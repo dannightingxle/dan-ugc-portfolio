@@ -68,25 +68,68 @@ const NICHES = [
   { name: "Family & parenting", note: "Stronger with my wife — see Duo" },
 ];
 
-// To populate the Work grid with real TikToks, replace videoId with the
-// long number at the end of a video URL:
-//   https://www.tiktok.com/@dansdailydeals/video/7398765432109876543
-//                                              ^^^^^^^^^^^^^^^^^^^
-// Leave videoId empty to keep the existing placeholder card.
+// Featured work videos. TikTok uses `videoId` (the long number at the end of
+// the URL). Facebook uses `fbUrl` (the full public URL). Stats render as a
+// small badge below the video.
 type WorkItem = {
   category: string;
   title: string;
   duration: string;
+  platform: "tiktok" | "facebook";
   videoId?: string;
+  fbUrl?: string;
+  stat?: string;
 };
 
 const WORK: WorkItem[] = [
-  { category: "Neutonic", title: "Nootropic drink — talking to camera", duration: "30s", videoId: "" },
-  { category: "JustFloow", title: "Supplement routine — voiceover + B-roll", duration: "45s", videoId: "" },
-  { category: "MyProtein", title: "Protein review — POV unboxing", duration: "30s", videoId: "" },
-  { category: "Puma", title: "Sportswear — lifestyle demo", duration: "30s", videoId: "" },
-  { category: "Anker", title: "Tech product — problem to solution", duration: "45s", videoId: "" },
-  { category: "Family", title: "Couple-POV with wife — family product demo", duration: "45s", videoId: "" },
+  {
+    category: "JustFloow",
+    title: "Supplement reel — Facebook",
+    duration: "60s",
+    platform: "facebook",
+    fbUrl: "https://www.facebook.com/Justfloowofficial/videos/1300673174768205",
+    stat: "1M+ organic views · £40k+ generated",
+  },
+  {
+    category: "Genius Mind",
+    title: "Viral hook reel — Facebook",
+    duration: "45s",
+    platform: "facebook",
+    fbUrl: "https://www.facebook.com/reel/813690918035228",
+    stat: "2M+ organic views · £55k+ generated",
+  },
+  {
+    category: "Puma",
+    title: "Sportswear showcase",
+    duration: "30s",
+    platform: "tiktok",
+    videoId: "7395570509640912160",
+    stat: "High GMV TikTok Shop",
+  },
+  {
+    category: "Neutonic",
+    title: "Nootropic drink — long-term partner",
+    duration: "45s",
+    platform: "tiktok",
+    videoId: "7551050694749359382",
+    stat: "Paid UGC partnership",
+  },
+  {
+    category: "4-in-1 Cable",
+    title: "Tech accessory demo",
+    duration: "30s",
+    platform: "tiktok",
+    videoId: "7418692339901746465",
+    stat: "Top-selling UGC piece",
+  },
+  {
+    category: "Hitch",
+    title: "Bottle + mug — street interview",
+    duration: "30s",
+    platform: "tiktok",
+    videoId: "7136567805037595910",
+    stat: "Street interview UGC style",
+  },
 ];
 
 const PROCESS = [
@@ -624,40 +667,67 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
 }
 
 function WorkCard({ item }: { item: WorkItem }) {
+  const hasVideo = (item.platform === "tiktok" && item.videoId) || (item.platform === "facebook" && item.fbUrl);
+
+  const embedSrc =
+    item.platform === "tiktok" && item.videoId
+      ? `https://www.tiktok.com/embed/v2/${item.videoId}`
+      : item.platform === "facebook" && item.fbUrl
+      ? `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(item.fbUrl)}&show_text=false&t=0`
+      : "";
+
   return (
-    <div className="hover-lift group relative aspect-[9/16] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden">
-      {item.videoId ? (
-        <iframe
-          src={`https://www.tiktok.com/embed/v2/${item.videoId}`}
-          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className="absolute inset-0 w-full h-full border-0"
-          title={item.title}
-        />
-      ) : (
-        <>
-          <div className="absolute inset-0 flex flex-col justify-between p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium">
-                {item.category}
-              </span>
-              <span className="text-xs text-[color:var(--text-dim)] font-mono">
-                {item.duration}
-              </span>
-            </div>
-            <div>
-              <div className="text-base font-medium text-[color:var(--text)] leading-snug">
-                {item.title}
+    <div className="flex flex-col gap-3">
+      <div className="hover-lift group relative aspect-[9/16] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden">
+        {hasVideo ? (
+          <iframe
+            src={embedSrc}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="absolute inset-0 w-full h-full border-0"
+            title={item.title}
+          />
+        ) : (
+          <>
+            <div className="absolute inset-0 flex flex-col justify-between p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium">
+                  {item.category}
+                </span>
+                <span className="text-xs text-[color:var(--text-dim)] font-mono">
+                  {item.duration}
+                </span>
               </div>
-              <div className="mt-3 text-xs text-[color:var(--text-dim)] flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-[color:var(--accent)]" />
-                Sample · contact for full reel
+              <div>
+                <div className="text-base font-medium text-[color:var(--text)] leading-snug">
+                  {item.title}
+                </div>
+                <div className="mt-3 text-xs text-[color:var(--text-dim)] flex items-center gap-1.5">
+                  <span className="size-1.5 rounded-full bg-[color:var(--accent)]" />
+                  Sample · contact for full reel
+                </div>
               </div>
             </div>
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-br from-[color:var(--accent-soft)] via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        </>
-      )}
+            <div className="absolute inset-0 bg-gradient-to-br from-[color:var(--accent-soft)] via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          </>
+        )}
+      </div>
+      <div className="px-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium">
+            {item.category}
+          </span>
+          <span className="text-xs text-[color:var(--text-dim)] font-mono uppercase">
+            {item.platform === "tiktok" ? "TikTok" : "Facebook"}
+          </span>
+        </div>
+        <div className="mt-1 text-sm font-medium text-[color:var(--text)] leading-snug">
+          {item.title}
+        </div>
+        {item.stat && (
+          <div className="mt-1 text-xs text-[color:var(--text-muted)]">{item.stat}</div>
+        )}
+      </div>
     </div>
   );
 }
