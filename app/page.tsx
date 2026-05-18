@@ -222,7 +222,7 @@ export default function Home() {
                 src="/dan-hero.jpg"
                 alt="Dan Nightingale and family"
                 className="w-full h-full object-cover"
-                style={{ objectPosition: "30% 35%" }}
+                style={{ objectPosition: "70% 35%" }}
               />
             </div>
           </div>
