@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 
 const NAV = [
   { href: "#work", label: "Work" },
@@ -17,12 +20,12 @@ const STATS = [
   { value: "2", label: "Creators (with wife)" },
 ];
 
-const FEATURED_BRANDS = [
-  "Neutonic",
-  "JustFloow",
-  "Puma",
-  "Anker",
-  "MyProtein",
+const FEATURED_BRANDS: { name: string; domain: string }[] = [
+  { name: "Neutonic", domain: "neutonic.com" },
+  { name: "JustFloow", domain: "justfloow.com" },
+  { name: "Puma", domain: "puma.com" },
+  { name: "Anker", domain: "anker.com" },
+  { name: "MyProtein", domain: "myprotein.com" },
 ];
 
 const ALL_BRANDS = [
@@ -256,14 +259,9 @@ export default function Home() {
           <div className="text-center text-xs uppercase tracking-[0.18em] text-[color:var(--text-dim)] mb-10">
             Brands I've worked with
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-6 items-center justify-items-center mb-10">
-            {FEATURED_BRANDS.map((name) => (
-              <div
-                key={name}
-                className="text-xl sm:text-2xl lg:text-[26px] font-bold tracking-tight uppercase text-[color:var(--text)] opacity-70 hover:opacity-100 transition-opacity"
-              >
-                {name}
-              </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-8 items-center justify-items-center mb-10">
+            {FEATURED_BRANDS.map((b) => (
+              <BrandLogo key={b.name} name={b.name} domain={b.domain} />
             ))}
           </div>
           <div className="flex flex-wrap justify-center items-center gap-x-1 gap-y-3 text-sm tracking-wide text-[color:var(--text-muted)]">
@@ -601,6 +599,34 @@ function SocialCard({ label, handle, href }: { label: string; handle: string; hr
       </div>
       <div className="text-sm font-medium text-[color:var(--text)]">{handle}</div>
     </a>
+  );
+}
+
+function BrandLogo({ name, domain }: { name: string; domain: string }) {
+  const [sourceIdx, setSourceIdx] = useState(0);
+  // 1) Logo.dev (free, public test token from their docs)
+  // 2) Google favicons (always resolves, smaller / icon-style)
+  // 3) Text fallback if both error
+  const sources = [
+    `https://img.logo.dev/${domain}?token=pk_X-1ZO13GSgeOoUrIuJ6GMQ&size=200&format=png`,
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+  ];
+  if (sourceIdx >= sources.length) {
+    return (
+      <div className="text-base sm:text-lg font-bold uppercase tracking-wider text-[color:var(--text-muted)] text-center">
+        {name}
+      </div>
+    );
+  }
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      key={sourceIdx}
+      src={sources[sourceIdx]}
+      alt={name}
+      onError={() => setSourceIdx((i) => i + 1)}
+      className="h-10 sm:h-12 max-w-[140px] object-contain opacity-80 hover:opacity-100 transition-opacity"
+    />
   );
 }
 
