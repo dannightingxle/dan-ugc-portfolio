@@ -179,8 +179,8 @@ export default function Home() {
 
       <section className="relative overflow-hidden">
         <div className="aurora" />
-        <div className="relative mx-auto max-w-6xl px-6 py-16 sm:py-20 lg:py-28">
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-stretch lg:min-h-[640px] fade-up">
+        <div className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-16 sm:py-20 lg:py-28">
+          <div className="grid lg:grid-cols-[1fr_1.15fr] gap-10 lg:gap-16 items-stretch lg:min-h-[680px] fade-up">
             <div className="order-2 lg:order-1 flex flex-col justify-center">
               <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)] mb-6">
                 <span className="size-1.5 rounded-full bg-[color:var(--accent)] animate-pulse" />
