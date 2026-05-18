@@ -1,7 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
 
 const NAV = [
   { href: "#work", label: "Work" },
@@ -21,11 +18,11 @@ const STATS = [
 ];
 
 const FEATURED_BRANDS = [
-  { name: "Neutonic", domain: "neutonic.com" },
-  { name: "JustFloow", domain: "justfloow.com" },
-  { name: "Puma", domain: "puma.com" },
-  { name: "Anker", domain: "anker.com" },
-  { name: "MyProtein", domain: "myprotein.com" },
+  "Neutonic",
+  "JustFloow",
+  "Puma",
+  "Anker",
+  "MyProtein",
 ];
 
 const ALL_BRANDS = [
@@ -259,14 +256,24 @@ export default function Home() {
           <div className="text-center text-xs uppercase tracking-[0.18em] text-[color:var(--text-dim)] mb-10">
             Brands I've worked with
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-6 items-center justify-items-center mb-10">
-            {FEATURED_BRANDS.map((b) => (
-              <BrandLogo key={b.name} name={b.name} domain={b.domain} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-6 items-center justify-items-center mb-10">
+            {FEATURED_BRANDS.map((name) => (
+              <div
+                key={name}
+                className="text-xl sm:text-2xl lg:text-[26px] font-bold tracking-tight uppercase text-[color:var(--text)] opacity-70 hover:opacity-100 transition-opacity"
+              >
+                {name}
+              </div>
             ))}
           </div>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-[color:var(--text-muted)]">
-            {ALL_BRANDS.map((name) => (
-              <span key={name}>{name}</span>
+          <div className="flex flex-wrap justify-center items-center gap-x-1 gap-y-3 text-sm tracking-wide text-[color:var(--text-muted)]">
+            {ALL_BRANDS.map((name, i) => (
+              <span key={name} className="flex items-center gap-3">
+                <span>{name}</span>
+                {i < ALL_BRANDS.length - 1 && (
+                  <span className="text-[color:var(--text-dim)]">·</span>
+                )}
+              </span>
             ))}
           </div>
         </div>
@@ -594,27 +601,6 @@ function SocialCard({ label, handle, href }: { label: string; handle: string; hr
       </div>
       <div className="text-sm font-medium text-[color:var(--text)]">{handle}</div>
     </a>
-  );
-}
-
-function BrandLogo({ name, domain }: { name: string; domain: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <div className="text-base font-semibold text-[color:var(--text-muted)] tracking-tight">
-        {name}
-      </div>
-    );
-  }
-  return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={`https://logo.clearbit.com/${domain}`}
-      alt={name}
-      onError={() => setFailed(true)}
-      className="h-9 max-w-[140px] object-contain opacity-60 hover:opacity-100 transition-opacity"
-      style={{ filter: "grayscale(100%) brightness(1.4)" }}
-    />
   );
 }
 
