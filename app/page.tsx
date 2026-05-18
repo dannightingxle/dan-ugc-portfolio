@@ -21,11 +21,11 @@ const STATS = [
 ];
 
 const FEATURED_BRANDS: { name: string; logo: string }[] = [
-  { name: "Neutonic", logo: "/logos/neutonic.png" },
-  { name: "JustFloow", logo: "/logos/justfloow.png" },
+  { name: "Neutonic", logo: "/logos/neutonic.svg" },
+  { name: "JustFloow", logo: "/logos/justfloow.svg" },
   { name: "Puma", logo: "/logos/puma.svg" },
-  { name: "Anker", logo: "/logos/anker.png" },
-  { name: "MyProtein", logo: "/logos/myprotein.png" },
+  { name: "Anker", logo: "/logos/anker.svg" },
+  { name: "MyProtein", logo: "/logos/myprotein.svg" },
 ];
 
 const ALL_BRANDS = [
