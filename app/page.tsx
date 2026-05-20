@@ -391,8 +391,8 @@ export default function Home() {
           </div>
           <div className="relative">
             <div className="grid grid-cols-2 gap-4">
-              <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.jpg" />
-              <DuoCard label="Wife" tag="Mum creator" tagline="Parenting / beauty / wellness / home" photo="/duo/wife.jpg" />
+              <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.png" />
+              <DuoCard label="Wife" tag="Mum creator" tagline="Parenting / beauty / wellness / home" photo="/duo/wife.png" />
             </div>
             <div className="absolute -inset-px rounded-2xl border border-[color:var(--accent)] opacity-20 pointer-events-none" />
           </div>
@@ -581,6 +581,7 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
         ))}
         <div className="shrink-0 w-2 lg:w-0" aria-hidden />
       </div>
+      <div className="pointer-events-none absolute left-0 top-0 bottom-3 w-20 bg-gradient-to-r from-[color:var(--bg-elevated)] to-transparent hidden lg:block" />
       <div className="pointer-events-none absolute right-0 top-0 bottom-3 w-20 bg-gradient-to-l from-[color:var(--bg-elevated)] to-transparent hidden lg:block" />
       <button
         type="button"
