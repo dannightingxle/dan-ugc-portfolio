@@ -658,6 +658,8 @@ function WorkCard({ item }: { item: WorkItem }) {
           muted
           loop
           playsInline
+          controls
+          controlsList="nodownload"
           preload="metadata"
           className="absolute inset-0 w-full h-full object-cover"
         />
