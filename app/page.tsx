@@ -76,7 +76,7 @@ type WorkItem = {
 
 const WORK: WorkItem[] = [
   {
-    category: "Viral reel",
+    category: "JustFloow",
     title: "Organic Facebook reel - top performer",
     videoSrc: "/work/fb-reel.mp4",
     stat: "2M+ organic views · £55k+ generated",
@@ -260,7 +260,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="work" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30">
+      <section id="work" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <div className="flex items-end justify-between flex-wrap gap-4 mb-12">
             <div>
@@ -273,12 +273,19 @@ export default function Home() {
               Hand-picked highlights. Brand-specific case studies and full client deliverables available on request.
             </p>
           </div>
-          <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none -mx-6 px-6 sm:mx-0 sm:px-0 pb-2 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {WORK.map((w, i) => (
-              <div key={i} className="snap-start shrink-0 w-[78vw] max-w-[320px] sm:w-auto sm:max-w-none">
-                <WorkCard item={w} />
-              </div>
-            ))}
+          <div className="relative -mx-6 lg:mx-0">
+            <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-0 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {WORK.map((w, i) => (
+                <div
+                  key={i}
+                  className="snap-start shrink-0 w-[78vw] max-w-[320px] sm:w-[46%] sm:max-w-[360px] lg:w-[30%] lg:max-w-none"
+                >
+                  <WorkCard item={w} />
+                </div>
+              ))}
+              <div className="shrink-0 w-2 lg:w-0" aria-hidden />
+            </div>
+            <div className="pointer-events-none absolute right-0 top-0 bottom-2 w-16 bg-gradient-to-l from-[color:var(--bg-elevated)] to-transparent hidden lg:block" />
           </div>
         </div>
       </section>
@@ -301,7 +308,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30">
+      <section className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <SectionLabel n="03">Why me</SectionLabel>
           <div className="mt-3 grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
@@ -353,7 +360,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="process" className="relative mx-auto max-w-6xl px-6 py-24">
+      <section id="process" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]">
+        <div className="mx-auto max-w-6xl px-6 py-24">
         <SectionLabel n="05">Process</SectionLabel>
         <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
           From brief to ad-ready file in under a week.
@@ -368,6 +376,7 @@ export default function Home() {
               <p className="text-sm text-[color:var(--text-muted)] leading-relaxed">{p.body}</p>
             </div>
           ))}
+        </div>
         </div>
       </section>
 
@@ -405,7 +414,7 @@ export default function Home() {
 
       <section
         id="contact"
-        className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30"
+        className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]"
       >
         <div className="mx-auto max-w-6xl px-6 py-24">
           <SectionLabel n="07">Contact</SectionLabel>
