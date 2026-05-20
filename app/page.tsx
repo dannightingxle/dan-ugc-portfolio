@@ -260,8 +260,31 @@ export default function Home() {
         </div>
       </section>
 
+      <section id="work" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30">
+        <div className="mx-auto max-w-6xl px-6 py-24">
+          <div className="flex items-end justify-between flex-wrap gap-4 mb-12">
+            <div>
+              <SectionLabel n="01">Work</SectionLabel>
+              <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight">
+                Selected spec + client work.
+              </h2>
+            </div>
+            <p className="text-sm text-[color:var(--text-dim)] max-w-md">
+              Hand-picked highlights. Brand-specific case studies and full client deliverables available on request.
+            </p>
+          </div>
+          <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none -mx-6 px-6 sm:mx-0 sm:px-0 pb-2 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {WORK.map((w, i) => (
+              <div key={i} className="snap-start shrink-0 w-[78vw] max-w-[320px] sm:w-auto sm:max-w-none">
+                <WorkCard item={w} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="relative mx-auto max-w-6xl px-6 py-24">
-        <SectionLabel n="01">What I do</SectionLabel>
+        <SectionLabel n="02">What I do</SectionLabel>
         <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
           Full-service UGC - brief in, ad-ready file out.
         </h2>
@@ -280,7 +303,7 @@ export default function Home() {
 
       <section className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30">
         <div className="mx-auto max-w-6xl px-6 py-24">
-          <SectionLabel n="02">Why me</SectionLabel>
+          <SectionLabel n="03">Why me</SectionLabel>
           <div className="mt-3 grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
             <div>
               <h2 className="text-3xl sm:text-5xl font-semibold tracking-tight">
@@ -310,7 +333,7 @@ export default function Home() {
       </section>
 
       <section id="niches" className="relative mx-auto max-w-6xl px-6 py-24">
-        <SectionLabel n="03">Niches</SectionLabel>
+        <SectionLabel n="04">Niches</SectionLabel>
         <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
           Where I'm strongest.
         </h2>
@@ -327,27 +350,6 @@ export default function Home() {
               <div className="mt-2 text-sm text-[color:var(--text-dim)]">{n.note}</div>
             </div>
           ))}
-        </div>
-      </section>
-
-      <section id="work" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30">
-        <div className="mx-auto max-w-6xl px-6 py-24">
-          <div className="flex items-end justify-between flex-wrap gap-4 mb-12">
-            <div>
-              <SectionLabel n="04">Work</SectionLabel>
-              <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight">
-                Selected spec + client work.
-              </h2>
-            </div>
-            <p className="text-sm text-[color:var(--text-dim)] max-w-md">
-              Hand-picked highlights. Brand-specific case studies and full client deliverables available on request.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {WORK.map((w, i) => (
-              <WorkCard key={i} item={w} />
-            ))}
-          </div>
         </div>
       </section>
 
@@ -450,7 +452,7 @@ export default function Home() {
             href="mailto:dan@birdandbear.co.uk?subject=Custom%20web%20or%20app%20design%20enquiry&body=Hi%20Dan%2C%20I%20saw%20your%20portfolio%20and%20I'm%20looking%20for%20help%20with%20a%20custom%20web%20or%20app%20build.%20Here%20are%20the%20details%3A%0A%0A-%20What%20I%20need%3A%0A-%20Timeline%3A%0A-%20Budget%3A%0A%0AThanks%2C"
             className="text-sm text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors"
           >
-            Site built by me - need a custom web or app build?{" "}
+            Site built by... me! Need a custom web or app build?{" "}
             <span className="text-[color:var(--accent)]">Get in touch →</span>
           </a>
         </div>
@@ -485,8 +487,7 @@ function DuoCard({ label, tag, tagline, photo }: { label: string; tag: string; t
       <img
         src={photo}
         alt={label}
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ objectPosition: "center top" }}
+        className="absolute inset-0 w-full h-full object-cover object-top"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
       <div className="relative h-full p-5 flex flex-col justify-between">
