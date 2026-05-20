@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 const NAV = [
   { href: "#work", label: "Work" },
@@ -273,20 +273,7 @@ export default function Home() {
               Hand-picked highlights. Brand-specific case studies and full client deliverables available on request.
             </p>
           </div>
-          <div className="relative -mx-6 lg:mx-0">
-            <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-0 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {WORK.map((w, i) => (
-                <div
-                  key={i}
-                  className="snap-start shrink-0 w-[78vw] max-w-[320px] sm:w-[46%] sm:max-w-[360px] lg:w-[30%] lg:max-w-none"
-                >
-                  <WorkCard item={w} />
-                </div>
-              ))}
-              <div className="shrink-0 w-2 lg:w-0" aria-hidden />
-            </div>
-            <div className="pointer-events-none absolute right-0 top-0 bottom-2 w-16 bg-gradient-to-l from-[color:var(--bg-elevated)] to-transparent hidden lg:block" />
-          </div>
+          <WorkCarousel items={WORK} />
         </div>
       </section>
 
@@ -563,6 +550,59 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
       className="h-10 sm:h-12 max-w-[140px] object-contain opacity-80 hover:opacity-100 transition-opacity"
       style={{ filter: "brightness(0) invert(1)" }}
     />
+  );
+}
+
+function WorkCarousel({ items }: { items: WorkItem[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollBy = (dir: 1 | -1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const firstCard = el.querySelector("[data-card]") as HTMLElement | null;
+    const step = firstCard ? firstCard.offsetWidth + 16 : 320;
+    el.scrollBy({ left: dir * step, behavior: "smooth" });
+  };
+
+  return (
+    <div className="relative -mx-6 lg:mx-0">
+      <div
+        ref={scrollRef}
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-0 pb-3 scroll-smooth"
+      >
+        {items.map((w, i) => (
+          <div
+            key={i}
+            data-card
+            className="snap-start shrink-0 w-[78vw] max-w-[320px] sm:w-[46%] sm:max-w-[360px] lg:w-[31%] lg:max-w-none"
+          >
+            <WorkCard item={w} />
+          </div>
+        ))}
+        <div className="shrink-0 w-2 lg:w-0" aria-hidden />
+      </div>
+      <div className="pointer-events-none absolute right-0 top-0 bottom-3 w-20 bg-gradient-to-l from-[color:var(--bg-elevated)] to-transparent hidden lg:block" />
+      <button
+        type="button"
+        onClick={() => scrollBy(-1)}
+        aria-label="Previous"
+        className="hidden lg:flex absolute -left-4 top-1/2 -translate-y-1/2 z-10 size-11 items-center justify-center rounded-full bg-[color:var(--bg-card)] border border-[color:var(--border-strong)] text-[color:var(--text)] hover:bg-[color:var(--accent)] hover:text-[color:var(--bg)] hover:border-[color:var(--accent)] transition-colors shadow-lg"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={() => scrollBy(1)}
+        aria-label="Next"
+        className="hidden lg:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 size-11 items-center justify-center rounded-full bg-[color:var(--bg-card)] border border-[color:var(--border-strong)] text-[color:var(--text)] hover:bg-[color:var(--accent)] hover:text-[color:var(--bg)] hover:border-[color:var(--accent)] transition-colors shadow-lg"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    </div>
   );
 }
 
