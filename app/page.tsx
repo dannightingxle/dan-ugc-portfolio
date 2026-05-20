@@ -118,7 +118,7 @@ const PROCESS = [
   {
     n: "01",
     title: "Brief",
-    body: "Send me the product + a sentence on the angle. Or just the product — I'll concept.",
+    body: "Send me the product + a sentence on the angle. Or just the product — I'll handle the rest.",
   },
   {
     n: "02",
@@ -128,7 +128,7 @@ const PROCESS = [
   {
     n: "03",
     title: "Film + edit",
-    body: "3–5 days. Mobile-first, paid-ad ready, captions burned in, sound designed.",
+    body: "3–5 days. Mobile-first, paid-ad ready, captions burned in, audio mixed.",
   },
   {
     n: "04",
