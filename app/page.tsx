@@ -490,6 +490,7 @@ function DuoCard({ label, tag, tagline, photo }: { label: string; tag: string; t
         src={photo}
         alt={label}
         className="absolute inset-0 w-full h-full object-cover"
+        style={{ objectPosition: "center top" }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
       <div className="relative h-full p-5 flex flex-col justify-between">
