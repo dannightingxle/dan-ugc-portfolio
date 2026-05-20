@@ -216,11 +216,12 @@ export default function Home() {
               </h1>
               <p className="text-xl sm:text-2xl lg:text-[28px] font-medium tracking-tight leading-snug text-[color:var(--text)]">
                 Marketing-trained <span className="text-[color:var(--accent)]">UGC</span> for dads,
-                families and grown-up brands.
+                families and modern brands.
               </p>
               <p className="mt-5 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-xl">
-                I write, film and edit UGC built to convert — not just look good. 10+ years in
-                performance marketing, a wife who creates too, zero interest in pretending to be 22.
+                I write, film and edit UGC built to convert — not just look good. 5+ years in
+                performance marketing and content creation, a wife who creates too, and a proper
+                perfectionist (i.e. people pleaser. Probably works to your advantage).
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
                 <HeroLink
