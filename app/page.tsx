@@ -649,15 +649,6 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
 }
 
 function WorkCard({ item }: { item: WorkItem }) {
-  const hasVideo = (item.platform === "tiktok" && item.videoId) || (item.platform === "facebook" && item.fbUrl);
-
-  const embedSrc =
-    item.platform === "tiktok" && item.videoId
-      ? `https://www.tiktok.com/embed/v2/${item.videoId}`
-      : item.platform === "facebook" && item.fbUrl
-      ? `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(item.fbUrl)}&show_text=false&t=0`
-      : "";
-
   return (
     <div className="flex flex-col gap-3">
       <div className="hover-lift group relative aspect-[9/16] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden">
