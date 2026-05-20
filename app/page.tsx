@@ -63,9 +63,9 @@ const NICHES = [
   { name: "Supplements & health", note: "Protein, longevity, sleep, gut" },
   { name: "Fitness & wellness", note: "Apps, equipment, recovery" },
   { name: "Productivity & SaaS", note: "Where my marketing brain is a moat" },
-  { name: "Personal finance", note: "Investing apps, neobanks, money tools" },
-  { name: "Travel & lifestyle", note: "Family travel, gear, weekenders" },
-  { name: "Family & parenting", note: "Stronger with my wife — see Duo" },
+  { name: "Personal finance", note: "Investing apps, money tools, banking" },
+  { name: "Home & lifestyle", note: "Home goods, family setup, everyday gear" },
+  { name: "Family & parenting", note: "Couple, family and his-and-hers — solo or with my wife" },
 ];
 
 type WorkItem = {
@@ -383,7 +383,7 @@ export default function Home() {
               </h2>
             </div>
             <p className="text-sm text-[color:var(--text-dim)] max-w-md">
-              Sample reel updating weekly. Brand-specific case studies and full client deliverables available on request.
+              Hand-picked highlights. Brand-specific case studies and full client deliverables available on request.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
