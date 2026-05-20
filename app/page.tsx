@@ -398,8 +398,8 @@ export default function Home() {
           </div>
           <div className="relative">
             <div className="grid grid-cols-2 gap-4">
-              <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.png" />
-              <DuoCard label="Wife" tag="Mum creator" tagline="Parenting / beauty / wellness / home" photo="/duo/wife.png" />
+              <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.jpg" />
+              <DuoCard label="Wife" tag="Mum creator" tagline="Parenting / beauty / wellness / home" photo="/duo/wife.jpg" />
             </div>
             <div className="absolute -inset-px rounded-2xl border border-[color:var(--accent)] opacity-20 pointer-events-none" />
           </div>
