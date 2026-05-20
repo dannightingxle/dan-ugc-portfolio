@@ -1,4 +1,4 @@
-# Dan Nightingale — Rate Card
+# Dan Nightingale - Rate Card
 
 **Marketing-trained UGC for brands selling to working men, dads, families and grown-up audiences. Solo or as a duo with my wife.**
 
@@ -12,9 +12,9 @@ All prices in GBP, exclusive of VAT.
 
 | Deliverable | Price |
 | :--- | ---: |
-| Short-form video, up to 30s — 1 hook, organic usage only | **£200** |
-| Standard video, 30–60s — up to 3 hook variations, 30-day paid usage included | **£450** |
-| Performance brief, 60s+ or vertical sequence — full creative direction, extended usage rights | **From £750** |
+| Short-form video, up to 30s - 1 hook, organic usage only | **£200** |
+| Standard video, 30-60s - up to 3 hook variations, 30-day paid usage included | **£450** |
+| Performance brief, 60s+ or vertical sequence - full creative direction, extended usage rights | **From £750** |
 
 ## Duo (Dan + wife)
 
@@ -23,14 +23,14 @@ For couple POV, family demos, his-and-hers and parenting content. One brief, one
 | Deliverable | Price |
 | :--- | ---: |
 | Duo short-form, up to 30s | **£400** |
-| Duo standard, 30–60s | **£800** |
+| Duo standard, 30-60s | **£800** |
 | Duo performance brief, 60s+ or sequence | **From £1,400** |
 
 ---
 
 ## Usage rights
 
-Base price covers **organic usage** — brand posts the content on their own channels, no paid spend behind it.
+Base price covers **organic usage** - brand posts the content on their own channels, no paid spend behind it.
 
 For **paid usage** (running the content as an ad), the formula is:
 
@@ -65,16 +65,16 @@ Discounted per-video rates in exchange for a guaranteed monthly volume.
 | 8 solo videos / month | £300 | **£2,400** |
 | 4 duo videos / month | £700 | **£2,800** |
 
-Retainer pricing assumes 30–60s organic videos with up to 2 revisions each. Paid usage and posting add-ons charged separately at standard rates.
+Retainer pricing assumes 30-60s organic videos with up to 2 revisions each. Paid usage and posting add-ons charged separately at standard rates.
 
 ---
 
 ## Process
 
-- **Brief** — send the product + a sentence on the angle (or just the product, I'll handle the rest)
-- **Concept** — script, hook variations and shot list within 48 hours
-- **Film + edit** — 3–5 days from approved concept, mobile-first and paid-ad ready
-- **Deliver** — final cuts, raw footage on request, 2 rounds of revisions included
+- **Brief** - send the product + a sentence on the angle (or just the product, I'll handle the rest)
+- **Concept** - script, hook variations and shot list within 48 hours
+- **Film + edit** - 3-5 days from approved concept, mobile-first and paid-ad ready
+- **Deliver** - final cuts, raw footage on request, 2 rounds of revisions included
 
 ## Working terms
 

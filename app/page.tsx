@@ -64,7 +64,7 @@ const NICHES = [
   { name: "Productivity & SaaS", note: "Where my marketing brain is a moat" },
   { name: "Personal finance", note: "Investing apps, money tools, banking" },
   { name: "Home & lifestyle", note: "Home goods, family setup, everyday gear" },
-  { name: "Family & parenting", note: "Couple, family and his-and-hers — solo or with my wife" },
+  { name: "Family & parenting", note: "Couple, family and his-and-hers - solo or with my wife" },
 ];
 
 type WorkItem = {
@@ -77,13 +77,13 @@ type WorkItem = {
 const WORK: WorkItem[] = [
   {
     category: "Viral reel",
-    title: "Organic Facebook reel — top performer",
+    title: "Organic Facebook reel - top performer",
     videoSrc: "/work/fb-reel.mp4",
     stat: "2M+ organic views · £55k+ generated",
   },
   {
     category: "JustFloow",
-    title: "Supplement reel — Facebook",
+    title: "Supplement reel - Facebook",
     videoSrc: "/work/justfloow.mp4",
     stat: "1M+ organic views · £40k+ generated",
   },
@@ -95,7 +95,7 @@ const WORK: WorkItem[] = [
   },
   {
     category: "Neutonic",
-    title: "Nootropic drink — long-term partner",
+    title: "Nootropic drink - long-term partner",
     videoSrc: "/work/neutonic.mp4",
     stat: "Paid UGC partnership",
   },
@@ -107,7 +107,7 @@ const WORK: WorkItem[] = [
   },
   {
     category: "Hitch",
-    title: "Bottle + coffee mug — street interview",
+    title: "Bottle + coffee mug - street interview",
     videoSrc: "/work/hitch.mp4",
     stat: "Street interview UGC style",
   },
@@ -117,7 +117,7 @@ const PROCESS = [
   {
     n: "01",
     title: "Brief",
-    body: "Send me the product + a sentence on the angle. Or just the product — I'll handle the rest.",
+    body: "Send me the product + a sentence on the angle. Or just the product - I'll handle the rest.",
   },
   {
     n: "02",
@@ -127,7 +127,7 @@ const PROCESS = [
   {
     n: "03",
     title: "Film + edit",
-    body: "3–5 days. Mobile-first, paid-ad ready, captions burned in, audio mixed.",
+    body: "3-5 days. Mobile-first, paid-ad ready, captions burned in, audio mixed.",
   },
   {
     n: "04",
@@ -181,7 +181,7 @@ export default function Home() {
                 families and modern brands.
               </p>
               <p className="mt-5 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-xl">
-                I write, film and edit UGC built to convert — not just look good. 5+ years in
+                I write, film and edit UGC built to convert - not just look good. 5+ years in
                 performance marketing and content creation, a wife who creates too, and a proper
                 perfectionist (i.e. people pleaser. Probably works to your advantage).
               </p>
@@ -263,7 +263,7 @@ export default function Home() {
       <section className="relative mx-auto max-w-6xl px-6 py-24">
         <SectionLabel n="01">What I do</SectionLabel>
         <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
-          Full-service UGC — brief in, ad-ready file out.
+          Full-service UGC - brief in, ad-ready file out.
         </h2>
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {SERVICES.map((s) => (
@@ -290,11 +290,11 @@ export default function Home() {
             <div className="space-y-8 lg:pt-4">
               <Reason
                 title="Marketing-trained."
-                body="5+ years in performance marketing, currently leading creative on a 7-figure UK supplement brand. I think in CTRs, hooks and three-second openers — and the numbers back it up."
+                body="5+ years in performance marketing, currently leading creative on a 7-figure UK supplement brand. I think in CTRs, hooks and three-second openers - and the numbers back it up."
               />
               <Reason
                 title="Your demographic, not a stand-in."
-                body="If your customer is a working male in his late 20s or 30s — fitness, supplements, tech, finance, SaaS, dad-and-business brands — I'm already there."
+                body="If your customer is a working male in his late 20s or 30s - fitness, supplements, tech, finance, SaaS, dad-and-business brands - I'm already there."
               />
               <Reason
                 title="Husband-wife duo available."
@@ -302,7 +302,7 @@ export default function Home() {
               />
               <Reason
                 title="UK-based, fast turnarounds."
-                body="48-hour concept turnaround, 3–5 days to delivered cuts. I run a business — I treat your deadlines like one."
+                body="48-hour concept turnaround, 3-5 days to delivered cuts. I run a business - I treat your deadlines like one."
               />
             </div>
           </div>
@@ -315,7 +315,7 @@ export default function Home() {
           Where I'm strongest.
         </h2>
         <p className="mt-4 max-w-2xl text-[color:var(--text-muted)]">
-          Briefs outside these are welcome — but these are where my background gives you an unfair advantage.
+          Briefs outside these are welcome - but these are where my background gives you an unfair advantage.
         </p>
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {NICHES.map((n) => (
@@ -377,10 +377,10 @@ export default function Home() {
               Two creators, one brief, half the headache.
             </h2>
             <p className="mt-6 text-lg text-[color:var(--text-muted)] leading-relaxed">
-              My wife is a UGC creator too. If your product needs a couple POV, a family demo, his-and-hers, or paired content across two demographics — book us as a duo.
+              My wife is a UGC creator too. If your product needs a couple POV, a family demo, his-and-hers, or paired content across two demographics - book us as a duo.
             </p>
             <p className="mt-4 text-[color:var(--text-muted)] leading-relaxed">
-              One brief. One invoice. Two creators who actually know each other (and your product by the end of it). Perfect for parenting brands, home goods, fitness, travel, wellness — anywhere a &ldquo;real couple&rdquo; beats two strangers reading from the same script.
+              One brief. One invoice. Two creators who actually know each other (and your product by the end of it). Perfect for parenting brands, home goods, fitness, travel, wellness - anywhere a &ldquo;real couple&rdquo; beats two strangers reading from the same script.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <a
@@ -450,7 +450,7 @@ export default function Home() {
             href="mailto:dan@birdandbear.co.uk?subject=Custom%20web%20or%20app%20design%20enquiry&body=Hi%20Dan%2C%20I%20saw%20your%20portfolio%20and%20I'm%20looking%20for%20help%20with%20a%20custom%20web%20or%20app%20build.%20Here%20are%20the%20details%3A%0A%0A-%20What%20I%20need%3A%0A-%20Timeline%3A%0A-%20Budget%3A%0A%0AThanks%2C"
             className="text-sm text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors"
           >
-            Site built by me — need a custom web or app build?{" "}
+            Site built by me - need a custom web or app build?{" "}
             <span className="text-[color:var(--accent)]">Get in touch →</span>
           </a>
         </div>
