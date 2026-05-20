@@ -491,14 +491,14 @@ function DuoCard({ label, tag, tagline, photo }: { label: string; tag: string; t
         alt={label}
         className="absolute inset-0 w-full h-full object-cover"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
       <div className="relative h-full p-5 flex flex-col justify-between">
-        <div className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+        <span className="self-start inline-flex items-center px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-md border border-white/10 text-xs uppercase tracking-wider text-[color:var(--accent)] font-semibold">
           {tag}
-        </div>
+        </span>
         <div>
           <div className="text-2xl font-semibold tracking-tight text-white">{label}</div>
-          <div className="mt-2 text-sm text-white/80">{tagline}</div>
+          <div className="mt-2 text-sm text-white/85">{tagline}</div>
         </div>
       </div>
     </div>
