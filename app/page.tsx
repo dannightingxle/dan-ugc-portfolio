@@ -8,7 +8,6 @@ const NAV = [
   { href: "#brands", label: "Brands" },
   { href: "#niches", label: "Niches" },
   { href: "#process", label: "Process" },
-  { href: "#rates", label: "Rates" },
   { href: "#duo", label: "Duo" },
   { href: "#contact", label: "Contact" },
 ];
@@ -134,43 +133,6 @@ const PROCESS = [
     n: "04",
     title: "Deliver",
     body: "Final cuts, raw footage on request, 2 rounds of revisions included.",
-  },
-];
-
-const RATES = [
-  {
-    name: "Starter",
-    price: "£100",
-    cadence: "per video",
-    desc: "Up to 30s. One hook. Organic usage. Great for testing the relationship.",
-    features: ["Up to 30 seconds", "1 hook + body + CTA", "Organic usage only", "2 revisions"],
-  },
-  {
-    name: "Standard",
-    price: "£250",
-    cadence: "per video",
-    desc: "30–60s. Up to 3 hook variations for paid testing. 30 days paid usage included.",
-    features: [
-      "Up to 60 seconds",
-      "3 hook variations",
-      "30 days paid usage included",
-      "Captions + sound design",
-      "2 revisions",
-    ],
-    featured: true,
-  },
-  {
-    name: "Performance",
-    price: "From £500",
-    cadence: "per video",
-    desc: "Full creative direction, repeat usage rights, posted on my channels if needed.",
-    features: [
-      "60s+ or vertical sequence",
-      "Up to 5 hook variations",
-      "Extended paid usage rights",
-      "Optional post on my socials",
-      "Priority turnaround",
-    ],
   },
 ];
 
@@ -412,69 +374,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="rates" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30">
-        <div className="mx-auto max-w-6xl px-6 py-24">
-          <SectionLabel n="06">Rates</SectionLabel>
-          <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
-            Simple, transparent, no surprises.
-          </h2>
-          <p className="mt-4 max-w-2xl text-[color:var(--text-muted)]">
-            Starting prices. Final quote depends on hooks, usage rights, exclusivity and turnaround. Bundles and retainers available — see Contact.
-          </p>
-          <div className="mt-12 grid md:grid-cols-3 gap-4">
-            {RATES.map((r) => (
-              <div
-                key={r.name}
-                className={`relative p-6 rounded-2xl border ${
-                  r.featured
-                    ? "border-[color:var(--accent)] bg-[color:var(--bg-card)]"
-                    : "border-[color:var(--border)] bg-[color:var(--bg-card)]"
-                }`}
-              >
-                {r.featured && (
-                  <div className="absolute -top-3 left-6 px-3 py-1 text-xs font-medium rounded-full bg-[color:var(--accent)] text-[color:var(--bg)]">
-                    Most popular
-                  </div>
-                )}
-                <div className="text-base font-medium text-[color:var(--text)]">{r.name}</div>
-                <div className="mt-4 flex items-baseline gap-2">
-                  <span className="text-4xl font-semibold tracking-tight">{r.price}</span>
-                  <span className="text-sm text-[color:var(--text-dim)]">{r.cadence}</span>
-                </div>
-                <p className="mt-3 text-sm text-[color:var(--text-muted)] leading-relaxed">{r.desc}</p>
-                <ul className="mt-6 space-y-2.5">
-                  {r.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-[color:var(--text-muted)]">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 14 14"
-                        fill="none"
-                        className="text-[color:var(--accent)] mt-0.5 shrink-0"
-                      >
-                        <path
-                          d="M2 7l3.5 3.5L12 4"
-                          stroke="currentColor"
-                          strokeWidth="1.75"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <p className="mt-8 text-sm text-[color:var(--text-dim)]">
-            Add-ons: posting on my own socials +£100 per platform · paid usage extension +30% of base per month · whitelisting / Spark Ads quoted per brand.
-          </p>
-        </div>
-      </section>
-
       <section id="duo" className="relative mx-auto max-w-6xl px-6 py-24">
-        <SectionLabel n="07">The Duo</SectionLabel>
+        <SectionLabel n="06">The Duo</SectionLabel>
         <div className="mt-3 grid lg:grid-cols-2 gap-12 items-center">
           <div>
             <h2 className="text-3xl sm:text-5xl font-semibold tracking-tight">
@@ -510,7 +411,7 @@ export default function Home() {
         className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/30"
       >
         <div className="mx-auto max-w-6xl px-6 py-24">
-          <SectionLabel n="08">Contact</SectionLabel>
+          <SectionLabel n="07">Contact</SectionLabel>
           <div className="mt-3 grid lg:grid-cols-2 gap-12 items-start">
             <div>
               <h2 className="text-3xl sm:text-5xl font-semibold tracking-tight">
