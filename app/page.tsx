@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const NAV = [
   { href: "#work", label: "Work" },
@@ -392,7 +392,7 @@ export default function Home() {
           <div className="relative">
             <div className="grid grid-cols-2 gap-4">
               <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.png" />
-              <DuoCard label="Wife" tag="Mum creator" tagline="Parenting / beauty / wellness / home" photo="/duo/wife.jpg" />
+              <DuoCard label="Lydia" tag="Mum creator" tagline="Mum / beauty / wellness / home" photo="/duo/wife.jpg" />
             </div>
             <div className="absolute -inset-px rounded-2xl border border-[color:var(--accent)] opacity-20 pointer-events-none" />
           </div>
@@ -555,6 +555,17 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
 
 function WorkCarousel({ items }: { items: WorkItem[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Render the list 3x so there's always content peeking on both sides.
+  // Start scrolled into the middle copy on mount.
+  const displayItems = [...items, ...items, ...items];
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollLeft = el.scrollWidth / 3;
+    });
+  }, []);
 
   const scrollBy = (dir: 1 | -1) => {
     const el = scrollRef.current;
@@ -568,9 +579,9 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
     <div className="relative -mx-6 lg:mx-0">
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-0 pb-3 scroll-smooth"
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-0 pb-3 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {items.map((w, i) => (
+        {displayItems.map((w, i) => (
           <div
             key={i}
             data-card
@@ -579,7 +590,6 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
             <WorkCard item={w} />
           </div>
         ))}
-        <div className="shrink-0 w-2 lg:w-0" aria-hidden />
       </div>
       <div className="pointer-events-none absolute left-0 top-0 bottom-3 w-24 bg-gradient-to-r from-[color:var(--bg)] via-[color:var(--bg)]/60 to-transparent hidden lg:block" />
       <div className="pointer-events-none absolute right-0 top-0 bottom-3 w-24 bg-gradient-to-l from-[color:var(--bg)] via-[color:var(--bg)]/60 to-transparent hidden lg:block" />
