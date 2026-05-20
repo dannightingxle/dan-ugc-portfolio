@@ -333,11 +333,11 @@ export default function Home() {
             <div className="space-y-8 lg:pt-4">
               <Reason
                 title="Marketing-trained."
-                body="5+ years in performance marketing, currently leading creative on a 7-figure UK supplement brand. I think in CTRs, hooks and three-second openers — and the numbers back it up: £150k+ generated from my UGC for one brand in 9 months."
+                body="5+ years in performance marketing, currently leading creative on a 7-figure UK supplement brand. I think in CTRs, hooks and three-second openers — and the numbers back it up."
               />
               <Reason
-                title="Dad demographic."
-                body="UGC skews early-20s female. If your audience is parents, professionals or men in their 30s, you've been forcing creators to act outside their own lives. I don't have to act."
+                title="Your demographic, not a stand-in."
+                body="If your customer is a working male in his late 20s or 30s — fitness, supplements, tech, finance, SaaS, dad-and-business brands — I'm already there."
               />
               <Reason
                 title="Husband-wife duo available."
