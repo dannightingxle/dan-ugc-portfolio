@@ -14,10 +14,10 @@ const NAV = [
 ];
 
 const STATS = [
-  { value: "10+", label: "Years in marketing" },
-  { value: "UK", label: "Based in" },
+  { value: "£150k+", label: "Generated · one brand, 9 months" },
+  { value: "£50k+", label: "TikTok Shop GMV · 12 months" },
+  { value: "5+", label: "Years in marketing + content" },
   { value: "48h", label: "Concept turnaround" },
-  { value: "2", label: "Creators (with wife)" },
 ];
 
 const FEATURED_BRANDS: { name: string; logo: string }[] = [
@@ -333,7 +333,7 @@ export default function Home() {
             <div className="space-y-8 lg:pt-4">
               <Reason
                 title="Marketing-trained."
-                body="10+ years in performance marketing, currently leading creative on a 7-figure UK supplement brand. I think in CTRs, hooks and three-second openers — not just aesthetics."
+                body="5+ years in performance marketing, currently leading creative on a 7-figure UK supplement brand. I think in CTRs, hooks and three-second openers — and the numbers back it up: £150k+ generated from my UGC for one brand in 9 months."
               />
               <Reason
                 title="Dad demographic."
