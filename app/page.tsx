@@ -398,8 +398,8 @@ export default function Home() {
           </div>
           <div className="relative">
             <div className="grid grid-cols-2 gap-4">
-              <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" />
-              <DuoCard label="Wife" tag="Mum creator" tagline="Parenting / beauty / wellness / home" />
+              <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.png" />
+              <DuoCard label="Wife" tag="Mum creator" tagline="Parenting / beauty / wellness / home" photo="/duo/wife.png" />
             </div>
             <div className="absolute -inset-px rounded-2xl border border-[color:var(--accent)] opacity-20 pointer-events-none" />
           </div>
@@ -482,15 +482,24 @@ function Reason({ title, body }: { title: string; body: string }) {
   );
 }
 
-function DuoCard({ label, tag, tagline }: { label: string; tag: string; tagline: string }) {
+function DuoCard({ label, tag, tagline, photo }: { label: string; tag: string; tagline: string; photo: string }) {
   return (
-    <div className="hover-lift aspect-[3/4] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-5 flex flex-col justify-between">
-      <div className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium">
-        {tag}
-      </div>
-      <div>
-        <div className="text-2xl font-semibold tracking-tight text-[color:var(--text)]">{label}</div>
-        <div className="mt-2 text-sm text-[color:var(--text-muted)]">{tagline}</div>
+    <div className="hover-lift relative aspect-[3/4] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={photo}
+        alt={label}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
+      <div className="relative h-full p-5 flex flex-col justify-between">
+        <div className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+          {tag}
+        </div>
+        <div>
+          <div className="text-2xl font-semibold tracking-tight text-white">{label}</div>
+          <div className="mt-2 text-sm text-white/80">{tagline}</div>
+        </div>
       </div>
     </div>
   );
