@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const NAV = [
   { href: "#work", label: "Work" },
@@ -555,6 +555,21 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
 
 function WorkCarousel({ items }: { items: WorkItem[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(true);
+
+  const updateScrollState = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 8);
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8);
+  };
+
+  useEffect(() => {
+    updateScrollState();
+    window.addEventListener("resize", updateScrollState);
+    return () => window.removeEventListener("resize", updateScrollState);
+  }, []);
 
   const scrollBy = (dir: 1 | -1) => {
     const el = scrollRef.current;
@@ -568,6 +583,7 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
     <div className="relative -mx-6 lg:mx-0">
       <div
         ref={scrollRef}
+        onScroll={updateScrollState}
         className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-0 pb-3 scroll-smooth"
       >
         {items.map((w, i) => (
@@ -581,8 +597,14 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
         ))}
         <div className="shrink-0 w-2 lg:w-0" aria-hidden />
       </div>
-      <div className="pointer-events-none absolute left-0 top-0 bottom-3 w-20 bg-gradient-to-r from-[color:var(--bg-elevated)] to-transparent hidden lg:block" />
-      <div className="pointer-events-none absolute right-0 top-0 bottom-3 w-20 bg-gradient-to-l from-[color:var(--bg-elevated)] to-transparent hidden lg:block" />
+      <div
+        className="pointer-events-none absolute left-0 top-0 bottom-3 w-20 bg-gradient-to-r from-[color:var(--bg-elevated)] to-transparent hidden lg:block transition-opacity duration-200"
+        style={{ opacity: canLeft ? 1 : 0 }}
+      />
+      <div
+        className="pointer-events-none absolute right-0 top-0 bottom-3 w-20 bg-gradient-to-l from-[color:var(--bg-elevated)] to-transparent hidden lg:block transition-opacity duration-200"
+        style={{ opacity: canRight ? 1 : 0 }}
+      />
       <button
         type="button"
         onClick={() => scrollBy(-1)}
