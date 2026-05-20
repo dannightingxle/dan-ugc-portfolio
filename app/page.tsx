@@ -563,7 +563,8 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
     const el = scrollRef.current;
     if (!el) return;
     requestAnimationFrame(() => {
-      el.scrollLeft = el.scrollWidth / 3;
+      // Start scrolled into the middle copy, offset so the previous card peeks on the left
+      el.scrollLeft = el.scrollWidth / 3 - 64;
     });
   }, []);
 
@@ -579,7 +580,8 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
     <div className="relative -mx-6 lg:mx-0">
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-0 pb-3 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ scrollPaddingLeft: 64, scrollPaddingRight: 64 }}
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-16 pb-3 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {displayItems.map((w, i) => (
           <div
