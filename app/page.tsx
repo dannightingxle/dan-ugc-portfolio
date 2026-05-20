@@ -192,14 +192,9 @@ export default function Home() {
                   handle="@dansdailydeals"
                 />
                 <HeroLink
-                  href="https://www.instagram.com/dannightingaleugc"
-                  label="Instagram"
-                  handle="@dannightingaleugc"
-                />
-                <HeroLink
-                  href="mailto:hello@dannightingale.com?subject=UGC brief"
+                  href="mailto:dan@birdandbear.co.uk?subject=UGC brief"
                   label="Email"
-                  handle="hello@dannightingale.com"
+                  handle="dan@birdandbear.co.uk"
                 />
               </div>
             </div>
@@ -423,27 +418,24 @@ export default function Home() {
             </div>
             <div className="space-y-4">
               <a
-                href="mailto:hello@dannightingale.com?subject=UGC brief"
+                href="mailto:dan@birdandbear.co.uk?subject=UGC brief"
                 className="hover-lift block p-6 rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)]"
               >
                 <div className="text-xs uppercase tracking-wider text-[color:var(--text-dim)] mb-2">
                   Email
                 </div>
                 <div className="text-lg font-medium text-[color:var(--text)]">
-                  hello@dannightingale.com
+                  dan@birdandbear.co.uk
                 </div>
                 <div className="mt-1 text-sm text-[color:var(--text-muted)]">
                   Best for briefs, quotes and pitches.
                 </div>
               </a>
-              <div className="grid grid-cols-2 gap-4">
-                <SocialCard
-                  label="TikTok"
-                  handle="@dansdailydeals"
-                  href="https://www.tiktok.com/@dansdailydeals"
-                />
-                <SocialCard label="Instagram" handle="@dannightingaleugc" href="#" />
-              </div>
+              <SocialCard
+                label="TikTok"
+                handle="@dansdailydeals"
+                href="https://www.tiktok.com/@dansdailydeals"
+              />
             </div>
           </div>
         </div>
@@ -454,9 +446,13 @@ export default function Home() {
           <div className="text-sm text-[color:var(--text-dim)]">
             © {new Date().getFullYear()} Dan Nightingale. UK-based UGC creator.
           </div>
-          <div className="text-xs text-[color:var(--text-dim)] font-mono">
-            v0.2 · brands, photo and TikTok-ready work grid
-          </div>
+          <a
+            href="mailto:dan@birdandbear.co.uk?subject=Custom%20web%20or%20app%20design%20enquiry&body=Hi%20Dan%2C%20I%20saw%20your%20portfolio%20and%20I'm%20looking%20for%20help%20with%20a%20custom%20web%20or%20app%20build.%20Here%20are%20the%20details%3A%0A%0A-%20What%20I%20need%3A%0A-%20Timeline%3A%0A-%20Budget%3A%0A%0AThanks%2C"
+            className="text-sm text-[color:var(--text-muted)] hover:text-[color:var(--text)] transition-colors"
+          >
+            Site built by me — need a custom web or app build?{" "}
+            <span className="text-[color:var(--accent)]">Get in touch →</span>
+          </a>
         </div>
       </footer>
     </>

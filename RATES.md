@@ -85,7 +85,7 @@ Retainer pricing assumes 30–60s organic videos with up to 2 revisions each. Pa
 
 ## How to brief
 
-Email **hello@dannightingale.com** with:
+Email **dan@birdandbear.co.uk** with:
 1. The product or service
 2. The audience / who you're targeting
 3. The platform(s) and whether it's organic or paid
