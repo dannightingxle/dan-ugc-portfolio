@@ -266,7 +266,7 @@ export default function Home() {
       </section>
 
       <section id="work" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]">
-        <div className="mx-auto max-w-6xl px-6 py-24">
+        <div className="mx-auto max-w-6xl px-6 py-14 sm:py-20 lg:py-24">
           <div className="flex items-end justify-between flex-wrap gap-4 mb-12">
             <div>
               <SectionLabel n="01">Work</SectionLabel>
@@ -282,7 +282,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative mx-auto max-w-6xl px-6 py-24">
+      <section className="relative mx-auto max-w-6xl px-6 py-14 sm:py-20 lg:py-24">
         <SectionLabel n="02">What I do</SectionLabel>
         <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
           Full-service UGC - brief in, ad-ready file out.
@@ -301,7 +301,7 @@ export default function Home() {
       </section>
 
       <section className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]">
-        <div className="mx-auto max-w-6xl px-6 py-24">
+        <div className="mx-auto max-w-6xl px-6 py-14 sm:py-20 lg:py-24">
           <SectionLabel n="03">Why me</SectionLabel>
           <div className="mt-3 grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
             <div>
@@ -331,7 +331,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="niches" className="relative mx-auto max-w-6xl px-6 py-24">
+      <section id="niches" className="relative mx-auto max-w-6xl px-6 py-14 sm:py-20 lg:py-24">
         <SectionLabel n="04">Niches</SectionLabel>
         <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
           Where I'm strongest.
@@ -353,7 +353,7 @@ export default function Home() {
       </section>
 
       <section id="process" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]">
-        <div className="mx-auto max-w-6xl px-6 py-24">
+        <div className="mx-auto max-w-6xl px-6 py-14 sm:py-20 lg:py-24">
         <SectionLabel n="05">Process</SectionLabel>
         <h2 className="mt-3 text-3xl sm:text-5xl font-semibold tracking-tight max-w-3xl">
           From brief to ad-ready file in under a week.
@@ -372,7 +372,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="duo" className="relative mx-auto max-w-6xl px-6 py-24">
+      <section id="duo" className="relative mx-auto max-w-6xl px-6 py-14 sm:py-20 lg:py-24">
         <SectionLabel n="06">The Duo</SectionLabel>
         <div className="mt-3 grid lg:grid-cols-2 gap-12 items-center">
           <div>
@@ -408,7 +408,7 @@ export default function Home() {
         id="contact"
         className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]"
       >
-        <div className="mx-auto max-w-6xl px-6 py-24">
+        <div className="mx-auto max-w-6xl px-6 py-14 sm:py-20 lg:py-24">
           <SectionLabel n="07">Contact</SectionLabel>
           <div className="mt-3 grid lg:grid-cols-2 gap-12 items-start">
             <div>
