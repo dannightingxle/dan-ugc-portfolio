@@ -244,7 +244,12 @@ export default function Home() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-8 items-center justify-items-center mb-10">
             {FEATURED_BRANDS.map((b) => (
-              <BrandLogo key={b.name} name={b.name} logo={b.logo} />
+              <div
+                key={b.name}
+                className="flex items-center justify-center w-full last:col-span-2 sm:last:col-span-1"
+              >
+                <BrandLogo name={b.name} logo={b.logo} />
+              </div>
             ))}
           </div>
           <div className="flex flex-wrap justify-center items-center gap-x-1 gap-y-3 text-sm tracking-wide text-[color:var(--text-muted)]">
