@@ -177,8 +177,8 @@ export default function Home() {
                 Dan Nightingale
               </h1>
               <p className="text-xl sm:text-2xl lg:text-[28px] font-medium tracking-tight leading-snug text-[color:var(--text)]">
-                Marketing-trained <span className="text-[color:var(--accent)]">UGC</span> for dads,
-                families and modern brands.
+                Marketing-trained <span className="text-[color:var(--accent)]">UGC</span> for fitness,
+                family and lifestyle brands.
               </p>
               <p className="mt-5 text-sm sm:text-base text-[color:var(--text-muted)] leading-relaxed max-w-xl">
                 I write, film and edit UGC built to convert - not just look good. 5+ years in
