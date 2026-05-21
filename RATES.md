@@ -12,9 +12,9 @@ All prices in GBP, exclusive of VAT.
 
 | Deliverable | Price |
 | :--- | ---: |
-| Short-form video, up to 30s - 1 hook, organic usage only | **£200** |
-| Standard video, 30-60s - up to 3 hook variations, 30-day paid usage included | **£450** |
-| Performance brief, 60s+ or vertical sequence - full creative direction, extended usage rights | **From £750** |
+| Short-form video, up to 30s - 1 hook, organic usage only | **£100** |
+| Standard video, 30-60s - up to 3 hook variations, 30-day paid usage included | **£225** |
+| Performance brief, 60s+ or vertical sequence - full creative direction, extended usage rights | **From £400** |
 
 ## Duo (Dan + wife)
 
@@ -22,9 +22,9 @@ For couple POV, family demos, his-and-hers and parenting content. One brief, one
 
 | Deliverable | Price |
 | :--- | ---: |
-| Duo short-form, up to 30s | **£400** |
-| Duo standard, 30-60s | **£800** |
-| Duo performance brief, 60s+ or sequence | **From £1,400** |
+| Duo short-form, up to 30s | **£200** |
+| Duo standard, 30-60s | **£400** |
+| Duo performance brief, 60s+ or sequence | **From £700** |
 
 ---
 
@@ -37,9 +37,9 @@ For **paid usage** (running the content as an ad), the formula is:
 > **Base + (30% of Base × months of paid usage)**
 
 Examples:
-- £450 base, 30 days paid usage → **£585** (included in Standard tier)
-- £450 base, 3 months paid usage → £450 + (£135 × 3) = **£855**
-- £750 base, 6 months paid usage → £750 + (£225 × 6) = **£2,100**
+- £225 base, 30 days paid usage → **£292** (included in Standard tier)
+- £225 base, 3 months paid usage → £225 + (£68 × 3) = **£429**
+- £400 base, 6 months paid usage → £400 + (£120 × 6) = **£1,120**
 
 **Perpetuity (forever rights)** quoted separately and only with a substantial premium. Default is not granted.
 
@@ -47,13 +47,13 @@ Examples:
 
 | Add-on | Price |
 | :--- | ---: |
-| Posting on my TikTok (@dansdailydeals) | **+£150** |
-| Posting on my Instagram | **+£100** |
-| Posting on both | **+£200** |
-| Whitelisting / Spark Ads from my handle (per 30 days) | **+£300** |
-| Additional hook variations on same body footage | **£50** each |
-| Category exclusivity, 90 days | **+£500** |
-| Priority turnaround (concept in 24h, delivery in 72h) | **+£200** |
+| Posting on my TikTok (@dansdailydeals) | **+£75** |
+| Posting on my Instagram | **+£50** |
+| Posting on both | **+£100** |
+| Whitelisting / Spark Ads from my handle (per 30 days) | **+£150** |
+| Additional hook variations on same body footage | **£25** each |
+| Category exclusivity, 90 days | **+£250** |
+| Priority turnaround (concept in 24h, delivery in 72h) | **+£100** |
 
 ## Retainers
 
@@ -61,9 +61,9 @@ Discounted per-video rates in exchange for a guaranteed monthly volume.
 
 | Volume | Per-video rate | Monthly |
 | :--- | ---: | ---: |
-| 4 solo videos / month | £350 | **£1,400** |
-| 8 solo videos / month | £300 | **£2,400** |
-| 4 duo videos / month | £700 | **£2,800** |
+| 4 solo videos / month | £175 | **£700** |
+| 8 solo videos / month | £150 | **£1,200** |
+| 4 duo videos / month | £350 | **£1,400** |
 
 Retainer pricing assumes 30-60s organic videos with up to 2 revisions each. Paid usage and posting add-ons charged separately at standard rates.
 
@@ -78,8 +78,8 @@ Retainer pricing assumes 30-60s organic videos with up to 2 revisions each. Paid
 
 ## Working terms
 
-- Two rounds of revisions included; further rounds at £75 / round.
-- 50% deposit on briefs over £500. Balance on delivery.
+- Two rounds of revisions included; further rounds at £40 / round.
+- 50% deposit on briefs over £400. Balance on delivery.
 - Net-14 invoicing for established brands.
 - I keep the right to use delivered content in my own portfolio.
 
