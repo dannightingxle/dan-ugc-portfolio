@@ -422,15 +422,15 @@ export default function Home() {
             <div className="space-y-4">
               <a
                 href="mailto:dan@birdandbear.co.uk?subject=UGC brief"
-                className="hover-lift block p-6 rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)]"
+                className="hover-lift block p-6 rounded-2xl bg-white text-[color:var(--bg)] shadow-lg"
               >
-                <div className="text-xs uppercase tracking-wider text-[color:var(--text-dim)] mb-2">
+                <div className="text-xs uppercase tracking-wider text-black/50 mb-2">
                   Email
                 </div>
-                <div className="text-lg font-medium text-[color:var(--text)]">
+                <div className="text-lg font-semibold text-black">
                   dan@birdandbear.co.uk
                 </div>
-                <div className="mt-1 text-sm text-[color:var(--text-muted)]">
+                <div className="mt-1 text-sm text-black/60">
                   Best for briefs, quotes and pitches.
                 </div>
               </a>
@@ -527,12 +527,12 @@ function SocialCard({ label, handle, href }: { label: string; handle: string; hr
       href={href}
       target={href.startsWith("http") ? "_blank" : undefined}
       rel={href.startsWith("http") ? "noreferrer" : undefined}
-      className="hover-lift block p-4 rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)]"
+      className="hover-lift block p-4 rounded-2xl bg-white text-[color:var(--bg)] shadow-lg"
     >
-      <div className="text-xs uppercase tracking-wider text-[color:var(--text-dim)] mb-1">
+      <div className="text-xs uppercase tracking-wider text-black/50 mb-1">
         {label}
       </div>
-      <div className="text-sm font-medium text-[color:var(--text)]">{handle}</div>
+      <div className="text-sm font-semibold text-black">{handle}</div>
     </a>
   );
 }
