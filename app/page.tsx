@@ -260,11 +260,11 @@ export default function Home() {
           <div className="text-center text-xs uppercase tracking-[0.18em] text-[color:var(--text-dim)] mb-10">
             Brands I've worked with
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-x-8 gap-y-8 items-center justify-items-center mb-10">
+          <div className="flex flex-wrap justify-center items-center gap-x-10 gap-y-8 mb-10">
             {FEATURED_BRANDS.map((b) => (
               <div
                 key={b.name}
-                className="flex items-center justify-center w-full"
+                className="flex items-center justify-center"
               >
                 <BrandLogo name={b.name} logo={b.logo} />
               </div>
