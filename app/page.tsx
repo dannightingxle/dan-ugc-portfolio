@@ -21,16 +21,16 @@ const STATS = [
 
 const FEATURED_BRANDS: { name: string; logo: string }[] = [
   { name: "Neutonic", logo: "/logos/neutonic.svg" },
-  { name: "JustFloow", logo: "/logos/justfloow.svg" },
   { name: "Puma", logo: "/logos/puma.svg" },
-  { name: "Anker", logo: "/logos/anker.svg" },
   { name: "MyProtein", logo: "/logos/myprotein.svg" },
-  { name: "B&M", logo: "/logos/bm.jpg" },
+  { name: "B&M", logo: "/logos/bm.png" },
   { name: "Tembo", logo: "/logos/tembo.png" },
   { name: "Zable", logo: "/logos/zable.png" },
 ];
 
 const ALL_BRANDS = [
+  "JustFloow",
+  "Anker",
   "Huel",
   "Meoky",
   "Applied Nutrition",
@@ -571,8 +571,8 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
       src={logo}
       alt={name}
       onError={() => setFailed(true)}
-      className="h-10 sm:h-12 max-w-[140px] object-contain opacity-70 hover:opacity-100 transition-opacity rounded-lg"
-      style={isSvg ? { filter: "brightness(0) invert(1)" } : undefined}
+      className="h-10 sm:h-12 max-w-[140px] object-contain opacity-70 hover:opacity-100 transition-opacity rounded-sm"
+      style={isSvg ? { filter: "brightness(0) invert(1)" } : { mixBlendMode: "screen" }}
     />
   );
 }
