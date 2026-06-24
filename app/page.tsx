@@ -25,6 +25,9 @@ const FEATURED_BRANDS: { name: string; logo: string }[] = [
   { name: "Puma", logo: "/logos/puma.svg" },
   { name: "Anker", logo: "/logos/anker.svg" },
   { name: "MyProtein", logo: "/logos/myprotein.svg" },
+  { name: "B&M", logo: "/logos/bm.jpg" },
+  { name: "Tembo", logo: "/logos/tembo.png" },
+  { name: "Zable", logo: "/logos/zable.png" },
 ];
 
 const ALL_BRANDS = [
@@ -110,6 +113,21 @@ const WORK: WorkItem[] = [
     title: "Bottle + coffee mug - street interview",
     videoSrc: "/work/hitch.mp4",
     stat: "Street interview UGC style",
+  },
+  {
+    category: "B&M",
+    title: "90s/00s birthday buffet - lifestyle",
+    videoSrc: "/work/bm.mp4",
+  },
+  {
+    category: "Tembo",
+    title: "Cash ISA - paid social",
+    videoSrc: "/work/tembo.mp4",
+  },
+  {
+    category: "Zable",
+    title: "Car finance - paid social",
+    videoSrc: "/work/zable.mp4",
   },
 ];
 
@@ -242,11 +260,11 @@ export default function Home() {
           <div className="text-center text-xs uppercase tracking-[0.18em] text-[color:var(--text-dim)] mb-10">
             Brands I've worked with
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-8 items-center justify-items-center mb-10">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-x-8 gap-y-8 items-center justify-items-center mb-10">
             {FEATURED_BRANDS.map((b) => (
               <div
                 key={b.name}
-                className="flex items-center justify-center w-full last:col-span-2 sm:last:col-span-1"
+                className="flex items-center justify-center w-full"
               >
                 <BrandLogo name={b.name} logo={b.logo} />
               </div>
@@ -539,6 +557,7 @@ function SocialCard({ label, handle, href }: { label: string; handle: string; hr
 
 function BrandLogo({ name, logo }: { name: string; logo: string }) {
   const [failed, setFailed] = useState(false);
+  const isSvg = logo.endsWith(".svg");
   if (failed) {
     return (
       <div className="text-base sm:text-lg font-bold uppercase tracking-wider text-[color:var(--text-muted)] text-center">
@@ -552,8 +571,8 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
       src={logo}
       alt={name}
       onError={() => setFailed(true)}
-      className="h-10 sm:h-12 max-w-[140px] object-contain opacity-80 hover:opacity-100 transition-opacity"
-      style={{ filter: "brightness(0) invert(1)" }}
+      className="h-10 sm:h-12 max-w-[140px] object-contain opacity-70 hover:opacity-100 transition-opacity rounded-lg"
+      style={isSvg ? { filter: "brightness(0) invert(1)" } : undefined}
     />
   );
 }
