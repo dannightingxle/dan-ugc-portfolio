@@ -19,13 +19,15 @@ const STATS = [
   { value: "48h", label: "Concept turnaround" },
 ];
 
-const FEATURED_BRANDS: { name: string; logo: string }[] = [
+const FEATURED_BRANDS: { name: string; logo: string; invert?: boolean }[] = [
   { name: "Neutonic", logo: "/logos/neutonic.svg" },
   { name: "Puma", logo: "/logos/puma.svg" },
   { name: "MyProtein", logo: "/logos/myprotein.svg" },
   { name: "B&M", logo: "/logos/bm.png" },
   { name: "Tembo", logo: "/logos/tembo.png" },
   { name: "Zable", logo: "/logos/zable.png" },
+  { name: "Avios", logo: "/logos/avios.png", invert: true },
+  { name: "Harry's", logo: "/logos/harrys.png", invert: true },
 ];
 
 const ALL_BRANDS = [
@@ -260,13 +262,13 @@ export default function Home() {
           <div className="text-center text-xs uppercase tracking-[0.18em] text-[color:var(--text-dim)] mb-10">
             Brands I've worked with
           </div>
-          <div className="flex flex-wrap justify-center items-center gap-x-10 gap-y-8 mb-10">
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:flex lg:flex-wrap lg:justify-center lg:items-center gap-x-10 gap-y-8 mb-10 justify-items-center">
             {FEATURED_BRANDS.map((b) => (
               <div
                 key={b.name}
                 className="flex items-center justify-center"
               >
-                <BrandLogo name={b.name} logo={b.logo} />
+                <BrandLogo name={b.name} logo={b.logo} invert={b.invert} />
               </div>
             ))}
           </div>
@@ -555,9 +557,10 @@ function SocialCard({ label, handle, href }: { label: string; handle: string; hr
   );
 }
 
-function BrandLogo({ name, logo }: { name: string; logo: string }) {
+function BrandLogo({ name, logo, invert }: { name: string; logo: string; invert?: boolean }) {
   const [failed, setFailed] = useState(false);
   const isSvg = logo.endsWith(".svg");
+  const useInvert = isSvg || invert;
   if (failed) {
     return (
       <div className="text-base sm:text-lg font-bold uppercase tracking-wider text-[color:var(--text-muted)] text-center">
@@ -572,7 +575,7 @@ function BrandLogo({ name, logo }: { name: string; logo: string }) {
       alt={name}
       onError={() => setFailed(true)}
       className="h-10 sm:h-12 max-w-[140px] object-contain opacity-70 hover:opacity-100 transition-opacity rounded-sm"
-      style={isSvg ? { filter: "brightness(0) invert(1)" } : { mixBlendMode: "screen" }}
+      style={useInvert ? { filter: "brightness(0) invert(1)" } : { mixBlendMode: "screen" }}
     />
   );
 }
