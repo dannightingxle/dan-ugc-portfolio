@@ -95,6 +95,16 @@ const WORK: WorkItem[] = [
     videoSrc: "/work/avios.mp4",
   },
   {
+    category: "Tembo",
+    title: "Cash ISA - paid social",
+    videoSrc: "/work/tembo.mp4",
+  },
+  {
+    category: "Zable",
+    title: "Car finance - paid social",
+    videoSrc: "/work/zable.mp4",
+  },
+  {
     category: "Spoon Cereals x Manilife",
     title: "Cereal collab - lifestyle",
     videoSrc: "/work/spoon-manilife.mp4",
@@ -149,16 +159,6 @@ const WORK: WorkItem[] = [
     category: "B&M",
     title: "90s/00s birthday buffet - lifestyle",
     videoSrc: "/work/bm.mp4",
-  },
-  {
-    category: "Tembo",
-    title: "Cash ISA - paid social",
-    videoSrc: "/work/tembo.mp4",
-  },
-  {
-    category: "Zable",
-    title: "Car finance - paid social",
-    videoSrc: "/work/zable.mp4",
   },
 ];
 
