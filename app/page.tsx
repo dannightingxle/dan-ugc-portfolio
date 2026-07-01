@@ -31,6 +31,10 @@ const FEATURED_BRANDS: { name: string; logo: string; invert?: boolean }[] = [
 ];
 
 const ALL_BRANDS = [
+  "Parcel2Go",
+  "Whatnot",
+  "Spoon Cereals",
+  "Manilife",
   "JustFloow",
   "Anker",
   "Huel",
@@ -80,6 +84,31 @@ type WorkItem = {
 };
 
 const WORK: WorkItem[] = [
+  {
+    category: "Parcel2Go",
+    title: "Parcel delivery app - paid social",
+    videoSrc: "/work/parcel2go.mp4",
+  },
+  {
+    category: "Avios",
+    title: "Loyalty rewards - paid social",
+    videoSrc: "/work/avios.mp4",
+  },
+  {
+    category: "Spoon Cereals x Manilife",
+    title: "Cereal collab - lifestyle",
+    videoSrc: "/work/spoon-manilife.mp4",
+  },
+  {
+    category: "Whatnot",
+    title: "Live selling platform - paid social",
+    videoSrc: "/work/whatnot.mp4",
+  },
+  {
+    category: "B&M",
+    title: "90s/00s birthday buffet - lifestyle",
+    videoSrc: "/work/bm2.mp4",
+  },
   {
     category: "JustFloow",
     title: "Organic Facebook reel - top performer",
