@@ -856,18 +856,39 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
 }
 
 function WorkCard({ item }: { item: WorkItem }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const poster = item.videoSrc.replace(/\/([^/]+)\.mp4$/, "/posters/$1.jpg");
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.play().catch(() => {});
+        } else {
+          el.pause();
+        }
+      },
+      { threshold: 0.25, rootMargin: "200px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="hover-lift group relative aspect-[9/16] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden">
         <video
+          ref={videoRef}
           src={item.videoSrc}
-          autoPlay
+          poster={poster}
           muted
           loop
           playsInline
           controls
           controlsList="nodownload"
-          preload="metadata"
+          preload="none"
           className="absolute inset-0 w-full h-full object-cover"
         />
       </div>
