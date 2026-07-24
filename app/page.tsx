@@ -111,6 +111,11 @@ const WORK: WorkItem[] = [
   { category: "Spoon Cereals x Manilife", title: "Cereal collab - lifestyle", videoSrc: "/work/spoon-manilife.mp4" },
   { category: "Whatnot", title: "Live selling platform - paid social", videoSrc: "/work/whatnot.mp4" },
   { category: "B&M", title: "90s/00s birthday buffet - lifestyle", videoSrc: "/work/bm2.mp4" },
+  { category: "Fussy", title: "Natural deodorant - paid social", videoSrc: "/work/fussy.mp4" },
+  { category: "Harry's", title: "Men's grooming - paid social", videoSrc: "/work/harrys.mp4" },
+  { category: "OneFamily", title: "Savings & investments - paid social", videoSrc: "/work/onefamily.mp4" },
+  { category: "CarLoans365", title: "Car finance - paid social", videoSrc: "/work/carloans365.mp4" },
+  { category: "Inckd", title: "Tattoo booking app - paid social", videoSrc: "/work/inckd.mp4" },
   {
     category: "JustFloow",
     title: "Organic Facebook reel - top performer",
