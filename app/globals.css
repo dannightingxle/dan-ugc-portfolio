@@ -30,6 +30,19 @@
   --color-accent-soft: var(--accent-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-serif);
+}
+
+/* Editorial serif display */
+.font-display {
+  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 0.98;
+}
+.font-display em,
+.font-display i {
+  font-style: italic;
 }
 
 html, body {
@@ -61,8 +74,9 @@ html {
 }
 
 /* Aurora glow */
+/* Site-wide glow layer: fixed to the viewport, painted behind all content. */
 .aurora {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
@@ -72,21 +86,26 @@ html {
 .aurora::after {
   content: "";
   position: absolute;
-  width: 60vw;
-  height: 60vw;
+  width: 26vw;
+  height: 26vw;
+  min-width: 300px;
+  min-height: 300px;
   border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.35;
+  filter: blur(100px);
+  transform: translate(-50%, -50%);
 }
+/* Positions are driven by --mx/--my (set from the cursor in JS).
+   The fallback values reproduce the original corner glows. */
 .aurora::before {
   background: var(--accent);
-  top: -20vw;
-  right: -20vw;
+  left: var(--mx, 88%);
+  top: var(--my, 4%);
+  opacity: 0.3;
 }
 .aurora::after {
   background: #6b35ff;
-  bottom: -30vw;
-  left: -20vw;
+  left: var(--mx2, 12%);
+  top: var(--my2, 96%);
   opacity: 0.2;
 }
 
@@ -104,4 +123,97 @@ html {
 .hover-lift:hover {
   transform: translateY(-2px);
   border-color: var(--border-strong);
+}
+
+/* ---------- Scroll-triggered reveal ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- Kinetic per-letter headline ---------- */
+.kin {
+  display: inline;
+}
+.kin-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.55em);
+  transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.kin.in .kin-letter {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- Infinite marquee ---------- */
+.marquee {
+  display: flex;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 8%,
+    #000 92%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 8%,
+    #000 92%,
+    transparent
+  );
+}
+.marquee-track {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-width: max-content;
+  animation: marquee var(--marquee-dur, 34s) linear infinite;
+}
+/* Two identical groups. Each carries its own gap + a matching trailing gap
+   (padding-right), so the spacing between groups equals the spacing inside a
+   group. translateX(-50%) then lands exactly on the second group = seamless. */
+.marquee-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--marquee-gap, 4rem);
+  padding-right: var(--marquee-gap, 4rem);
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .kin-letter {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .marquee-track {
+    animation: none;
+  }
 }
