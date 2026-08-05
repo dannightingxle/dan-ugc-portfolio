@@ -193,6 +193,15 @@ html {
 .marquee:hover .marquee-track {
   animation-play-state: paused;
 }
+/* `.font-display` sets line-height: 0.98, which sits outside Tailwind's utility
+   layer and so beats any `leading-*` class. At 0.98 the serif ascenders and
+   descenders spill past the line box and get cut off by `.marquee`'s
+   overflow: hidden. Restate it here (higher specificity) with room to spare. */
+.marquee .marquee-word {
+  display: block;
+  line-height: 1.16;
+  padding-block: 0.06em;
+}
 @keyframes marquee {
   from {
     transform: translateX(0);

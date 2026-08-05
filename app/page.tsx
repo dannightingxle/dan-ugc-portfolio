@@ -170,13 +170,13 @@ export default function Home() {
 
       {/* ---------------- HERO ---------------- */}
       <section className="relative overflow-hidden">
-        <div className="relative mx-auto max-w-[1440px] px-6 lg:px-10 pt-16 sm:pt-24 lg:pt-28 pb-10">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)] mb-8">
+        <div className="relative mx-auto max-w-[1440px] px-6 lg:px-10 pt-5 sm:pt-16 lg:pt-24 pb-10">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)] mb-4 sm:mb-8">
             <span className="size-1.5 rounded-full bg-[color:var(--accent)] animate-pulse" />
-            Available for new briefs · UK
+            Available for new briefs
           </div>
 
-          <div className="grid lg:grid-cols-[1fr_0.9fr] gap-10 lg:gap-16 items-center lg:min-h-[560px]">
+          <div className="grid lg:grid-cols-[1fr_0.9fr] gap-5 sm:gap-10 lg:gap-16 items-center lg:min-h-[560px]">
             <div className="flex flex-col justify-center order-2 lg:order-1">
               <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl xl:text-[5.5rem] leading-[0.92] tracking-[-0.02em]">
                 <KineticText text="Dan Nightingale" className="block" />
@@ -186,14 +186,14 @@ export default function Home() {
                 </span>
               </h1>
               <Reveal delay={160}>
-                <p className="mt-8 text-lg sm:text-xl font-medium tracking-tight leading-snug text-[color:var(--text)] max-w-xl">
+                <p className="mt-5 sm:mt-8 text-lg sm:text-xl font-medium tracking-tight leading-snug text-[color:var(--text)] max-w-xl">
                   Marketing-trained UGC for fitness, family and lifestyle brands - written, filmed and
                   edited to <span className="font-display italic text-[color:var(--accent)]">convert</span>, not
                   just look good.
                 </p>
               </Reveal>
               <Reveal delay={240}>
-                <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <div className="mt-6 sm:mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
                   <HeroLink href="https://www.tiktok.com/@dannightingxle.ugc" label="TikTok" handle="@dannightingxle.ugc" />
                   <HeroLink href="https://www.instagram.com/dannightingxle.ugc" label="Instagram" handle="@dannightingxle.ugc" />
                   <HeroLink href="mailto:hello@dannightingxle.com?subject=UGC brief" label="Email" handle="hello@dannightingxle.com" />
@@ -201,7 +201,7 @@ export default function Home() {
               </Reveal>
             </div>
             <Reveal delay={180} className="order-1 lg:order-2 w-full lg:h-full">
-              <div className="relative h-full rounded-2xl overflow-hidden border border-[color:var(--border)] bg-[color:var(--bg-card)] aspect-[4/5] sm:aspect-[16/10] lg:aspect-auto lg:min-h-[560px] shadow-xl">
+              <div className="relative h-full rounded-2xl overflow-hidden border border-[color:var(--border)] bg-[color:var(--bg-card)] aspect-[4/3] sm:aspect-[16/10] lg:aspect-auto lg:min-h-[560px] shadow-xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/dan-hero.jpg"
@@ -211,7 +211,7 @@ export default function Home() {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
                 <div className="absolute bottom-4 left-4 inline-flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/90 bg-black/45 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-                  <span className="size-1.5 rounded-full bg-[color:var(--accent)]" /> Dan Nightingale · UK
+                  <span className="size-1.5 rounded-full bg-[color:var(--accent)]" /> Dan Nightingale
                 </div>
               </div>
             </Reveal>
@@ -220,9 +220,9 @@ export default function Home() {
 
         {/* hero brand marquee */}
         <div id="brands" className="scroll-mt-20 border-y border-[color:var(--border)] py-7">
-          <Marquee duration={36}>
+          <Marquee duration={36} gap="2.5rem">
             {FEATURED_BRANDS.map((b) => (
-              <div key={b.name} className="flex items-center px-2">
+              <div key={b.name} className="flex items-center">
                 <BrandLogo name={b.name} logo={b.logo} invert={b.invert} />
               </div>
             ))}
@@ -432,7 +432,7 @@ export default function Home() {
 
       {/* ---------------- CONTACT ---------------- */}
       <section id="contact" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70 overflow-hidden">
-        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-36">
+        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 pt-20 sm:pt-28 lg:pt-36 pb-12 sm:pb-20 lg:pb-24">
           <Reveal>
             <SectionLabel n="(08)">Contact</SectionLabel>
           </Reveal>
@@ -475,23 +475,23 @@ export default function Home() {
       </section>
 
       {/* ---------------- FOOTER MARQUEE ---------------- */}
-      <div className="border-t border-[color:var(--border)] py-10 sm:py-12 overflow-hidden">
-        <Marquee duration={40}>
+      <div className="border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70 py-8 sm:py-12 overflow-hidden">
+        <Marquee duration={40} gap="3rem">
           {["Dan Nightingale", "UGC Creator", "Fitness", "Family", "Lifestyle", "Paid social", "Organic"].map(
             (t, i) => (
               <span
                 key={i}
-                className="font-display text-5xl sm:text-7xl leading-[1.15] text-[color:var(--text)] flex items-center gap-8 sm:gap-12 whitespace-nowrap"
+                className="font-display text-4xl sm:text-7xl text-[color:var(--text)] flex items-center gap-6 sm:gap-12 whitespace-nowrap"
               >
-                {t}
-                <span className="text-[color:var(--accent)] text-2xl sm:text-4xl">✦</span>
+                <span className="marquee-word">{t}</span>
+                <span className="text-[color:var(--accent)] text-xl sm:text-4xl">✦</span>
               </span>
             )
           )}
         </Marquee>
       </div>
 
-      <footer className="relative border-t border-[color:var(--border)]">
+      <footer className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-10 flex flex-wrap items-center justify-between gap-4">
           <div className="text-sm text-[color:var(--text-dim)]">
             © {new Date().getFullYear()} Dan Nightingale. UK-based UGC creator.
@@ -686,14 +686,16 @@ function CountUp({
 function Marquee({
   children,
   duration = 34,
+  gap,
   reverse = false,
 }: {
   children: React.ReactNode;
   duration?: number;
+  gap?: string;
   reverse?: boolean;
 }) {
   return (
-    <div className="marquee">
+    <div className="marquee" style={gap ? ({ "--marquee-gap": gap } as React.CSSProperties) : undefined}>
       <div
         className="marquee-track"
         style={{ animationDuration: `${duration}s`, animationDirection: reverse ? "reverse" : "normal" }}
@@ -855,8 +857,13 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
   );
 }
 
+/* Only one clip is allowed sound at a time. */
+const AUDIO_EVENT = "ugc:audio";
+
 function WorkCard({ item }: { item: WorkItem }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
   const poster = item.videoSrc.replace(/\/([^/]+)\.mp4$/, "/posters/$1.jpg");
 
   useEffect(() => {
@@ -868,13 +875,48 @@ function WorkCard({ item }: { item: WorkItem }) {
           el.play().catch(() => {});
         } else {
           el.pause();
+          // scrolling a clip away drops its sound, so the next one starts quiet
+          if (!el.muted) {
+            el.muted = true;
+            setMuted(true);
+          }
         }
       },
       { threshold: 0.25, rootMargin: "200px 0px" }
     );
     io.observe(el);
-    return () => io.disconnect();
+
+    const onOtherAudio = (e: Event) => {
+      if ((e as CustomEvent<HTMLVideoElement>).detail === el) return;
+      el.muted = true;
+      setMuted(true);
+    };
+    window.addEventListener(AUDIO_EVENT, onOtherAudio);
+
+    return () => {
+      io.disconnect();
+      window.removeEventListener(AUDIO_EVENT, onOtherAudio);
+    };
   }, []);
+
+  const togglePlay = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.paused) el.play().catch(() => {});
+    else el.pause();
+  };
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = !el.muted;
+    setMuted(el.muted);
+    if (!el.muted) {
+      window.dispatchEvent(new CustomEvent(AUDIO_EVENT, { detail: el }));
+      el.play().catch(() => {});
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -886,11 +928,60 @@ function WorkCard({ item }: { item: WorkItem }) {
           muted
           loop
           playsInline
-          controls
-          controlsList="nodownload"
+          /* iOS in-app browsers (TikTok, Instagram) only honour the legacy
+             attributes - without them a tap kicks the clip into fullscreen. */
+          webkit-playsinline="true"
+          x5-playsinline="true"
+          disablePictureInPicture
           preload="none"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
           className="absolute inset-0 w-full h-full object-cover"
         />
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label={`${playing ? "Pause" : "Play"} ${item.category} clip`}
+          className="absolute inset-0 flex items-center justify-center focus:outline-none"
+        >
+          <span
+            className={`grid place-items-center size-14 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white transition-opacity duration-200 ${
+              playing ? "opacity-0 group-hover:opacity-70" : "opacity-100"
+            }`}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+              {playing ? (
+                <path d="M4.5 2.5h3.5v13H4.5zM10 2.5h3.5v13H10z" />
+              ) : (
+                <path d="M5 2.8l10 6.2-10 6.2z" />
+              )}
+            </svg>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={muted ? `Unmute ${item.category} clip` : `Mute ${item.category} clip`}
+          className="absolute bottom-3 right-3 grid place-items-center size-9 rounded-full bg-black/55 backdrop-blur-md border border-white/15 text-white hover:bg-black/75 transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path
+              d="M4 7.5h2.5L10 4.5v11L6.5 12.5H4z"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+            />
+            {muted ? (
+              <path d="M13 7.5l4 5M17 7.5l-4 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            ) : (
+              <>
+                <path d="M12.8 7.4a3.4 3.4 0 010 5.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M15.1 5.5a6.3 6.3 0 010 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </>
+            )}
+          </svg>
+        </button>
       </div>
       <div className="px-1">
         <div className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium">{item.category}</div>
