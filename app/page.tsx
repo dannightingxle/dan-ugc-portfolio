@@ -860,10 +860,36 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
 /* Only one clip is allowed sound at a time. */
 const AUDIO_EVENT = "ugc:audio";
 
+function SkipIcon({ back = false }: { back?: boolean }) {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden="true"
+      style={back ? { transform: "scaleX(-1)" } : undefined}
+    >
+      <path d="M3 5.2l6 4.8-6 4.8zM10.5 5.2l6 4.8-6 4.8z" />
+    </svg>
+  );
+}
+
+const SKIP_SECONDS = 5;
+
+function formatTime(s: number) {
+  if (!Number.isFinite(s) || s < 0) s = 0;
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
 function WorkCard({ item }: { item: WorkItem }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [scrubbing, setScrubbing] = useState(false);
   const poster = item.videoSrc.replace(/\/([^/]+)\.mp4$/, "/posters/$1.jpg");
 
   useEffect(() => {
@@ -906,6 +932,59 @@ function WorkCard({ item }: { item: WorkItem }) {
     else el.pause();
   };
 
+  const seekTo = (seconds: number) => {
+    const el = videoRef.current;
+    if (!el || !el.duration) return;
+    const t = Math.min(el.duration, Math.max(0, seconds));
+    el.currentTime = t;
+    setTime(t);
+  };
+
+  const seekFromPointer = (clientX: number) => {
+    const el = videoRef.current;
+    const bar = barRef.current;
+    if (!el || !bar || !el.duration) return;
+    const r = bar.getBoundingClientRect();
+    seekTo(((clientX - r.left) / r.width) * el.duration);
+  };
+
+  const skip = (delta: number) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const el = videoRef.current;
+    if (!el) return;
+    seekTo(el.currentTime + delta);
+  };
+
+  const onScrubStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setScrubbing(true);
+    seekFromPointer(e.clientX);
+  };
+
+  const onScrubMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbing) return;
+    e.stopPropagation();
+    seekFromPointer(e.clientX);
+  };
+
+  const onScrubEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbing) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setScrubbing(false);
+  };
+
+  const onScrubKey = (e: React.KeyboardEvent) => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (e.key === "ArrowLeft") seekTo(el.currentTime - SKIP_SECONDS);
+    else if (e.key === "ArrowRight") seekTo(el.currentTime + SKIP_SECONDS);
+    else return;
+    e.preventDefault();
+  };
+
+  const progress = duration > 0 ? Math.min(100, (time / duration) * 100) : 0;
+
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
     const el = videoRef.current;
@@ -936,6 +1015,11 @@ function WorkCard({ item }: { item: WorkItem }) {
           preload="none"
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
+          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+          onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
+          onTimeUpdate={(e) => {
+            if (!scrubbing) setTime(e.currentTarget.currentTime);
+          }}
           className="absolute inset-0 w-full h-full object-cover"
         />
         <button
@@ -958,30 +1042,82 @@ function WorkCard({ item }: { item: WorkItem }) {
             </svg>
           </span>
         </button>
-        <button
-          type="button"
-          onClick={toggleMute}
-          aria-label={muted ? `Unmute ${item.category} clip` : `Mute ${item.category} clip`}
-          className="absolute bottom-3 right-3 grid place-items-center size-9 rounded-full bg-black/55 backdrop-blur-md border border-white/15 text-white hover:bg-black/75 transition-colors"
-        >
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path
-              d="M4 7.5h2.5L10 4.5v11L6.5 12.5H4z"
-              fill="currentColor"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinejoin="round"
+        {/* Control strip. Sits above the full-card play/pause button and stops
+            its own events, so a scrub drag never reads as a tap-to-pause. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-2.5 pt-10 bg-gradient-to-t from-black/85 via-black/45 to-transparent">
+          <div
+            ref={barRef}
+            role="slider"
+            tabIndex={0}
+            aria-label={`Seek ${item.category} clip`}
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(time)}
+            aria-valuetext={`${formatTime(time)} of ${formatTime(duration)}`}
+            onPointerDown={onScrubStart}
+            onPointerMove={onScrubMove}
+            onPointerUp={onScrubEnd}
+            onPointerCancel={onScrubEnd}
+            onKeyDown={onScrubKey}
+            className="group/bar pointer-events-auto relative flex h-5 cursor-pointer touch-none items-center focus:outline-none"
+          >
+            <div className="h-[3px] w-full overflow-hidden rounded-full bg-white/25">
+              <div className="h-full rounded-full bg-[color:var(--accent)]" style={{ width: `${progress}%` }} />
+            </div>
+            <span
+              className={`pointer-events-none absolute size-3 -translate-x-1/2 rounded-full bg-white shadow-md transition-opacity ${
+                scrubbing ? "opacity-100" : "opacity-0 group-hover/bar:opacity-100 group-focus/bar:opacity-100"
+              }`}
+              style={{ left: `${progress}%` }}
             />
-            {muted ? (
-              <path d="M13 7.5l4 5M17 7.5l-4 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            ) : (
-              <>
-                <path d="M12.8 7.4a3.4 3.4 0 010 5.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M15.1 5.5a6.3 6.3 0 010 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </>
-            )}
-          </svg>
-        </button>
+          </div>
+
+          <div className="pointer-events-auto mt-1 flex items-center gap-1.5 text-white">
+            <button
+              type="button"
+              onClick={skip(-SKIP_SECONDS)}
+              aria-label={`Rewind ${SKIP_SECONDS} seconds`}
+              className="grid size-7 place-items-center rounded-full hover:bg-white/15 transition-colors"
+            >
+              <SkipIcon back />
+            </button>
+            <button
+              type="button"
+              onClick={skip(SKIP_SECONDS)}
+              aria-label={`Forward ${SKIP_SECONDS} seconds`}
+              className="grid size-7 place-items-center rounded-full hover:bg-white/15 transition-colors"
+            >
+              <SkipIcon />
+            </button>
+            <span className="ml-auto text-[11px] tabular-nums text-white/70">
+              {formatTime(time)} / {formatTime(duration)}
+            </span>
+            <button
+              type="button"
+              onClick={toggleMute}
+              aria-label={muted ? `Unmute ${item.category} clip` : `Mute ${item.category} clip`}
+              className="grid size-7 place-items-center rounded-full hover:bg-white/15 transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path
+                  d="M4 7.5h2.5L10 4.5v11L6.5 12.5H4z"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                />
+                {muted ? (
+                  <path d="M13 7.5l4 5M17 7.5l-4 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                ) : (
+                  <>
+                    <path d="M12.8 7.4a3.4 3.4 0 010 5.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M15.1 5.5a6.3 6.3 0 010 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
       <div className="px-1">
         <div className="text-xs uppercase tracking-wider text-[color:var(--accent)] font-medium">{item.category}</div>
