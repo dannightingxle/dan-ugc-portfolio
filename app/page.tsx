@@ -19,26 +19,28 @@ const STATS = [
   { prefix: "", target: 48, suffix: "h", label: "Concept turnaround" },
 ];
 
-const FEATURED_BRANDS: { name: string; logo: string; invert?: boolean }[] = [
-  { name: "Neutonic", logo: "/logos/neutonic.svg" },
-  { name: "Puma", logo: "/logos/puma.svg" },
-  { name: "MyProtein", logo: "/logos/myprotein.svg" },
-  { name: "B&M", logo: "/logos/bm.png" },
-  { name: "Tembo", logo: "/logos/tembo.png" },
-  { name: "Zable", logo: "/logos/zable.png" },
-  { name: "Avios", logo: "/logos/avios.png", invert: true },
-  { name: "Harry's", logo: "/logos/harrys.png", invert: true },
-  { name: "Huel", logo: "/logos/huel.png", invert: true },
-  { name: "Whatnot", logo: "/logos/whatnot.png" },
-  { name: "Parcel2Go", logo: "/logos/parcel2go.png", invert: true },
-  { name: "Applied Nutrition", logo: "/logos/applied-nutrition.png" },
-  { name: "Chilly's", logo: "/logos/chillys.png" },
-  { name: "Warrior Supplements", logo: "/logos/warrior.png" },
-  { name: "Wellgard", logo: "/logos/wellgard.png" },
-  { name: "Spoon Cereals", logo: "/logos/spoon.png" },
-  { name: "JustFloow", logo: "/logos/justfloow.svg" },
-  { name: "Anker", logo: "/logos/anker.svg" },
-  { name: "Shark", logo: "/logos/shark.png", invert: true },
+/* `whiteAsset` marks logo files that are white/knocked-out versions - they get
+   rendered black on the white brand tiles until a full-colour file replaces them. */
+const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = [
+  { name: "Neutonic", logo: "/logos/neutonic.svg", whiteAsset: true },
+  { name: "Puma", logo: "/logos/puma.svg", whiteAsset: true },
+  { name: "MyProtein", logo: "/logos/myprotein.svg", whiteAsset: true },
+  { name: "B&M", logo: "/logos/bm.jpg" },
+  { name: "Tembo", logo: "/logos/tembo.png", whiteAsset: true },
+  { name: "Zable", logo: "/logos/zable.png", whiteAsset: true },
+  { name: "Avios", logo: "/logos/avios.png" },
+  { name: "Harry's", logo: "/logos/harrys.png" },
+  { name: "Huel", logo: "/logos/huel.png" },
+  { name: "Whatnot", logo: "/logos/whatnot.png", whiteAsset: true },
+  { name: "Parcel2Go", logo: "/logos/parcel2go.png" },
+  { name: "Applied Nutrition", logo: "/logos/applied-nutrition.png", whiteAsset: true },
+  { name: "Chilly's", logo: "/logos/chillys.png", whiteAsset: true },
+  { name: "Warrior Supplements", logo: "/logos/warrior.png", whiteAsset: true },
+  { name: "Wellgard", logo: "/logos/wellgard.png", whiteAsset: true },
+  { name: "Spoon Cereals", logo: "/logos/spoon.png", whiteAsset: true },
+  { name: "JustFloow", logo: "/logos/justfloow.svg", whiteAsset: true },
+  { name: "Anker", logo: "/logos/anker.svg", whiteAsset: true },
+  { name: "Shark", logo: "/logos/shark.png" },
 ];
 
 const SERVICES = [
@@ -218,22 +220,37 @@ export default function Home() {
           </div>
         </div>
 
-        {/* hero brand marquee */}
-        <div id="brands" className="scroll-mt-20 border-y border-[color:var(--border)] py-7">
-          <Marquee duration={36} gap="2.5rem">
-            {FEATURED_BRANDS.map((b) => (
-              <div key={b.name} className="flex items-center">
-                <BrandLogo name={b.name} logo={b.logo} invert={b.invert} />
-              </div>
+      </section>
+
+      {/* ---------------- (01) BRANDS ---------------- */}
+      <section id="brands" className="relative scroll-mt-20 bg-white">
+        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-24">
+          <Reveal>
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-neutral-500">
+              <span className="font-mono text-[color:var(--accent)]">(01)</span>
+              <span className="h-px w-8 bg-neutral-300" />
+              <span>Brands</span>
+            </div>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl text-neutral-950 max-w-3xl">
+              Brands I&apos;ve <em className="text-[color:var(--accent)]">worked</em> with.
+            </h2>
+          </Reveal>
+          <div className="mt-14 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            {FEATURED_BRANDS.map((b, i) => (
+              <Reveal key={b.name} delay={Math.min(i * 40, 360)} className="h-full">
+                <LogoTile name={b.name} logo={b.logo} whiteAsset={b.whiteAsset} />
+              </Reveal>
             ))}
-          </Marquee>
+          </div>
         </div>
       </section>
 
-      {/* ---------------- (01) COMMITMENT + STATS ---------------- */}
+      {/* ---------------- (02) COMMITMENT + STATS ---------------- */}
       <section className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(01)">My commitment</SectionLabel>
+          <SectionLabel n="(02)">My commitment</SectionLabel>
         </Reveal>
         <Reveal delay={80}>
           <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-4xl">
@@ -255,13 +272,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------------- (02) WORK ---------------- */}
+      {/* ---------------- (03) WORK ---------------- */}
       <section id="work" className="relative bg-[color:var(--bg-elevated)]/70">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <div className="flex items-end justify-between flex-wrap gap-4 mb-14">
             <div>
               <Reveal>
-                <SectionLabel n="(02)">Portfolio</SectionLabel>
+                <SectionLabel n="(03)">Portfolio</SectionLabel>
               </Reveal>
               <Reveal delay={80}>
                 <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl">
@@ -281,10 +298,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------------- (03) WHY ME ---------------- */}
+      {/* ---------------- (04) WHY ME ---------------- */}
       <section className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(03)">Why me</SectionLabel>
+          <SectionLabel n="(04)">Why me</SectionLabel>
         </Reveal>
         <div className="mt-5 grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
           <Reveal delay={80}>
@@ -305,11 +322,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------------- (04) SERVICES ---------------- */}
+      {/* ---------------- (05) SERVICES ---------------- */}
       <section className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
-            <SectionLabel n="(04)">Services</SectionLabel>
+            <SectionLabel n="(05)">Services</SectionLabel>
           </Reveal>
           <Reveal delay={80}>
             <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-3xl">
@@ -345,7 +362,7 @@ export default function Home() {
       {/* ---------------- NICHES ---------------- */}
       <section id="niches" className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(05)">Niches</SectionLabel>
+          <SectionLabel n="(06)">Niches</SectionLabel>
         </Reveal>
         <Reveal delay={80}>
           <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-3xl">
@@ -368,7 +385,7 @@ export default function Home() {
       <section id="process" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
-            <SectionLabel n="(06)">Process</SectionLabel>
+            <SectionLabel n="(07)">Process</SectionLabel>
           </Reveal>
           <Reveal delay={80}>
             <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-3xl">
@@ -390,7 +407,7 @@ export default function Home() {
       {/* ---------------- DUO ---------------- */}
       <section id="duo" className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(07)">The duo</SectionLabel>
+          <SectionLabel n="(08)">The duo</SectionLabel>
         </Reveal>
         <div className="mt-5 grid lg:grid-cols-2 gap-12 items-center">
           <div>
@@ -434,7 +451,7 @@ export default function Home() {
       <section id="contact" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70 overflow-hidden">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 pt-20 sm:pt-28 lg:pt-36 pb-12 sm:pb-20 lg:pb-24">
           <Reveal>
-            <SectionLabel n="(08)">Contact</SectionLabel>
+            <SectionLabel n="(09)">Contact</SectionLabel>
           </Reveal>
           <h2 className="font-display mt-6 text-[13vw] lg:text-[10vw] leading-[0.9] tracking-[-0.02em]">
             <KineticText text="Get in touch" />
@@ -771,26 +788,26 @@ function SocialCard({ label, handle, href }: { label: string; handle: string; hr
   );
 }
 
-function BrandLogo({ name, logo, invert }: { name: string; logo: string; invert?: boolean }) {
+function LogoTile({ name, logo, whiteAsset }: { name: string; logo: string; whiteAsset?: boolean }) {
   const [failed, setFailed] = useState(false);
-  const isSvg = logo.endsWith(".svg");
-  const useInvert = isSvg || invert;
-  if (failed) {
-    return (
-      <div className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-[color:var(--text-muted)] whitespace-nowrap">
-        {name}
-      </div>
-    );
-  }
   return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={logo}
-      alt={name}
-      onError={() => setFailed(true)}
-      className="h-10 sm:h-12 max-w-[150px] object-contain opacity-60 hover:opacity-100 transition-opacity"
-      style={useInvert ? { filter: "brightness(0) invert(1)" } : { mixBlendMode: "screen" }}
-    />
+    <div
+      title={name}
+      className="flex h-full min-h-[100px] sm:min-h-[120px] items-center justify-center rounded-2xl border border-neutral-200 bg-white px-6 py-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md"
+    >
+      {failed ? (
+        <div className="text-center text-base font-bold uppercase tracking-wider text-neutral-800">{name}</div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={logo}
+          alt={name}
+          onError={() => setFailed(true)}
+          className="max-h-12 sm:max-h-14 w-auto max-w-full object-contain"
+          style={whiteAsset ? { filter: "brightness(0)" } : undefined}
+        />
+      )}
+    </div>
   );
 }
 
