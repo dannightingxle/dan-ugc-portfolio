@@ -98,20 +98,6 @@ html {
   overflow: hidden;
   z-index: 0;
 }
-/* Second copy painted above the content with multiply blending: multiply is a
-   no-op over the near-black sections (where the base layer already shows
-   through) but tints the solid white sections, so the glow follows the cursor
-   on every background without washing out dark text. */
-.aurora-top {
-  z-index: 30;
-  mix-blend-mode: multiply;
-}
-.aurora-top::before {
-  opacity: 0.17;
-}
-.aurora-top::after {
-  opacity: 0.13;
-}
 .aurora::before,
 .aurora::after {
   content: "";
@@ -137,6 +123,37 @@ html {
   left: var(--mx2, 12%);
   top: var(--my2, 96%);
   opacity: 0.2;
+}
+
+/* Light sections have solid backgrounds, so the fixed layer above never shows
+   through them. They paint their own copy of the glow instead: `background-
+   attachment: fixed` anchors the gradients to the viewport (reading the same
+   cursor variables) while the section clips them, and z-index -1 keeps them
+   between the section's background and its content - so cards sit on top of
+   the glow exactly as they do on the dark sections. */
+.section-glow {
+  isolation: isolate;
+}
+.section-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-attachment: fixed;
+  background-image:
+    radial-gradient(
+      26vw 26vw at var(--mx, 88%) var(--my, 4%),
+      rgba(255, 107, 53, 0.26),
+      rgba(255, 107, 53, 0.12) 45%,
+      rgba(255, 107, 53, 0) 72%
+    ),
+    radial-gradient(
+      26vw 26vw at var(--mx2, 12%) var(--my2, 96%),
+      rgba(107, 53, 255, 0.2),
+      rgba(107, 53, 255, 0.09) 45%,
+      rgba(107, 53, 255, 0) 72%
+    );
 }
 
 .fade-up {

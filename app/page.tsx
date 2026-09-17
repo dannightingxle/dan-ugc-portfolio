@@ -262,7 +262,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- (01) BRANDS ---------------- */}
-      <section id="brands" className="relative scroll-mt-20 bg-white">
+      <section id="brands" className="section-glow relative scroll-mt-20 bg-white">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-24">
           <Reveal>
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-neutral-500">
@@ -318,7 +318,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- (03) WORK ---------------- */}
-      <section id="work" className="light relative bg-[color:var(--bg-elevated)]">
+      <section id="work" className="light section-glow relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <div className="flex items-end justify-between flex-wrap gap-4 mb-14">
             <div>
@@ -368,7 +368,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- (05) SERVICES ---------------- */}
-      <section className="light relative bg-[color:var(--bg-elevated)]">
+      <section className="light section-glow relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
             <SectionLabel n="(05)">Services</SectionLabel>
@@ -427,7 +427,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- PROCESS ---------------- */}
-      <section id="process" className="light relative bg-[color:var(--bg-elevated)]">
+      <section id="process" className="light section-glow relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
             <SectionLabel n="(07)">Process</SectionLabel>
@@ -493,7 +493,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- CONTACT ---------------- */}
-      <section id="contact" className="light relative bg-[color:var(--bg-elevated)] overflow-hidden">
+      <section id="contact" className="light section-glow relative bg-[color:var(--bg-elevated)] overflow-hidden">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 pt-20 sm:pt-28 lg:pt-36 pb-12 sm:pb-20 lg:pb-24">
           <Reveal>
             <SectionLabel n="(09)">Contact</SectionLabel>
@@ -574,9 +574,10 @@ export default function Home() {
 /* ================= Motion primitives ================= */
 
 /* Orange + purple glow that trails the cursor across the whole page.
-   Rendered twice: once behind the content (shows on the dark sections) and
-   once above it with multiply blending (shows on the white sections).
-   Falls back to the original static corner glows on touch / reduced motion. */
+   This layer sits behind everything, so it shows through the transparent dark
+   sections; the light sections paint their own copy via `.section-glow`, which
+   reads the same variables. Falls back to the original static corner glows on
+   touch / reduced motion. */
 function AuroraGlow() {
   useEffect(() => {
     // Both layers read the same variables, so set them once on <html>.
@@ -621,12 +622,7 @@ function AuroraGlow() {
     };
   }, []);
 
-  return (
-    <>
-      <div className="aurora" />
-      <div className="aurora aurora-top" />
-    </>
-  );
+  return <div className="aurora" />;
 }
 
 function useInView<T extends HTMLElement>(threshold = 0.15) {
