@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState, useRef, useEffect, Fragment } from "react";
 
 const NAV = [
-  { href: "#work", label: "Work" },
   { href: "#brands", label: "Brands" },
+  { href: "#work", label: "Work" },
   { href: "#niches", label: "Niches" },
   { href: "#process", label: "Process" },
   { href: "#duo", label: "Duo" },
@@ -14,31 +14,49 @@ const NAV = [
 
 const STATS = [
   { prefix: "£", target: 150, suffix: "k+", label: "Generated · one brand, 9 months" },
-  { prefix: "£", target: 50, suffix: "k+", label: "TikTok Shop GMV · 12 months" },
+  { prefix: "", target: 40, suffix: "+", label: "Brands worked with worldwide" },
   { prefix: "", target: 5, suffix: "+", label: "Years in marketing + content" },
   { prefix: "", target: 48, suffix: "h", label: "Concept turnaround" },
 ];
 
-const FEATURED_BRANDS: { name: string; logo: string; invert?: boolean }[] = [
-  { name: "Neutonic", logo: "/logos/neutonic.svg" },
-  { name: "Puma", logo: "/logos/puma.svg" },
-  { name: "MyProtein", logo: "/logos/myprotein.svg" },
-  { name: "B&M", logo: "/logos/bm.png" },
-  { name: "Tembo", logo: "/logos/tembo.png" },
-  { name: "Zable", logo: "/logos/zable.png" },
-  { name: "Avios", logo: "/logos/avios.png", invert: true },
-  { name: "Harry's", logo: "/logos/harrys.png", invert: true },
-  { name: "Huel", logo: "/logos/huel.png", invert: true },
-  { name: "Whatnot", logo: "/logos/whatnot.png" },
-  { name: "Parcel2Go", logo: "/logos/parcel2go.png", invert: true },
-  { name: "Applied Nutrition", logo: "/logos/applied-nutrition.png" },
-  { name: "Chilly's", logo: "/logos/chillys.png" },
-  { name: "Warrior Supplements", logo: "/logos/warrior.png" },
-  { name: "Wellgard", logo: "/logos/wellgard.png" },
-  { name: "Spoon Cereals", logo: "/logos/spoon.png" },
-  { name: "JustFloow", logo: "/logos/justfloow.svg" },
-  { name: "Anker", logo: "/logos/anker.svg" },
-  { name: "Shark", logo: "/logos/shark.png", invert: true },
+/* `whiteAsset` marks logo files that are white/knocked-out versions - they get
+   rendered black on the white brand tiles until a full-colour file replaces them. */
+const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = [
+  { name: "Puma", logo: "/logos/puma.svg", whiteAsset: true },
+  { name: "Shark", logo: "/logos/shark.png" },
+  { name: "Manchester City", logo: "/logos/mancity.webp" },
+  { name: "Coors", logo: "/logos/coors.webp" },
+  { name: "Sure", logo: "/logos/sure.jpg" },
+  { name: "MyProtein", logo: "/logos/myprotein.svg", whiteAsset: true },
+  { name: "Huel", logo: "/logos/huel.png" },
+  { name: "Fussy", logo: "/logos/fussy.png" },
+  { name: "HelpBnk", logo: "/logos/helpbnk.webp" },
+  { name: "Neutonic", logo: "/logos/neutonic.svg", whiteAsset: true },
+  { name: "Canva", logo: "/logos/canva.webp" },
+  { name: "P&O Ferries", logo: "/logos/po-ferries.jpg" },
+  { name: "B&M", logo: "/logos/bm-color.png" },
+  { name: "Chilly's", logo: "/logos/chillys-color.png" },
+  { name: "Grenade", logo: "/logos/grenade.png" },
+  { name: "Avios", logo: "/logos/avios.png" },
+  { name: "Harry's", logo: "/logos/harrys-color.svg" },
+  { name: "Tide", logo: "/logos/tide.jpg" },
+  { name: "Anker", logo: "/logos/anker.svg", whiteAsset: true },
+  { name: "Whatnot", logo: "/logos/whatnot-color.png" },
+  { name: "Tembo", logo: "/logos/tembo-color.png" },
+  { name: "Zable", logo: "/logos/zable-color.png" },
+  { name: "Parcel2Go", logo: "/logos/parcel2go.png" },
+  { name: "OneFamily", logo: "/logos/onefamily.png" },
+  { name: "Grape Tree", logo: "/logos/grapetree.webp" },
+  { name: "STILL G.I.N.", logo: "/logos/still-gin.webp" },
+  { name: "Loop", logo: "/logos/loop.webp" },
+  { name: "Strike", logo: "/logos/strike.webp" },
+  { name: "CarLoans365", logo: "/logos/carloans365.webp" },
+  { name: "JustFloow", logo: "/logos/justfloow-color.webp" },
+  { name: "Spoon Cereals", logo: "/logos/spoon-color.png" },
+  { name: "Applied Nutrition", logo: "/logos/applied-nutrition.png", whiteAsset: true },
+  { name: "Warrior Supplements", logo: "/logos/warrior.png", whiteAsset: true },
+  { name: "Wellgard", logo: "/logos/wellgard.png", whiteAsset: true },
+  { name: "Card Factory", logo: "/logos/cardfactory.png" },
 ];
 
 const SERVICES = [
@@ -104,6 +122,29 @@ type WorkItem = {
 };
 
 const WORK: WorkItem[] = [
+  {
+    category: "HelpBnk",
+    title: "World's biggest business competition - part one",
+    videoSrc: "/work/helpbnk-competition.mp4",
+  },
+  {
+    category: "HelpBnk",
+    title: "World's biggest business competition - part two",
+    videoSrc: "/work/helpbnk-competition-2.mp4",
+  },
+  { category: "Sure", title: "Man City - Manchester derby concept", videoSrc: "/work/sure-derby.mp4" },
+  { category: "Grenade", title: "Oreo protein powder launch", videoSrc: "/work/grenade-oreo.mp4" },
+  { category: "Strike", title: "Electrolytes - paid social", videoSrc: "/work/strike-electrolytes.mp4" },
+  { category: "Fussy", title: "Natural deodorant - new campaign", videoSrc: "/work/fussy-2.mp4" },
+  { category: "STILL G.I.N.", title: "Cocktail giveaway ad - paid social", videoSrc: "/work/still-gin-giveaway.mp4" },
+  { category: "Canva", title: "Six-second CV template - screen demo", videoSrc: "/work/canva-cv-template.mp4" },
+  { category: "Avios", title: "Flight rewards explainer", videoSrc: "/work/avios-flights.mp4" },
+  { category: "Canva", title: "Removing people from holiday photos - app demo", videoSrc: "/work/canva-photo-app.mp4" },
+  { category: "Loop", title: "Bike mount - product demo", videoSrc: "/work/loop-bike-mount.mp4" },
+  { category: "Grape Tree", title: "4pm snack swap - lifestyle", videoSrc: "/work/grapetree-snack-swap.mp4" },
+  { category: "Coors", title: "Summer heat check - social", videoSrc: "/work/coors-heat-check.mp4" },
+  { category: "Coors", title: "Cold-activated can demo", videoSrc: "/work/coors-cold-can.mp4" },
+  { category: "Fussy", title: "Airport travel testimonial ad", videoSrc: "/work/fussy-airport.mp4" },
   { category: "Parcel2Go", title: "Parcel delivery app - paid social", videoSrc: "/work/parcel2go.mp4" },
   { category: "Avios", title: "Loyalty rewards - paid social", videoSrc: "/work/avios.mp4" },
   { category: "Tembo", title: "Cash ISA - paid social", videoSrc: "/work/tembo.mp4" },
@@ -218,22 +259,43 @@ export default function Home() {
           </div>
         </div>
 
-        {/* hero brand marquee */}
-        <div id="brands" className="scroll-mt-20 border-y border-[color:var(--border)] py-7">
-          <Marquee duration={36} gap="2.5rem">
-            {FEATURED_BRANDS.map((b) => (
-              <div key={b.name} className="flex items-center">
-                <BrandLogo name={b.name} logo={b.logo} invert={b.invert} />
+      </section>
+
+      {/* ---------------- (01) BRANDS ---------------- */}
+      <section id="brands" className="relative scroll-mt-20 bg-white">
+        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-24">
+          <Reveal>
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-neutral-500">
+              <span className="font-mono text-[color:var(--accent)]">(01)</span>
+              <span className="h-px w-8 bg-neutral-300" />
+              <span>Brands</span>
+            </div>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="font-display mt-5 text-4xl sm:text-5xl lg:text-6xl text-neutral-950 max-w-3xl">
+              Brands I&apos;ve <em className="text-[color:var(--accent)]">worked</em> with.
+            </h2>
+          </Reveal>
+          {/* Mobile: 3-row horizontal swipe carousel. sm+: compact grid that fits one screen. */}
+          <Reveal delay={140}>
+            <div className="mt-8 sm:mt-10 -mx-6 px-6 sm:mx-0 sm:px-0">
+              <div className="grid grid-flow-col grid-rows-3 auto-cols-[minmax(136px,40vw)] gap-2.5 overflow-x-auto snap-x pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid-flow-row sm:grid-rows-none sm:auto-cols-auto sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 sm:gap-3 sm:overflow-visible sm:pb-0">
+                {FEATURED_BRANDS.map((b) => (
+                  <LogoTile key={b.name} name={b.name} logo={b.logo} whiteAsset={b.whiteAsset} />
+                ))}
               </div>
-            ))}
-          </Marquee>
+              <div className="mt-2 text-[11px] uppercase tracking-wider text-neutral-400 sm:hidden">
+                Swipe for more →
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* ---------------- (01) COMMITMENT + STATS ---------------- */}
+      {/* ---------------- (02) COMMITMENT + STATS ---------------- */}
       <section className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(01)">My commitment</SectionLabel>
+          <SectionLabel n="(02)">My commitment</SectionLabel>
         </Reveal>
         <Reveal delay={80}>
           <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-4xl">
@@ -255,13 +317,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------------- (02) WORK ---------------- */}
-      <section id="work" className="relative bg-[color:var(--bg-elevated)]/70">
+      {/* ---------------- (03) WORK ---------------- */}
+      <section id="work" className="light relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <div className="flex items-end justify-between flex-wrap gap-4 mb-14">
             <div>
               <Reveal>
-                <SectionLabel n="(02)">Portfolio</SectionLabel>
+                <SectionLabel n="(03)">Portfolio</SectionLabel>
               </Reveal>
               <Reveal delay={80}>
                 <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl">
@@ -281,10 +343,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------------- (03) WHY ME ---------------- */}
+      {/* ---------------- (04) WHY ME ---------------- */}
       <section className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(03)">Why me</SectionLabel>
+          <SectionLabel n="(04)">Why me</SectionLabel>
         </Reveal>
         <div className="mt-5 grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
           <Reveal delay={80}>
@@ -305,11 +367,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------------- (04) SERVICES ---------------- */}
-      <section className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70">
+      {/* ---------------- (05) SERVICES ---------------- */}
+      <section className="light relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
-            <SectionLabel n="(04)">Services</SectionLabel>
+            <SectionLabel n="(05)">Services</SectionLabel>
           </Reveal>
           <Reveal delay={80}>
             <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-3xl">
@@ -345,7 +407,7 @@ export default function Home() {
       {/* ---------------- NICHES ---------------- */}
       <section id="niches" className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(05)">Niches</SectionLabel>
+          <SectionLabel n="(06)">Niches</SectionLabel>
         </Reveal>
         <Reveal delay={80}>
           <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-3xl">
@@ -365,10 +427,10 @@ export default function Home() {
       </section>
 
       {/* ---------------- PROCESS ---------------- */}
-      <section id="process" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70">
+      <section id="process" className="light relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
-            <SectionLabel n="(06)">Process</SectionLabel>
+            <SectionLabel n="(07)">Process</SectionLabel>
           </Reveal>
           <Reveal delay={80}>
             <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl max-w-3xl">
@@ -390,7 +452,7 @@ export default function Home() {
       {/* ---------------- DUO ---------------- */}
       <section id="duo" className="relative mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
         <Reveal>
-          <SectionLabel n="(07)">The duo</SectionLabel>
+          <SectionLabel n="(08)">The duo</SectionLabel>
         </Reveal>
         <div className="mt-5 grid lg:grid-cols-2 gap-12 items-center">
           <div>
@@ -431,10 +493,10 @@ export default function Home() {
       </section>
 
       {/* ---------------- CONTACT ---------------- */}
-      <section id="contact" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70 overflow-hidden">
+      <section id="contact" className="light relative bg-[color:var(--bg-elevated)] overflow-hidden">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 pt-20 sm:pt-28 lg:pt-36 pb-12 sm:pb-20 lg:pb-24">
           <Reveal>
-            <SectionLabel n="(08)">Contact</SectionLabel>
+            <SectionLabel n="(09)">Contact</SectionLabel>
           </Reveal>
           <h2 className="font-display mt-6 text-[13vw] lg:text-[10vw] leading-[0.9] tracking-[-0.02em]">
             <KineticText text="Get in touch" />
@@ -512,13 +574,13 @@ export default function Home() {
 /* ================= Motion primitives ================= */
 
 /* Orange + purple glow that trails the cursor across the whole page.
+   Rendered twice: once behind the content (shows on the dark sections) and
+   once above it with multiply blending (shows on the white sections).
    Falls back to the original static corner glows on touch / reduced motion. */
 function AuroraGlow() {
-  const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    // Both layers read the same variables, so set them once on <html>.
+    const el = document.documentElement;
 
     const finePointer = window.matchMedia("(pointer: fine)").matches;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -559,7 +621,12 @@ function AuroraGlow() {
     };
   }, []);
 
-  return <div ref={ref} className="aurora" />;
+  return (
+    <>
+      <div className="aurora" />
+      <div className="aurora aurora-top" />
+    </>
+  );
 }
 
 function useInView<T extends HTMLElement>(threshold = 0.15) {
@@ -771,26 +838,26 @@ function SocialCard({ label, handle, href }: { label: string; handle: string; hr
   );
 }
 
-function BrandLogo({ name, logo, invert }: { name: string; logo: string; invert?: boolean }) {
+function LogoTile({ name, logo, whiteAsset }: { name: string; logo: string; whiteAsset?: boolean }) {
   const [failed, setFailed] = useState(false);
-  const isSvg = logo.endsWith(".svg");
-  const useInvert = isSvg || invert;
-  if (failed) {
-    return (
-      <div className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-[color:var(--text-muted)] whitespace-nowrap">
-        {name}
-      </div>
-    );
-  }
   return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={logo}
-      alt={name}
-      onError={() => setFailed(true)}
-      className="h-10 sm:h-12 max-w-[150px] object-contain opacity-60 hover:opacity-100 transition-opacity"
-      style={useInvert ? { filter: "brightness(0) invert(1)" } : { mixBlendMode: "screen" }}
-    />
+    <div
+      title={name}
+      className="flex h-full min-h-[64px] sm:min-h-[76px] snap-start items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md"
+    >
+      {failed ? (
+        <div className="text-center text-sm font-bold uppercase tracking-wider text-neutral-800">{name}</div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={logo}
+          alt={name}
+          onError={() => setFailed(true)}
+          className="max-h-8 sm:max-h-9 w-auto max-w-full object-contain"
+          style={whiteAsset ? { filter: "brightness(0)" } : undefined}
+        />
+      )}
+    </div>
   );
 }
 
@@ -886,6 +953,7 @@ function WorkCard({ item }: { item: WorkItem }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [muted, setMuted] = useState(true);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -1013,8 +1081,17 @@ function WorkCard({ item }: { item: WorkItem }) {
           x5-playsinline="true"
           disablePictureInPicture
           preload="none"
-          onPlay={() => setPlaying(true)}
+          /* preload="none" means a first play starts with zero data - surface
+             that as a buffering state so the card reads "loading", not broken. */
+          onPlay={(e) => {
+            setPlaying(true);
+            if (e.currentTarget.readyState < 3) setBuffering(true);
+          }}
           onPause={() => setPlaying(false)}
+          onWaiting={() => setBuffering(true)}
+          onStalled={() => setBuffering(true)}
+          onPlaying={() => setBuffering(false)}
+          onCanPlay={() => setBuffering(false)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
           onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
           onTimeUpdate={(e) => {
@@ -1029,17 +1106,31 @@ function WorkCard({ item }: { item: WorkItem }) {
           className="absolute inset-0 flex items-center justify-center focus:outline-none"
         >
           <span
-            className={`grid place-items-center size-14 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white transition-opacity duration-200 ${
-              playing ? "opacity-0 group-hover:opacity-70" : "opacity-100"
+            className={`flex flex-col items-center gap-2 transition-opacity duration-200 ${
+              playing && !buffering ? "opacity-0 group-hover:opacity-70" : "opacity-100"
             }`}
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
-              {playing ? (
-                <path d="M4.5 2.5h3.5v13H4.5zM10 2.5h3.5v13H10z" />
+            <span className="grid place-items-center size-14 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white">
+              {playing && buffering ? (
+                <span
+                  className="size-5 rounded-full border-2 border-white/30 border-t-white animate-spin"
+                  aria-hidden="true"
+                />
               ) : (
-                <path d="M5 2.8l10 6.2-10 6.2z" />
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+                  {playing ? (
+                    <path d="M4.5 2.5h3.5v13H4.5zM10 2.5h3.5v13H10z" />
+                  ) : (
+                    <path d="M5 2.8l10 6.2-10 6.2z" />
+                  )}
+                </svg>
               )}
-            </svg>
+            </span>
+            {playing && buffering && (
+              <span className="text-[10px] uppercase tracking-[0.2em] text-white/90 bg-black/45 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10">
+                Loading
+              </span>
+            )}
           </span>
         </button>
         {/* Control strip. Sits above the full-card play/pause button and stops
