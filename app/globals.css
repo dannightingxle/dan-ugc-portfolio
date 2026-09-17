@@ -14,6 +14,21 @@
   --accent-soft: rgba(255, 107, 53, 0.12);
 }
 
+/* Light sections: flip the theme variables locally so the same
+   var()-based classes render on white. */
+.light {
+  --bg: #ffffff;
+  --bg-elevated: #faf9f7;
+  --bg-card: #ffffff;
+  --border: #e7e5e2;
+  --border-strong: #d6d3cf;
+  --text: #0a0a0a;
+  --text-muted: #525252;
+  --text-dim: #8a8a8a;
+  --accent-soft: rgba(255, 107, 53, 0.1);
+  color: var(--text);
+}
+
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState, useRef, useEffect, Fragment } from "react";
 
 const NAV = [
-  { href: "#work", label: "Work" },
   { href: "#brands", label: "Brands" },
+  { href: "#work", label: "Work" },
   { href: "#niches", label: "Niches" },
   { href: "#process", label: "Process" },
   { href: "#duo", label: "Duo" },
@@ -14,7 +14,7 @@ const NAV = [
 
 const STATS = [
   { prefix: "£", target: 150, suffix: "k+", label: "Generated · one brand, 9 months" },
-  { prefix: "£", target: 50, suffix: "k+", label: "TikTok Shop GMV · 12 months" },
+  { prefix: "", target: 40, suffix: "+", label: "Brands worked with worldwide" },
   { prefix: "", target: 5, suffix: "+", label: "Years in marketing + content" },
   { prefix: "", target: 48, suffix: "h", label: "Concept turnaround" },
 ];
@@ -295,7 +295,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- (03) WORK ---------------- */}
-      <section id="work" className="relative bg-[color:var(--bg-elevated)]/70">
+      <section id="work" className="light relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <div className="flex items-end justify-between flex-wrap gap-4 mb-14">
             <div>
@@ -345,7 +345,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- (05) SERVICES ---------------- */}
-      <section className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70">
+      <section className="light relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
             <SectionLabel n="(05)">Services</SectionLabel>
@@ -404,7 +404,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- PROCESS ---------------- */}
-      <section id="process" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70">
+      <section id="process" className="light relative bg-[color:var(--bg-elevated)]">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-20 sm:py-28 lg:py-32">
           <Reveal>
             <SectionLabel n="(07)">Process</SectionLabel>
@@ -470,7 +470,7 @@ export default function Home() {
       </section>
 
       {/* ---------------- CONTACT ---------------- */}
-      <section id="contact" className="relative border-t border-[color:var(--border)] bg-[color:var(--bg-elevated)]/70 overflow-hidden">
+      <section id="contact" className="light relative bg-[color:var(--bg-elevated)] overflow-hidden">
         <div className="mx-auto max-w-[1440px] px-6 lg:px-10 pt-20 sm:pt-28 lg:pt-36 pb-12 sm:pb-20 lg:pb-24">
           <Reveal>
             <SectionLabel n="(09)">Contact</SectionLabel>
