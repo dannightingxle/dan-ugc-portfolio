@@ -122,6 +122,25 @@ type WorkItem = {
 };
 
 const WORK: WorkItem[] = [
+  {
+    category: "HelpBnk",
+    title: "World's biggest business competition - part one",
+    videoSrc: "/work/helpbnk-competition.mp4",
+  },
+  {
+    category: "HelpBnk",
+    title: "World's biggest business competition - part two",
+    videoSrc: "/work/helpbnk-competition-2.mp4",
+  },
+  { category: "Sure", title: "Man City - Manchester derby concept", videoSrc: "/work/sure-derby.mp4" },
+  { category: "Grenade", title: "Oreo protein powder launch", videoSrc: "/work/grenade-oreo.mp4" },
+  { category: "Strike", title: "Electrolytes - paid social", videoSrc: "/work/strike-electrolytes.mp4" },
+  { category: "Fussy", title: "Natural deodorant - new campaign", videoSrc: "/work/fussy-2.mp4" },
+  { category: "STILL G.I.N.", title: "Cocktail giveaway ad - paid social", videoSrc: "/work/still-gin-giveaway.mp4" },
+  { category: "Loop", title: "Bike mount - product demo", videoSrc: "/work/loop-bike-mount.mp4" },
+  { category: "Grape Tree", title: "4pm snack swap - lifestyle", videoSrc: "/work/grapetree-snack-swap.mp4" },
+  { category: "Coors", title: "Summer heat check - social", videoSrc: "/work/coors-heat-check.mp4" },
+  { category: "Coors", title: "Cold-activated can demo", videoSrc: "/work/coors-cold-can.mp4" },
   { category: "Parcel2Go", title: "Parcel delivery app - paid social", videoSrc: "/work/parcel2go.mp4" },
   { category: "Avios", title: "Loyalty rewards - paid social", videoSrc: "/work/avios.mp4" },
   { category: "Tembo", title: "Cash ISA - paid social", videoSrc: "/work/tembo.mp4" },
