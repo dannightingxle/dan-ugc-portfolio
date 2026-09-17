@@ -247,17 +247,23 @@ export default function Home() {
             </div>
           </Reveal>
           <Reveal delay={80}>
-            <h2 className="font-display mt-5 text-4xl sm:text-6xl lg:text-7xl text-neutral-950 max-w-3xl">
+            <h2 className="font-display mt-5 text-4xl sm:text-5xl lg:text-6xl text-neutral-950 max-w-3xl">
               Brands I&apos;ve <em className="text-[color:var(--accent)]">worked</em> with.
             </h2>
           </Reveal>
-          <div className="mt-14 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-            {FEATURED_BRANDS.map((b, i) => (
-              <Reveal key={b.name} delay={Math.min(i * 40, 360)} className="h-full">
-                <LogoTile name={b.name} logo={b.logo} whiteAsset={b.whiteAsset} />
-              </Reveal>
-            ))}
-          </div>
+          {/* Mobile: 3-row horizontal swipe carousel. sm+: compact grid that fits one screen. */}
+          <Reveal delay={140}>
+            <div className="mt-8 sm:mt-10 -mx-6 px-6 sm:mx-0 sm:px-0">
+              <div className="grid grid-flow-col grid-rows-3 auto-cols-[minmax(136px,40vw)] gap-2.5 overflow-x-auto snap-x pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid-flow-row sm:grid-rows-none sm:auto-cols-auto sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 sm:gap-3 sm:overflow-visible sm:pb-0">
+                {FEATURED_BRANDS.map((b) => (
+                  <LogoTile key={b.name} name={b.name} logo={b.logo} whiteAsset={b.whiteAsset} />
+                ))}
+              </div>
+              <div className="mt-2 text-[11px] uppercase tracking-wider text-neutral-400 sm:hidden">
+                Swipe for more →
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -807,17 +813,17 @@ function LogoTile({ name, logo, whiteAsset }: { name: string; logo: string; whit
   return (
     <div
       title={name}
-      className="flex h-full min-h-[100px] sm:min-h-[120px] items-center justify-center rounded-2xl border border-neutral-200 bg-white px-6 py-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md"
+      className="flex h-full min-h-[64px] sm:min-h-[76px] snap-start items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md"
     >
       {failed ? (
-        <div className="text-center text-base font-bold uppercase tracking-wider text-neutral-800">{name}</div>
+        <div className="text-center text-sm font-bold uppercase tracking-wider text-neutral-800">{name}</div>
       ) : (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={logo}
           alt={name}
           onError={() => setFailed(true)}
-          className="max-h-12 sm:max-h-14 w-auto max-w-full object-contain"
+          className="max-h-8 sm:max-h-9 w-auto max-w-full object-contain"
           style={whiteAsset ? { filter: "brightness(0)" } : undefined}
         />
       )}
