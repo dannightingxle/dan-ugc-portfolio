@@ -574,13 +574,13 @@ export default function Home() {
 /* ================= Motion primitives ================= */
 
 /* Orange + purple glow that trails the cursor across the whole page.
+   Rendered twice: once behind the content (shows on the dark sections) and
+   once above it with multiply blending (shows on the white sections).
    Falls back to the original static corner glows on touch / reduced motion. */
 function AuroraGlow() {
-  const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    // Both layers read the same variables, so set them once on <html>.
+    const el = document.documentElement;
 
     const finePointer = window.matchMedia("(pointer: fine)").matches;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -621,7 +621,12 @@ function AuroraGlow() {
     };
   }, []);
 
-  return <div ref={ref} className="aurora" />;
+  return (
+    <>
+      <div className="aurora" />
+      <div className="aurora aurora-top" />
+    </>
+  );
 }
 
 function useInView<T extends HTMLElement>(threshold = 0.15) {
@@ -948,6 +953,7 @@ function WorkCard({ item }: { item: WorkItem }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [muted, setMuted] = useState(true);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -1075,8 +1081,17 @@ function WorkCard({ item }: { item: WorkItem }) {
           x5-playsinline="true"
           disablePictureInPicture
           preload="none"
-          onPlay={() => setPlaying(true)}
+          /* preload="none" means a first play starts with zero data - surface
+             that as a buffering state so the card reads "loading", not broken. */
+          onPlay={(e) => {
+            setPlaying(true);
+            if (e.currentTarget.readyState < 3) setBuffering(true);
+          }}
           onPause={() => setPlaying(false)}
+          onWaiting={() => setBuffering(true)}
+          onStalled={() => setBuffering(true)}
+          onPlaying={() => setBuffering(false)}
+          onCanPlay={() => setBuffering(false)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
           onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
           onTimeUpdate={(e) => {
@@ -1091,17 +1106,31 @@ function WorkCard({ item }: { item: WorkItem }) {
           className="absolute inset-0 flex items-center justify-center focus:outline-none"
         >
           <span
-            className={`grid place-items-center size-14 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white transition-opacity duration-200 ${
-              playing ? "opacity-0 group-hover:opacity-70" : "opacity-100"
+            className={`flex flex-col items-center gap-2 transition-opacity duration-200 ${
+              playing && !buffering ? "opacity-0 group-hover:opacity-70" : "opacity-100"
             }`}
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
-              {playing ? (
-                <path d="M4.5 2.5h3.5v13H4.5zM10 2.5h3.5v13H10z" />
+            <span className="grid place-items-center size-14 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white">
+              {playing && buffering ? (
+                <span
+                  className="size-5 rounded-full border-2 border-white/30 border-t-white animate-spin"
+                  aria-hidden="true"
+                />
               ) : (
-                <path d="M5 2.8l10 6.2-10 6.2z" />
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+                  {playing ? (
+                    <path d="M4.5 2.5h3.5v13H4.5zM10 2.5h3.5v13H10z" />
+                  ) : (
+                    <path d="M5 2.8l10 6.2-10 6.2z" />
+                  )}
+                </svg>
               )}
-            </svg>
+            </span>
+            {playing && buffering && (
+              <span className="text-[10px] uppercase tracking-[0.2em] text-white/90 bg-black/45 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10">
+                Loading
+              </span>
+            )}
           </span>
         </button>
         {/* Control strip. Sits above the full-card play/pause button and stops

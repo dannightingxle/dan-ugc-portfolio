@@ -89,13 +89,28 @@ html {
 }
 
 /* Aurora glow */
-/* Site-wide glow layer: fixed to the viewport, painted behind all content. */
+/* Site-wide glow layer: fixed to the viewport, painted behind all content.
+   Visible wherever a section's background is transparent (the dark sections). */
 .aurora {
   position: fixed;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
   z-index: 0;
+}
+/* Second copy painted above the content with multiply blending: multiply is a
+   no-op over the near-black sections (where the base layer already shows
+   through) but tints the solid white sections, so the glow follows the cursor
+   on every background without washing out dark text. */
+.aurora-top {
+  z-index: 30;
+  mix-blend-mode: multiply;
+}
+.aurora-top::before {
+  opacity: 0.17;
+}
+.aurora-top::after {
+  opacity: 0.13;
 }
 .aurora::before,
 .aurora::after {
