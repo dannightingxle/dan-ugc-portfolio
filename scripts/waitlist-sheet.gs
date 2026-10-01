@@ -50,7 +50,31 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+  notify(data);
   return reply({ ok: true });
+}
+
+// Emails you each signup. Run testEmail once from the editor to approve the
+// email permission and see what it looks like.
+function notify(data) {
+  try {
+    const lines = COLUMNS.slice(1).map(([heading, key]) => {
+      const v = data[key];
+      return heading + ": " + (Array.isArray(v) ? v.join(", ") : v || "-");
+    });
+    MailApp.sendEmail({
+      to: Session.getEffectiveUser().getEmail(),
+      replyTo: data.email,
+      subject: "New waitlist signup: " + data.name,
+      body: lines.join("\n\n") + "\n\nSheet: " + SpreadsheetApp.getActiveSpreadsheet().getUrl(),
+    });
+  } catch (err) {
+    console.error("Notification email failed", err);
+  }
+}
+
+function testEmail() {
+  notify({ name: "Test Person", email: "test@example.com", stage: "Haven't started yet", struggles: ["Knowing what to charge"] });
 }
 
 function getSheet() {
