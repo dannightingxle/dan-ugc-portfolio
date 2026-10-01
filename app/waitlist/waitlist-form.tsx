@@ -222,10 +222,10 @@ export default function WaitlistForm() {
               value={data.struggles}
               onChange={(v) => toggle("struggles", v)}
             />
-            <Field label="If this programme could fix one thing for you, what would it be?" optional>
+            <Field label="If you joined this programme, what would your absolute dream outcome be?" optional>
               <textarea
                 rows={3}
-                placeholder="e.g. I've made content but have no idea how to find brands that pay..."
+                placeholder="e.g. 3-4 regular brand deals a month, enough to drop to a four-day week..."
                 value={data.wishlist}
                 onChange={(e) => set("wishlist", e.target.value)}
                 className={`${inputClass} resize-y`}

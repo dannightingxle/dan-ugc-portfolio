@@ -20,7 +20,7 @@ const COLUMNS = [
   ["Goal", "goal"],
   ["Hours / week", "hours"],
   ["Biggest struggles", "struggles"],
-  ["Want the course to cover", "wishlist"],
+  ["Dream outcome", "wishlist"],
   ["How they want to learn", "formats"],
   ["Would pay (one-time)", "price"],
   ["14-day guarantee", "guarantee"],
