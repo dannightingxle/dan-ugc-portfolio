@@ -35,7 +35,6 @@ const LINKS: LinkItem[] = [
 const PORTFOLIO = {
   title: "Dan's UGC Portfolio",
   note: "Brands, results, past work + rates",
-  thumb: "/work/posters/puma.jpg",
   href: "/",
   cta: "View my work",
 };
@@ -55,13 +54,13 @@ export default function LinksPage() {
         <img
           src="/dan-avatar.jpg"
           alt="Dan Nightingale"
-          className="size-24 rounded-full object-cover border-2 border-[color:var(--accent)] shadow-xl"
+          className="w-60 aspect-[4/5] rounded-3xl object-cover shadow-2xl"
         />
         <h1 className="mt-5 font-display text-4xl">
           Dan Nightingale<span className="text-[color:var(--accent)]">.</span>
         </h1>
         <p className="mt-2 text-center text-[color:var(--text-muted)]">
-          UGC creator · Teaching you to make it a second income
+          UGC Creator · 50+ brands in 6 months · Teaching you to do the same
         </p>
 
         <div className="mt-5 flex items-center gap-3">
@@ -84,12 +83,15 @@ export default function LinksPage() {
           className="hover-lift mt-9 w-full rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-4 transition-colors hover:border-[color:var(--border-strong)]"
         >
           <div className="flex items-center gap-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={PORTFOLIO.thumb}
-              alt=""
-              className="size-16 shrink-0 rounded-xl object-cover border border-[color:var(--border)]"
-            />
+            {/* Monogram tile in place of a logo file */}
+            <span
+              aria-hidden="true"
+              className="grid size-16 shrink-0 place-items-center rounded-xl bg-white font-black text-[28px] tracking-tighter text-black"
+            >
+              <span>
+                DN<span className="text-[color:var(--accent)]">.</span>
+              </span>
+            </span>
             <div className="min-w-0">
               <p className="font-semibold text-lg text-[color:var(--text)]">{PORTFOLIO.title}</p>
               <p className="mt-0.5 text-sm text-[color:var(--text-muted)]">{PORTFOLIO.note}</p>
