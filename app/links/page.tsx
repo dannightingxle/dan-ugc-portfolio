@@ -25,23 +25,35 @@ type LinkItem = {
 const LINKS: LinkItem[] = [
   {
     label: "Free: The A-Z of UGC",
-    note: "30-minute masterclass - everything I'd tell you if you were starting today",
+    note: "30-minute masterclass for complete beginners",
     href: "", // add the video link when it's live
     tag: "Free",
     featured: true,
-  },
-  {
-    label: "A-Z UGC",
-    note: "My course + mentorship is coming soon. Register your interest",
-    href: "/waitlist",
-    tag: "Join",
     thumb: (
       <Tile>
         <span className="flex flex-col items-center leading-none">
           <span className="text-[24px]">
             A-Z<span className="text-[color:var(--accent)]">.</span>
           </span>
-          <span className="mt-1 text-[11px] tracking-[0.2em] text-[color:var(--accent)]">UGC</span>
+          {/* Letters laid out with a fixed gap so the spacing reads evenly */}
+          <span className="mt-1 flex gap-[3px] text-[11px] text-[color:var(--accent)]">
+            <span>U</span>
+            <span>G</span>
+            <span>C</span>
+          </span>
+        </span>
+      </Tile>
+    ),
+  },
+  {
+    label: "Anyone Can Create",
+    note: "My UGC course + mentorship is coming soon. Register your interest",
+    href: "/waitlist",
+    tag: "Join",
+    thumb: (
+      <Tile>
+        <span>
+          ACC<span className="text-[color:var(--accent)]">.</span>
         </span>
       </Tile>
     ),
