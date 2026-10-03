@@ -245,10 +245,10 @@ export default function Home() {
               <div className="relative h-full rounded-2xl overflow-hidden border border-[color:var(--border)] bg-[color:var(--bg-card)] aspect-[4/3] sm:aspect-[16/10] lg:aspect-auto lg:min-h-[560px] shadow-xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/dan-hero.jpg"
+                  src="/dan-family.jpg"
                   alt="Dan Nightingale"
                   className="absolute inset-0 w-full h-full object-cover"
-                  style={{ objectPosition: "center 32%" }}
+                  style={{ objectPosition: "center 70%" }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
                 <div className="absolute bottom-4 left-4 inline-flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/90 bg-black/45 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">

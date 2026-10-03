@@ -5,10 +5,10 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Dan Nightingale — Links",
-  description: "UGC creator. Free A-Z of UGC, the 0 to £1k course, mentorship and my portfolio.",
+  description: "UGC creator. My portfolio, the UGC course waitlist and socials.",
   openGraph: {
     title: "Dan Nightingale — Links",
-    description: "Free A-Z of UGC, the 0 to £1k course, mentorship and my portfolio.",
+    description: "My portfolio, the UGC course waitlist and socials.",
     type: "website",
   },
 };
@@ -19,28 +19,26 @@ const LINKS: LinkItem[] = [
   {
     label: "Free: The A-Z of UGC",
     note: "30-minute masterclass - everything I'd tell you if you were starting today",
-    href: "", // Skool free group invite link
+    href: "", // add the video link when it's live
     tag: "Free",
     featured: true,
   },
   {
     label: "0 to £1k a month in UGC",
-    note: "The step-by-step course - one payment, lifetime access",
-    href: "", // Skool course link
-    tag: "£147",
-  },
-  {
-    label: "UGC Mentorship",
-    note: "The course + 90 days of direct help from me. Limited places",
+    note: "My course + mentorship is coming soon. Register your interest for first access",
     href: "/waitlist",
-    tag: "Apply",
-  },
-  {
-    label: "Brands: work with me",
-    note: "Portfolio, past work and rates",
-    href: "/",
+    tag: "Join",
   },
 ];
+
+/* Big card for brands, styled like a mini portfolio preview. */
+const PORTFOLIO = {
+  title: "Dan's UGC Portfolio",
+  note: "Brands, results, past work + rates",
+  thumb: "/work/posters/puma.jpg",
+  href: "/",
+  cta: "View my work",
+};
 
 const SOCIALS = [
   { label: "TikTok", href: "https://www.tiktok.com/@dannightingxle.ugc", icon: <TikTokIcon /> },
@@ -55,10 +53,9 @@ export default function LinksPage() {
       <main className="relative z-10 mx-auto w-full max-w-[480px] px-5 pt-14 pb-16 flex flex-col items-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/dan-hero.jpg"
+          src="/dan-avatar.jpg"
           alt="Dan Nightingale"
           className="size-24 rounded-full object-cover border-2 border-[color:var(--accent)] shadow-xl"
-          style={{ objectPosition: "center 30%" }}
         />
         <h1 className="mt-5 font-display text-4xl">
           Dan Nightingale<span className="text-[color:var(--accent)]">.</span>
@@ -82,7 +79,28 @@ export default function LinksPage() {
           ))}
         </div>
 
-        <ul className="mt-9 w-full flex flex-col gap-3">
+        <a
+          href={PORTFOLIO.href}
+          className="hover-lift mt-9 w-full rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-4 transition-colors hover:border-[color:var(--border-strong)]"
+        >
+          <div className="flex items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={PORTFOLIO.thumb}
+              alt=""
+              className="size-16 shrink-0 rounded-xl object-cover border border-[color:var(--border)]"
+            />
+            <div className="min-w-0">
+              <p className="font-semibold text-lg text-[color:var(--text)]">{PORTFOLIO.title}</p>
+              <p className="mt-0.5 text-sm text-[color:var(--text-muted)]">{PORTFOLIO.note}</p>
+            </div>
+          </div>
+          <span className="mt-4 block w-full rounded-xl bg-[color:var(--text)] py-3 text-center text-sm font-semibold text-[color:var(--bg)]">
+            {PORTFOLIO.cta}
+          </span>
+        </a>
+
+        <ul className="mt-3 w-full flex flex-col gap-3">
           {LINKS.filter((l) => l.href).map((l) => (
             <li key={l.label}>
               <a
