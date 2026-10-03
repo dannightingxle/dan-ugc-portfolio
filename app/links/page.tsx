@@ -27,7 +27,7 @@ const LINKS: LinkItem[] = [
     label: "Free: The A-Z of UGC",
     note: "30-minute masterclass for complete beginners",
     href: "", // add the video link when it's live
-    tag: "Free",
+    tag: "Watch free",
     featured: true,
     thumb: (
       <Tile>
@@ -49,10 +49,10 @@ const LINKS: LinkItem[] = [
     label: "Anyone Can Create",
     note: "My UGC course + mentorship is coming soon. Register your interest",
     href: "/waitlist",
-    tag: "Join",
+    tag: "Learn more",
     thumb: (
       <Tile>
-        <span>
+        <span className="text-[21px]">
           ACC<span className="text-[color:var(--accent)]">.</span>
         </span>
       </Tile>
@@ -132,20 +132,22 @@ export default function LinksPage() {
             <li key={l.label}>
               <a
                 href={l.href}
-                className={`hover-lift group flex items-center gap-4 rounded-2xl border px-5 py-4 transition-colors ${
+                className={`hover-lift block rounded-2xl border p-4 transition-colors ${
                   l.featured
                     ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
                     : "border-[color:var(--border)] bg-[color:var(--bg-card)] hover:border-[color:var(--border-strong)]"
                 }`}
               >
-                {l.thumb}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-[color:var(--text)]">{l.label}</p>
-                  <p className="mt-0.5 text-sm leading-snug text-[color:var(--text-muted)]">{l.note}</p>
+                <div className="flex items-center gap-4">
+                  {l.thumb}
+                  <div className="min-w-0">
+                    <p className="font-semibold text-lg text-[color:var(--text)]">{l.label}</p>
+                    <p className="mt-0.5 text-sm leading-snug text-[color:var(--text-muted)]">{l.note}</p>
+                  </div>
                 </div>
                 {l.tag && (
                   <span
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                    className={`mt-4 block w-full rounded-xl py-3 text-center text-sm font-semibold ${
                       l.featured
                         ? "bg-[color:var(--accent)] text-[color:var(--bg)]"
                         : "border border-[color:var(--border-strong)] text-[color:var(--text)]"
