@@ -62,7 +62,7 @@ const LINKS: LinkItem[] = [
 
 /* Big card for brands, styled like a mini portfolio preview. */
 const PORTFOLIO = {
-  title: "Dan's UGC Portfolio",
+  title: "My UGC Portfolio",
   note: "Brands, past work, about me + more",
   href: "/",
   cta: "View my work",
