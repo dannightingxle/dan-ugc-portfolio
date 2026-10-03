@@ -14,7 +14,7 @@ const NAV = [
 
 const STATS = [
   { prefix: "£", target: 150, suffix: "k+", label: "Generated · one brand, 9 months" },
-  { prefix: "", target: 40, suffix: "+", label: "Brands worked with worldwide" },
+  { prefix: "", target: 50, suffix: "+", label: "Brands worked with worldwide" },
   { prefix: "", target: 5, suffix: "+", label: "Years in marketing + content" },
   { prefix: "", target: 48, suffix: "h", label: "Concept turnaround" },
 ];

@@ -13,7 +13,14 @@ export const metadata: Metadata = {
   },
 };
 
-type LinkItem = { label: string; note: string; href: string; tag?: string; featured?: boolean };
+type LinkItem = {
+  label: string;
+  note: string;
+  href: string;
+  tag?: string;
+  featured?: boolean;
+  thumb?: React.ReactNode;
+};
 
 const LINKS: LinkItem[] = [
   {
@@ -24,17 +31,27 @@ const LINKS: LinkItem[] = [
     featured: true,
   },
   {
-    label: "0 to £1k a month in UGC",
-    note: "My course + mentorship is coming soon. Register your interest for first access",
+    label: "A-Z UGC",
+    note: "My course + mentorship is coming soon. Register your interest",
     href: "/waitlist",
     tag: "Join",
+    thumb: (
+      <Tile>
+        <span className="flex flex-col items-center leading-none">
+          <span className="text-[24px]">
+            A-Z<span className="text-[color:var(--accent)]">.</span>
+          </span>
+          <span className="mt-1 text-[11px] tracking-[0.2em] text-[color:var(--accent)]">UGC</span>
+        </span>
+      </Tile>
+    ),
   },
 ];
 
 /* Big card for brands, styled like a mini portfolio preview. */
 const PORTFOLIO = {
   title: "Dan's UGC Portfolio",
-  note: "Brands, results, past work + rates",
+  note: "Brands, past work, about me + more",
   href: "/",
   cta: "View my work",
 };
@@ -83,15 +100,11 @@ export default function LinksPage() {
           className="hover-lift mt-9 w-full rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-4 transition-colors hover:border-[color:var(--border-strong)]"
         >
           <div className="flex items-center gap-4">
-            {/* Monogram tile in place of a logo file */}
-            <span
-              aria-hidden="true"
-              className="grid size-16 shrink-0 place-items-center rounded-xl bg-white font-black text-[28px] tracking-tighter text-black"
-            >
+            <Tile>
               <span>
                 DN<span className="text-[color:var(--accent)]">.</span>
               </span>
-            </span>
+            </Tile>
             <div className="min-w-0">
               <p className="font-semibold text-lg text-[color:var(--text)]">{PORTFOLIO.title}</p>
               <p className="mt-0.5 text-sm text-[color:var(--text-muted)]">{PORTFOLIO.note}</p>
@@ -113,6 +126,7 @@ export default function LinksPage() {
                     : "border-[color:var(--border)] bg-[color:var(--bg-card)] hover:border-[color:var(--border-strong)]"
                 }`}
               >
+                {l.thumb}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-[color:var(--text)]">{l.label}</p>
                   <p className="mt-0.5 text-sm leading-snug text-[color:var(--text-muted)]">{l.note}</p>
@@ -136,6 +150,18 @@ export default function LinksPage() {
         <p className="mt-12 text-xs text-[color:var(--text-dim)]">© {new Date().getFullYear()} Dan Nightingale</p>
       </main>
     </>
+  );
+}
+
+/* White logo-style tile (heavy black type, orange accent) used as a card thumbnail. */
+function Tile({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-16 shrink-0 place-items-center rounded-xl bg-white font-black text-[28px] tracking-tighter text-black"
+    >
+      {children}
+    </span>
   );
 }
 
