@@ -75,7 +75,6 @@ so strangers can't spend your credits. Every live call is recorded per user in t
 
 ## Style
 
-Themes live in `app/hub/hub.css` as blocks of colour/font/corner values. There's a
-temporary **Style** menu in the header (or add `?theme=mono|sky|graphite|editorial` to a
-URL) to compare them; the default is `DEFAULT_THEME` in `app/hub/themes.ts`. Once one is
-chosen, the menu and the other blocks can go.
+The "Sky" look - cool white, slate text, blue accent, Plus Jakarta Sans. Colours, font
+and corner radii all live in one block in `app/hub/hub.css`; change values there to
+restyle the whole hub.

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SourceBadge, useApi } from "./_lib/ui";
 import type { Source } from "./_lib/types";
-import { ThemePicker } from "./theme-picker";
 import { useAccount } from "./account-provider";
 
 const LINKS = [
@@ -46,7 +45,6 @@ export function HubNav() {
           <span className="hidden md:block">
             <SourceBadge source={data?.source} />
           </span>
-          <ThemePicker />
           {user && (
             <Link
               href="/hub/account"
