@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SourceBadge, useApi } from "./_lib/ui";
 import type { Source } from "./_lib/types";
-import { ThemePicker } from "./theme";
 
 const LINKS = [
   { href: "/hub", label: "My ads" },
@@ -19,7 +18,7 @@ export function HubNav() {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-bg backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
-        <Link href="/hub" className="font-serif text-xl italic">
+        <Link href="/hub" className="shrink-0 whitespace-nowrap font-serif text-xl italic">
           Creator <span className="text-accent">Hub</span>
         </Link>
         <nav className="flex gap-1 overflow-x-auto text-sm">
@@ -38,11 +37,8 @@ export function HubNav() {
             );
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-3">
-          <span className="hidden sm:block">
-            <SourceBadge source={data?.source} />
-          </span>
-          <ThemePicker />
+        <div className="ml-auto hidden sm:block">
+          <SourceBadge source={data?.source} />
         </div>
       </div>
     </header>
