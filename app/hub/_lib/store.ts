@@ -3,6 +3,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Ad } from "./types";
+import { exampleProject } from "./example-project";
 
 /* Starred ads and projects. Pages read and write through the hooks at the
    bottom; underneath, data lives either in the signed-in user's Supabase rows
@@ -24,6 +25,8 @@ export type LinkItem = { id: string; label: string; url: string };
 
 export type Project = {
   id: string;
+  /** The sample job new accounts start with. */
+  example?: boolean;
   createdAt: string;
   brand: string;
   title: string;
@@ -137,6 +140,8 @@ type Backend = {
   removeProject(id: string): void;
   saveStar(ad: StarredAd, immediate: boolean): void;
   removeStar(id: string): void;
+  /** Send any saves still waiting for a pause in typing, now. */
+  flush(): Promise<void>;
 };
 
 const LOCAL_STARS = "hub:stars";
@@ -159,6 +164,7 @@ const localBackend: Backend = {
   removeProject: () => persistLocal(),
   saveStar: () => persistLocal(),
   removeStar: () => persistLocal(),
+  flush: async () => {},
 };
 
 function persistLocal() {
@@ -170,7 +176,7 @@ function persistLocal() {
 
 /** Saves to Supabase. Typing produces lots of edits, so project saves wait for a short pause. */
 function remoteBackend(db: SupabaseClient): Backend {
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const pending = new Map<string, { timer: ReturnType<typeof setTimeout>; op: () => PromiseLike<{ error: unknown }> }>();
   let inFlight = 0;
 
   async function run(op: () => PromiseLike<{ error: unknown }>) {
@@ -181,28 +187,49 @@ function remoteBackend(db: SupabaseClient): Backend {
     if (error) {
       console.error("Creator Hub: save failed", error);
       setState({ sync: "error" });
-    } else if (inFlight === 0 && timers.size === 0) {
+    } else if (inFlight === 0 && pending.size === 0) {
       setState({ sync: "idle" });
     }
   }
 
   function later(key: string, op: () => PromiseLike<{ error: unknown }>) {
-    clearTimeout(timers.get(key));
+    clearTimeout(pending.get(key)?.timer);
     setState({ sync: "saving" });
-    timers.set(
-      key,
-      setTimeout(() => {
-        timers.delete(key);
-        run(op);
-      }, 600),
-    );
+    const timer = setTimeout(() => {
+      pending.delete(key);
+      run(op);
+    }, 600);
+    pending.set(key, { timer, op });
+  }
+
+  function cancel(key: string) {
+    clearTimeout(pending.get(key)?.timer);
+    pending.delete(key);
+  }
+
+  async function flush() {
+    const ops = [...pending.values()];
+    pending.clear();
+    ops.forEach((p) => clearTimeout(p.timer));
+    await Promise.all(ops.map((p) => run(p.op)));
+  }
+
+  // Leaving or hiding the page mid-edit: save straight away rather than lose it.
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", () => void flush());
+    document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && void flush());
+    window.addEventListener("beforeunload", (e) => {
+      if (pending.size || inFlight) {
+        void flush();
+        e.preventDefault();
+      }
+    });
   }
 
   return {
     saveProject: (p) => later("p:" + p.id, () => db.from("hub_projects").upsert({ id: p.id, data: p, updated_at: new Date().toISOString() })),
     removeProject: (id) => {
-      clearTimeout(timers.get("p:" + id));
-      timers.delete("p:" + id);
+      cancel("p:" + id);
       run(() => db.from("hub_projects").delete().eq("id", id));
     },
     saveStar: (ad, immediate) => {
@@ -211,10 +238,10 @@ function remoteBackend(db: SupabaseClient): Backend {
       else later("s:" + ad.id, op);
     },
     removeStar: (id) => {
-      clearTimeout(timers.get("s:" + id));
-      timers.delete("s:" + id);
+      cancel("s:" + id);
       run(() => db.from("hub_starred_ads").delete().eq("ad_id", id));
     },
+    flush,
   };
 }
 
@@ -230,6 +257,12 @@ export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: 
   if (opts.mode === "local") {
     backend = localBackend;
     setState({ ready: true, ...readLocal() });
+    let added = true;
+    try {
+      added = Boolean(localStorage.getItem(EXAMPLE_ADDED));
+      localStorage.setItem(EXAMPLE_ADDED, "1");
+    } catch {}
+    if (!added && state.projects.length === 0) addExampleProject();
     return;
   }
 
@@ -249,6 +282,26 @@ export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: 
     projects: (p.data ?? []).map((r) => upgrade(r.data as Partial<Project>)),
     stars: Object.fromEntries((s.data ?? []).map((r) => [(r.data as StarredAd).id, r.data as StarredAd])),
   });
+  // New accounts get the example job once (remembered on the account, so deleting it sticks on every device).
+  const { data } = await opts.db.auth.getUser();
+  if (data.user && !data.user.user_metadata?.example_added) {
+    if (state.projects.length === 0) {
+      addExampleProject();
+      await backend.flush();
+      if (state.sync === "error") return; // not saved - try again next visit
+    }
+    await opts.db.auth.updateUser({ data: { example_added: true } });
+  }
+}
+
+const EXAMPLE_ADDED = "hub:example-added";
+
+/** Add the filled-in example job (also used by the "Add an example project" button). */
+export function addExampleProject() {
+  const p = exampleProject();
+  setState({ projects: [p, ...state.projects] });
+  backend?.saveProject(p);
+  return p;
 }
 
 /* ---- Moving browser data into an account ---- */

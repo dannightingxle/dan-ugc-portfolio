@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { STAGES, newProject, useProjects, type Project } from "../_lib/store";
+import { STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
 import { gbp, shortDate } from "../_lib/ui";
-import { Field, PaymentPill, input, parseMoney } from "./fields";
+import { ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
 
 /* Project board: every brand deal from pitch to paid. */
 
@@ -19,6 +19,7 @@ export default function ProjectsPage() {
 
 function Board() {
   const { projects } = useProjects();
+  const ready = useDataReady();
   const params = useSearchParams();
   const [adding, setAdding] = useState(params.get("new") === "1");
 
@@ -33,6 +34,22 @@ function Board() {
           + New project
         </button>
       </div>
+
+      {ready && projects.length === 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-border-strong bg-bg-card p-5">
+          <div>
+            <p className="font-medium">No projects yet</p>
+            <p className="text-sm text-text-muted">Add one when a brand deal lands, or start with a filled-in example to see how it works.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => addExampleProject()}
+            className="rounded-xl border border-border px-4 py-2 text-sm font-medium hover:border-accent hover:text-accent"
+          >
+            Add an example project
+          </button>
+        </div>
+      )}
 
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6">
         {STAGES.map((stage) => {
@@ -63,7 +80,10 @@ function ProjectCard({ p }: { p: Project }) {
   return (
     <Link href={`/hub/projects/${p.id}`} className="block space-y-2 rounded-lg border border-border bg-bg-card p-3 transition hover:border-border-strong">
       <div>
-        <p className="text-xs text-text-dim">{p.brand || "No brand"}</p>
+        <p className="flex items-center gap-1.5 text-xs text-text-dim">
+          {p.brand || "No brand"}
+          {p.example && <ExampleTag />}
+        </p>
         <p className="text-sm font-medium">{p.title || "Untitled"}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-text-dim">
