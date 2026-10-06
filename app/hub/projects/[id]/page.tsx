@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useSyncExternalStore } from "react";
+import { use } from "react";
 import {
   PAYMENT_STATUSES,
   SHIPPING,
   STAGES,
   paymentDue,
+  useDataReady,
   useProjects,
+  useSyncStatus,
   useStars,
   type Deliverable,
   type Project,
@@ -28,13 +30,12 @@ const PRESETS: Omit<Deliverable, "id" | "done">[] = [
   { item: "Photos", qty: 5, format: "Photo", length: "" },
 ];
 
-const mounted = () => () => {};
-
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { projects, save, remove } = useProjects();
   const router = useRouter();
-  const ready = useSyncExternalStore(mounted, () => true, () => false);
+  const ready = useDataReady();
+  const sync = useSyncStatus();
   const p = projects.find((x) => x.id === id);
 
   if (!ready) return null;
@@ -70,7 +71,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <Link href="/hub/projects" className="text-sm text-text-dim hover:text-text">
           ← Projects
         </Link>
-        <span className="text-xs text-text-dim">Saved automatically</span>
+        <span className={`text-xs ${sync === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+          {sync === "saving" ? "Saving…" : sync === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
+        </span>
       </div>
 
       <header className="space-y-3">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Ad, AdDetail, Brand, Paged, Source } from "./_lib/types";
+import { ImportLocal } from "./import-local";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
 
@@ -29,6 +30,7 @@ export default function HubHome() {
 
   return (
     <div className="space-y-12">
+      <ImportLocal />
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

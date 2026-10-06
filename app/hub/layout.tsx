@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Inter, Manrope, Plus_Jakarta_Sans } from "next/font/google";
+import { AccountProvider } from "./account-provider";
+import { accountsEnabled } from "./_lib/supabase/config";
+import { currentUser } from "./_lib/supabase/server";
 import { HubNav } from "./nav";
 import { DEFAULT_THEME } from "./themes";
 import "./hub.css";
@@ -18,11 +21,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function HubLayout({ children }: { children: React.ReactNode }) {
+export default async function HubLayout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser();
   return (
     <div id="hub" data-theme={DEFAULT_THEME} className={`hub ${fontVars} min-h-screen`}>
-      <HubNav />
-      <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:px-6">{children}</main>
+      <AccountProvider enabled={accountsEnabled} user={user}>
+        <HubNav />
+        <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:px-6">{children}</main>
+      </AccountProvider>
     </div>
   );
 }
