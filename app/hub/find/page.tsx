@@ -45,7 +45,7 @@ export default function FindAds() {
           placeholder="Brand name, website or @instagram"
           className="min-w-0 flex-1 rounded-xl border border-border bg-bg-card px-4 py-3 outline-none focus:border-accent"
         />
-        <button className="rounded-xl bg-accent px-5 font-medium text-black hover:bg-accent-hover">Search</button>
+        <button className="rounded-xl bg-accent px-5 font-medium text-on-accent hover:bg-accent-hover">Search</button>
       </form>
 
       {submitted && !shownBrand && (
@@ -159,7 +159,7 @@ function BrandAds({ brand, onBack }: { brand: Brand; onBack?: () => void }) {
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-lg font-semibold">{compact(ad.reach)}</span>
-                {ad.reachDelta7d ? <span className="text-xs text-emerald-400">+{compact(ad.reachDelta7d)} 7d</span> : null}
+                {ad.reachDelta7d ? <span className="text-xs text-good">+{compact(ad.reachDelta7d)} 7d</span> : null}
               </div>
             </div>
           </Link>

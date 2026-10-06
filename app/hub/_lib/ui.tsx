@@ -54,12 +54,12 @@ export function useApi<T>(url: string | null) {
 export function SourceBadge({ source }: { source: Source | undefined }) {
   if (!source) return null;
   return source === "live" ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs text-emerald-300">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live TrendTrack data
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-good/30 bg-good-soft px-2.5 py-0.5 text-xs text-good">
+      <span className="h-1.5 w-1.5 rounded-full bg-good" /> Live TrendTrack data
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs text-amber-300">
-      <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> Demo data
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-warn/30 bg-warn-soft px-2.5 py-0.5 text-xs text-warn">
+      <span className="h-1.5 w-1.5 rounded-full bg-warn" /> Demo data
     </span>
   );
 }
@@ -69,10 +69,10 @@ export function StatusPill({ status }: { status: Ad["status"] }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-        live ? "bg-emerald-500/15 text-emerald-300" : "bg-white/5 text-text-dim"
+        live ? "bg-good-soft text-good" : "bg-text/5 text-text-dim"
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-text-dim"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-good" : "bg-text-dim"}`} />
       {live ? "Running" : "Stopped"}
     </span>
   );
@@ -97,7 +97,7 @@ export function Thumb({ ad, className = "" }: { ad: Ad; className?: string }) {
   const initials = ad.brandName.split(/\s+/).map((w) => w[0]).slice(0, 2).join("");
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#2a1a12] via-bg-card to-[#121a24] ${className}`}
+      className={`flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-thumb-a to-thumb-b ${className}`}
     >
       <span className="font-serif text-3xl italic text-accent">{initials}</span>
       {ad.mediaType === "video" && <span className="text-[10px] uppercase tracking-widest text-text-dim">Video</span>}
@@ -118,7 +118,7 @@ export function StarButton({ starred, onClick }: { starred: boolean; onClick: ()
       aria-label={starred ? "Unstar ad" : "Star ad"}
       className={`flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur transition ${
         starred
-          ? "border-accent bg-accent text-black"
+          ? "border-accent bg-accent text-on-accent"
           : "border-white/20 bg-black/50 text-white hover:border-accent hover:text-accent"
       }`}
     >
@@ -182,7 +182,7 @@ export function ReachChart({ points }: { points: ReachPoint[] }) {
       >
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth="1" />
+            <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} stroke="var(--grid)" strokeWidth="1" />
             <text x={pad.l - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--text-dim)">
               {compact(t)}
             </text>

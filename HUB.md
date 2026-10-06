@@ -41,3 +41,9 @@ TrendTrack responses are cached (1h for lists, 6h for ad detail) to save credits
 3. Written OK from TrendTrack to serve their data to other users (their terms limit it
    to personal/internal use otherwise).
 4. Moving it into its own repo/app once it outgrows the portfolio site.
+
+## Styles
+
+The hub has switchable themes (the **Style** menu top right, or `?theme=studio|editorial|night|current`
+in the URL). They're defined as blocks of colour/font/corner values in `app/hub/hub.css`; the default is
+`DEFAULT_THEME` in `app/hub/themes.ts`. Once one is picked, the menu and the others can be removed.

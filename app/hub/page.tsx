@@ -71,7 +71,7 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
   return (
     <div className="rounded-xl border border-border bg-bg-card p-4">
       <div className="text-xs text-text-dim">{label}</div>
-      <div className={`mt-1 text-3xl font-semibold ${accent ? "text-emerald-400" : ""}`}>{value}</div>
+      <div className={`mt-1 text-3xl font-semibold ${accent ? "text-good" : ""}`}>{value}</div>
     </div>
   );
 }
@@ -134,7 +134,7 @@ function EmptyState() {
       <p className="text-lg font-medium">No ads starred yet</p>
       <p className="mx-auto mt-1 max-w-md text-text-muted">Search a brand you&apos;ve worked with, find your ads and hit the star.</p>
       <div className="mt-5 flex flex-wrap justify-center gap-3">
-        <Link href="/hub/find" className="rounded-xl bg-accent px-5 py-2.5 font-medium text-black hover:bg-accent-hover">
+        <Link href="/hub/find" className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
           Find my ads
         </Link>
         {status.data?.source === "demo" && (

@@ -144,7 +144,7 @@ function Stat({ label, value, hint, accent }: { label: string; value: string; hi
   return (
     <div className="rounded-xl border border-border bg-bg-card p-4" title={hint}>
       <div className="text-xs text-text-dim">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${accent ? "text-emerald-400" : ""}`}>{value}</div>
+      <div className={`mt-1 text-2xl font-semibold ${accent ? "text-good" : ""}`}>{value}</div>
     </div>
   );
 }
@@ -155,7 +155,7 @@ function ShareCard({ brand, reach, days, running }: { brand: string; reach: numb
     <section className="space-y-2">
       <h2 className="font-medium">Share card</h2>
       <p className="text-sm text-text-dim">Screenshot this for your stories or pitch deck.</p>
-      <div className="max-w-sm rounded-2xl bg-gradient-to-br from-accent to-[#c2410c] p-6 text-black">
+      <div className="hub-share max-w-sm rounded-2xl p-6">
         <p className="text-xs font-semibold uppercase tracking-widest opacity-70">My ad for {brand}</p>
         <p className="mt-4 font-serif text-5xl italic leading-none">{compact(reach)}</p>
         <p className="text-sm font-medium opacity-80">people reached</p>

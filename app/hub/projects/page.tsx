@@ -37,7 +37,7 @@ function Board() {
           <h1 className="font-serif text-4xl italic sm:text-5xl">Projects</h1>
           <p className="mt-2 text-text-muted">Every brand deal from pitch to paid, with the script alongside.</p>
         </div>
-        <button onClick={() => setDraft(newProject())} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-black hover:bg-accent-hover">
+        <button onClick={() => setDraft(newProject())} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
           + New project
         </button>
       </div>
@@ -205,7 +205,7 @@ function Editor({
         </div>
 
         <div className="flex gap-2 pt-2">
-          <button className="flex-1 rounded-xl bg-accent py-2.5 font-medium text-black hover:bg-accent-hover">Save</button>
+          <button className="flex-1 rounded-xl bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover">Save</button>
           {initial.createdAt && (
             <button type="button" onClick={onDelete} className="rounded-xl border border-border px-4 text-sm text-text-dim hover:border-red-500 hover:text-red-400">
               Delete

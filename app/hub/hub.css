@@ -1,0 +1,159 @@
+/* Creator Hub themes. Each theme re-points the same CSS variables the hub's
+   Tailwind classes read (bg-bg, text-accent, rounded-xl, font-serif…), so a
+   theme is just a block of values here - no component changes.
+   Fonts are loaded in app/hub/layout.tsx. Unlayered on purpose so these win
+   over Tailwind's utilities layer. */
+
+.hub {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+}
+.hub .font-serif {
+  font-style: var(--display-style);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+}
+.hub-share {
+  background: linear-gradient(135deg, var(--share-a), var(--share-b));
+  color: var(--share-ink);
+}
+
+/* ---- Current: the portfolio site's look ---- */
+.hub[data-theme="current"] {
+  --bg: #0a0a0a;
+  --bg-elevated: #141414;
+  --bg-card: #1a1a1a;
+  --border: #262626;
+  --border-strong: #3a3a3a;
+  --grid: #262626;
+  --text: #f5f5f5;
+  --text-muted: #a3a3a3;
+  --text-dim: #737373;
+  --accent: #ff6b35;
+  --accent-hover: #ff8255;
+  --accent-soft: rgba(255, 107, 53, 0.12);
+  --on-accent: #0a0a0a;
+  --good: #34d399;
+  --good-soft: rgba(52, 211, 153, 0.14);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.1);
+  --thumb-a: #2a1a12;
+  --thumb-b: #121a24;
+  --share-a: #ff6b35;
+  --share-b: #c2410c;
+  --share-ink: #0a0a0a;
+  --font-serif: var(--font-instrument);
+  --font-sans: var(--font-geist);
+  --display-style: italic;
+  --display-weight: 400;
+  --display-tracking: 0;
+}
+
+/* ---- Studio: warm paper, ink outlines, cobalt + highlighter ---- */
+.hub[data-theme="studio"] {
+  --bg: #f3f0e8;
+  --bg-elevated: #e9e5da;
+  --bg-card: #fffdf8;
+  --border: #161616;
+  --border-strong: #161616;
+  --grid: #e2ddd0;
+  --text: #161616;
+  --text-muted: #45433f;
+  --text-dim: #77736a;
+  --accent: #2f4bff;
+  --accent-hover: #1d36e0;
+  --accent-soft: rgba(47, 75, 255, 0.1);
+  --on-accent: #ffffff;
+  --good: #0c7a43;
+  --good-soft: #d6f2e1;
+  --warn: #7a5300;
+  --warn-soft: #fff0b8;
+  --thumb-a: #d9defe;
+  --thumb-b: #f3f0e8;
+  --share-a: #e6ff4d;
+  --share-b: #e6ff4d;
+  --share-ink: #161616;
+  --font-serif: var(--font-bricolage);
+  --font-sans: var(--font-instrument-sans);
+  --display-style: normal;
+  --display-weight: 800;
+  --display-tracking: -0.035em;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+}
+.hub[data-theme="studio"] :is(.rounded-xl, .rounded-2xl).border {
+  box-shadow: 3px 3px 0 #161616;
+}
+.hub[data-theme="studio"] header {
+  border-bottom-width: 2px;
+}
+
+/* ---- Editorial: cream, forest green, tomato, soft serif ---- */
+.hub[data-theme="editorial"] {
+  --bg: #f6f1e6;
+  --bg-elevated: #eee6d4;
+  --bg-card: #fbf8f1;
+  --border: #ddd2bd;
+  --border-strong: #c2b49b;
+  --grid: #e8dfcc;
+  --text: #1e2a22;
+  --text-muted: #4b584e;
+  --text-dim: #7d857c;
+  --accent: #d6452a;
+  --accent-hover: #bb371e;
+  --accent-soft: rgba(214, 69, 42, 0.1);
+  --on-accent: #fff8ee;
+  --good: #2e6b44;
+  --good-soft: #dceadf;
+  --warn: #8f6200;
+  --warn-soft: #f6e6bd;
+  --thumb-a: #e7dcc4;
+  --thumb-b: #d3e0d0;
+  --share-a: #1f3d2b;
+  --share-b: #335d43;
+  --share-ink: #f6f1e6;
+  --font-serif: var(--font-fraunces);
+  --font-sans: var(--font-manrope);
+  --display-style: normal;
+  --display-weight: 600;
+  --display-tracking: -0.02em;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
+}
+
+/* ---- Night Shift: deep violet, acid lime, lilac ---- */
+.hub[data-theme="night"] {
+  --bg: #0d0b14;
+  --bg-elevated: #15121f;
+  --bg-card: #1b1728;
+  --border: #2b2540;
+  --border-strong: #423960;
+  --grid: #241f35;
+  --text: #f3f0fb;
+  --text-muted: #b5adc9;
+  --text-dim: #7f7798;
+  --accent: #c8f135;
+  --accent-hover: #d8ff5a;
+  --accent-soft: rgba(200, 241, 53, 0.12);
+  --on-accent: #0d0b14;
+  --good: #5eead4;
+  --good-soft: rgba(94, 234, 212, 0.13);
+  --warn: #ffb86b;
+  --warn-soft: rgba(255, 184, 107, 0.12);
+  --thumb-a: #2d2150;
+  --thumb-b: #16131f;
+  --share-a: #b69cff;
+  --share-b: #c8f135;
+  --share-ink: #0d0b14;
+  --font-serif: var(--font-space-grotesk);
+  --font-sans: var(--font-dm-sans);
+  --display-style: normal;
+  --display-weight: 700;
+  --display-tracking: -0.03em;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.5rem;
+}
