@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import { Fraunces, Geist, Inter, Manrope, Plus_Jakarta_Sans } from "next/font/google";
 import { HubNav } from "./nav";
+import { DEFAULT_THEME } from "./themes";
 import "./hub.css";
 
-/* Fonts used by hub.css. */
+/* Fonts used by the themes in hub.css. Browsers only download the active one. */
+const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
+const jakarta = Plus_Jakarta_Sans({ variable: "--font-jakarta", subsets: ["latin"] });
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"] });
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"] });
+const fontVars = [geist, jakarta, inter, fraunces, manrope].map((f) => f.variable).join(" ");
 
 export const metadata: Metadata = {
   title: "Creator Hub",
@@ -15,7 +20,7 @@ export const metadata: Metadata = {
 
 export default function HubLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`hub ${fraunces.variable} ${manrope.variable} min-h-screen`}>
+    <div id="hub" data-theme={DEFAULT_THEME} className={`hub ${fontVars} min-h-screen`}>
       <HubNav />
       <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:px-6">{children}</main>
     </div>

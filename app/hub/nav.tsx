@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SourceBadge, useApi } from "./_lib/ui";
 import type { Source } from "./_lib/types";
+import { ThemePicker } from "./theme-picker";
 
 const LINKS = [
   { href: "/hub", label: "Home" },
@@ -39,8 +40,11 @@ export function HubNav() {
             );
           })}
         </nav>
-        <div className="ml-auto hidden sm:block">
-          <SourceBadge source={data?.source} />
+        <div className="ml-auto flex items-center gap-3">
+          <span className="hidden md:block">
+            <SourceBadge source={data?.source} />
+          </span>
+          <ThemePicker />
         </div>
       </div>
     </header>

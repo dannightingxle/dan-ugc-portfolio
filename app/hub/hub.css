@@ -1,7 +1,13 @@
-/* Creator Hub look. Re-points the CSS variables the hub's Tailwind classes
-   read (bg-bg, text-accent, rounded-xl, font-serif…), so the whole style is
-   the block of values below. Fonts are loaded in app/hub/layout.tsx.
-   Unlayered on purpose so these win over Tailwind's utilities layer. */
+/* Creator Hub themes. Each block re-points the CSS variables the hub's
+   Tailwind classes read (bg-bg, text-accent, rounded-xl, font-serif…), so a
+   theme is just values - no component changes. Fonts are loaded in
+   app/hub/layout.tsx. Unlayered on purpose so these win over Tailwind's
+   utilities layer. */
+
+/* The portfolio's grain texture doesn't belong on the hub. */
+body:has(.hub)::before {
+  display: none;
+}
 
 .hub {
   font-family: var(--font-sans);
@@ -18,8 +24,111 @@
   color: var(--share-ink);
 }
 
-/* ---- Editorial: cream, forest green, tomato, soft serif ---- */
-.hub {
+
+/* ---- Mono: white, black, nothing extra ---- */
+.hub[data-theme="mono"] {
+  --bg: #ffffff;
+  --bg-elevated: #f5f5f6;
+  --bg-card: #ffffff;
+  --border: #e7e7ea;
+  --border-strong: #d4d4d8;
+  --grid: #efeff1;
+  --text: #0a0a0b;
+  --text-muted: #52525b;
+  --text-dim: #8b8b93;
+  --accent: #0a0a0b;
+  --accent-hover: #2a2a2e;
+  --accent-soft: rgba(10, 10, 11, 0.06);
+  --on-accent: #ffffff;
+  --good: #15803d;
+  --good-soft: #dcfce7;
+  --warn: #a16207;
+  --warn-soft: #fef3c7;
+  --thumb-a: #f1f1f3;
+  --thumb-b: #e4e4e7;
+  --share-a: #0a0a0b;
+  --share-b: #3f3f46;
+  --share-ink: #ffffff;
+  --font-serif: var(--font-geist);
+  --font-sans: var(--font-geist);
+  --display-style: normal;
+  --display-weight: 600;
+  --display-tracking: -0.045em;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+}
+
+/* ---- Sky: cool white, slate, confident blue ---- */
+.hub[data-theme="sky"] {
+  --bg: #f7f9fc;
+  --bg-elevated: #eef2f8;
+  --bg-card: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --grid: #e9eef5;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-dim: #8391a7;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --on-accent: #ffffff;
+  --good: #047857;
+  --good-soft: #d1fae5;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --thumb-a: #dbe6ff;
+  --thumb-b: #f1f5fb;
+  --share-a: #2563eb;
+  --share-b: #7c3aed;
+  --share-ink: #ffffff;
+  --font-serif: var(--font-jakarta);
+  --font-sans: var(--font-jakarta);
+  --display-style: normal;
+  --display-weight: 700;
+  --display-tracking: -0.035em;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+}
+
+/* ---- Graphite: dark, quiet, violet highlight ---- */
+.hub[data-theme="graphite"] {
+  --bg: #09090b;
+  --bg-elevated: #111113;
+  --bg-card: #151518;
+  --border: #242428;
+  --border-strong: #36363c;
+  --grid: #1d1d21;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-soft: rgba(167, 139, 250, 0.12);
+  --on-accent: #09090b;
+  --good: #4ade80;
+  --good-soft: rgba(74, 222, 128, 0.12);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.12);
+  --thumb-a: #1f1a33;
+  --thumb-b: #151518;
+  --share-a: #a78bfa;
+  --share-b: #f0abfc;
+  --share-ink: #09090b;
+  --font-serif: var(--font-inter);
+  --font-sans: var(--font-inter);
+  --display-style: normal;
+  --display-weight: 600;
+  --display-tracking: -0.04em;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.875rem;
+}
+
+/* ---- Editorial: the previous look, kept for comparison ---- */
+.hub[data-theme="editorial"] {
   --bg: #f6f1e6;
   --bg-elevated: #eee6d4;
   --bg-card: #fbf8f1;
