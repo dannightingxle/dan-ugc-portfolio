@@ -954,6 +954,9 @@ function WorkCard({ item }: { item: WorkItem }) {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [scrubbing, setScrubbing] = useState(false);
+  /* Nothing is fetched until the card nears the viewport, and then only the
+     metadata - the clip itself downloads when someone presses play. */
+  const [preload, setPreload] = useState<"none" | "metadata">("none");
   const poster = item.videoSrc.replace(/\/([^/]+)\.mp4$/, "/posters/$1.jpg");
 
   useEffect(() => {
@@ -962,7 +965,9 @@ function WorkCard({ item }: { item: WorkItem }) {
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          el.play().catch(() => {});
+          // Clips never start on their own - coming into view only loads the
+          // metadata, so the card can show the clip's length under its poster.
+          setPreload("metadata");
         } else {
           el.pause();
           // scrolling a clip away drops its sound, so the next one starts quiet
@@ -1076,9 +1081,9 @@ function WorkCard({ item }: { item: WorkItem }) {
           webkit-playsinline="true"
           x5-playsinline="true"
           disablePictureInPicture
-          preload="none"
-          /* preload="none" means a first play starts with zero data - surface
-             that as a buffering state so the card reads "loading", not broken. */
+          preload={preload}
+          /* The clip is unbuffered until someone presses play - surface that as
+             a buffering state so the card reads "loading", not broken. */
           onPlay={(e) => {
             setPlaying(true);
             if (e.currentTarget.readyState < 3) setBuffering(true);
