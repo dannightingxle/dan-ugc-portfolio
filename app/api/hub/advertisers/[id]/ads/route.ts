@@ -16,7 +16,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/hub/advertis
   };
   try {
     const result = await brandAds(id, q);
-    if (source() === "live") meter("dan", "advertiser-ads", result.items.length);
+    if (source() === "live") await meter("advertiser-ads", result.items.length);
     return Response.json(result);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 502 });

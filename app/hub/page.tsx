@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Ad, AdDetail, Brand, Paged, Source } from "./_lib/types";
+import { ImportLocal } from "./import-local";
+import { ExampleTag } from "./projects/fields";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
 
@@ -29,6 +31,7 @@ export default function HubHome() {
 
   return (
     <div className="space-y-12">
+      <ImportLocal />
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -64,7 +67,10 @@ export default function HubHome() {
                   <li key={p.id}>
                     <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-text-dim">{p.brand}</p>
+                        <p className="flex items-center gap-1.5 text-xs text-text-dim">
+                          {p.brand}
+                          {p.example && <ExampleTag />}
+                        </p>
                         <p className="truncate text-sm font-medium">{p.title || "Untitled"}</p>
                       </div>
                       <span className="rounded-full bg-text/5 px-2 py-0.5 text-xs text-text-muted">{p.stage}</span>

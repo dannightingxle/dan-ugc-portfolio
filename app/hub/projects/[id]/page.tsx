@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useSyncExternalStore } from "react";
+import { use } from "react";
 import {
   PAYMENT_STATUSES,
   SHIPPING,
   STAGES,
   paymentDue,
+  useDataReady,
   useProjects,
+  useSyncStatus,
   useStars,
   type Deliverable,
   type Project,
@@ -28,13 +30,12 @@ const PRESETS: Omit<Deliverable, "id" | "done">[] = [
   { item: "Photos", qty: 5, format: "Photo", length: "" },
 ];
 
-const mounted = () => () => {};
-
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { projects, save, remove } = useProjects();
   const router = useRouter();
-  const ready = useSyncExternalStore(mounted, () => true, () => false);
+  const ready = useDataReady();
+  const sync = useSyncStatus();
   const p = projects.find((x) => x.id === id);
 
   if (!ready) return null;
@@ -70,8 +71,29 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <Link href="/hub/projects" className="text-sm text-text-dim hover:text-text">
           ← Projects
         </Link>
-        <span className="text-xs text-text-dim">Saved automatically</span>
+        <span className={`text-xs ${sync === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+          {sync === "saving" ? "Saving…" : sync === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
+        </span>
       </div>
+
+      {project.example && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent-soft px-4 py-3 text-sm">
+          <p>
+            <span className="font-semibold text-accent">Example project.</span> A sample job showing what each section is for. Edit it into a real
+            one, or delete it.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              remove(project.id);
+              router.push("/hub/projects");
+            }}
+            className="rounded-lg border border-border bg-bg-card px-3 py-1.5 text-xs font-medium hover:border-accent hover:text-accent"
+          >
+            Delete example
+          </button>
+        </div>
+      )}
 
       <header className="space-y-3">
         <input

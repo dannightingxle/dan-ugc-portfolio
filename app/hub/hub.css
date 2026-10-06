@@ -1,7 +1,12 @@
 /* Creator Hub look. Re-points the CSS variables the hub's Tailwind classes
    read (bg-bg, text-accent, rounded-xl, font-serif…), so the whole style is
-   the block of values below. Fonts are loaded in app/hub/layout.tsx.
+   the block of values below. The font is loaded in app/hub/layout.tsx.
    Unlayered on purpose so these win over Tailwind's utilities layer. */
+
+/* The portfolio's grain texture doesn't belong on the hub. */
+body:has(.hub)::before {
+  display: none;
+}
 
 .hub {
   font-family: var(--font-sans);
@@ -18,36 +23,37 @@
   color: var(--share-ink);
 }
 
-/* ---- Editorial: cream, forest green, tomato, soft serif ---- */
+
+/* ---- Sky: cool white, slate, confident blue ---- */
 .hub {
-  --bg: #f6f1e6;
-  --bg-elevated: #eee6d4;
-  --bg-card: #fbf8f1;
-  --border: #ddd2bd;
-  --border-strong: #c2b49b;
-  --grid: #e8dfcc;
-  --text: #1e2a22;
-  --text-muted: #4b584e;
-  --text-dim: #7d857c;
-  --accent: #d6452a;
-  --accent-hover: #bb371e;
-  --accent-soft: rgba(214, 69, 42, 0.1);
-  --on-accent: #fff8ee;
-  --good: #2e6b44;
-  --good-soft: #dceadf;
-  --warn: #8f6200;
-  --warn-soft: #f6e6bd;
-  --thumb-a: #e7dcc4;
-  --thumb-b: #d3e0d0;
-  --share-a: #1f3d2b;
-  --share-b: #335d43;
-  --share-ink: #f6f1e6;
-  --font-serif: var(--font-fraunces);
-  --font-sans: var(--font-manrope);
+  --bg: #f7f9fc;
+  --bg-elevated: #eef2f8;
+  --bg-card: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --grid: #e9eef5;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-dim: #8391a7;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --on-accent: #ffffff;
+  --good: #047857;
+  --good-soft: #d1fae5;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --thumb-a: #dbe6ff;
+  --thumb-b: #f1f5fb;
+  --share-a: #2563eb;
+  --share-b: #7c3aed;
+  --share-ink: #ffffff;
+  --font-serif: var(--font-jakarta);
+  --font-sans: var(--font-jakarta);
   --display-style: normal;
-  --display-weight: 600;
-  --display-tracking: -0.02em;
-  --radius-lg: 0.875rem;
-  --radius-xl: 1.125rem;
-  --radius-2xl: 1.5rem;
+  --display-weight: 700;
+  --display-tracking: -0.035em;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
 }

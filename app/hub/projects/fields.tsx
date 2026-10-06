@@ -47,3 +47,8 @@ export function parseMoney(v: string): number | null {
   const n = Number(v.replace(/[^\d.]/g, ""));
   return v.trim() && Number.isFinite(n) ? n : null;
 }
+
+/** Marks the sample job new accounts start with. */
+export function ExampleTag() {
+  return <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">Example</span>;
+}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SourceBadge, useApi } from "./_lib/ui";
 import type { Source } from "./_lib/types";
+import { useAccount } from "./account-provider";
 
 const LINKS = [
   { href: "/hub", label: "Home" },
@@ -14,6 +15,7 @@ const LINKS = [
 
 export function HubNav() {
   const path = usePathname();
+  const { user } = useAccount();
   const { data } = useApi<{ source: Source }>(path === "/hub/login" ? null : "/api/hub/status");
   if (path === "/hub/login") return null;
   return (
@@ -39,8 +41,21 @@ export function HubNav() {
             );
           })}
         </nav>
-        <div className="ml-auto hidden sm:block">
-          <SourceBadge source={data?.source} />
+        <div className="ml-auto flex items-center gap-3">
+          <span className="hidden md:block">
+            <SourceBadge source={data?.source} />
+          </span>
+          {user && (
+            <Link
+              href="/hub/account"
+              title={`${user.name} - account`}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold uppercase transition ${
+                path.startsWith("/hub/account") ? "bg-accent text-on-accent" : "bg-accent-soft text-accent hover:bg-accent hover:text-on-accent"
+              }`}
+            >
+              {user.name.slice(0, 1)}
+            </Link>
+          )}
         </div>
       </div>
     </header>

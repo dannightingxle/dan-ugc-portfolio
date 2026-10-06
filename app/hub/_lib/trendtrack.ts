@@ -1,18 +1,19 @@
 import type { Ad, AdDetail, Brand, Paged, ReachPoint, Source } from "./types";
 import * as demo from "./demo-data";
+import { accountsEnabled } from "./supabase/config";
 
 /* Server-side TrendTrack client. The API key never reaches the browser: pages
    call /api/hub/*, those routes call this file.
 
-   Live calls need BOTH env vars:
-     TRENDTRACK_API_KEY - the workspace key from TrendTrack
-     HUB_PASSWORD       - gates /hub so strangers can't spend your credits
-   With either missing the hub runs on demo data. Spec: api.trendtrack.io/v1/openapi.json */
+   Live calls need TRENDTRACK_API_KEY plus a gate in front of /hub, so
+   strangers can't spend your credits: either Supabase accounts
+   (NEXT_PUBLIC_SUPABASE_*) or the single HUB_PASSWORD. Otherwise demo data. Spec: api.trendtrack.io/v1/openapi.json */
 
 const BASE = "https://api.trendtrack.io/v1";
 
 export function source(): Source {
-  return process.env.TRENDTRACK_API_KEY && process.env.HUB_PASSWORD ? "live" : "demo";
+  const gated = Boolean(process.env.HUB_PASSWORD) || accountsEnabled;
+  return process.env.TRENDTRACK_API_KEY && gated ? "live" : "demo";
 }
 
 async function tt<T>(path: string, revalidate: number): Promise<T> {
