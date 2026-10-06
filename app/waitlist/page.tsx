@@ -38,6 +38,49 @@ const POINTS = [
   },
 ];
 
+const COURSES = [
+  {
+    title: "Start Here",
+    body: "How UGC really makes money (briefs, outreach, retainers, dedicated accounts), picking your niche, kit on a budget, and your first 30 days.",
+  },
+  {
+    title: "Content That Converts",
+    body: "How brands actually judge a UGC ad, hooks and the first 3 seconds, scripting, reading a brief properly, filming, batching a shoot, and light editing.",
+  },
+  {
+    title: "Portfolio and Personal Brand",
+    body: "Building your portfolio and your site, and using your own TikTok to bring brands to you.",
+  },
+  {
+    title: "Tech UGC: Your First Paid Work",
+    body: "If you've never been paid for UGC before, start here. Low barrier, repeatable formats, and you get paid while you build experience.",
+    tag: "Start here if you're new",
+  },
+  {
+    title: "Winning Jobs",
+    body: "The platforms worth your time, applications that actually win, outreach using the Meta Ad Library, rate cards, usage rights and keeping clients.",
+  },
+  {
+    title: "Tools, AI and Workflow",
+    body: "Using AI for briefs, scripts and shot lists, the apps I use, and handing off to an editor.",
+  },
+  {
+    title: "The Business Side",
+    body: "Contracts, deposits, invoicing, tax basics, and staying compliant.",
+  },
+  {
+    title: "Mentality, Routine and Health",
+    body: "Handling rejection and slow months, and a weekly routine that fits around a job and a family.",
+  },
+];
+
+const MENTORSHIP = [
+  "Feedback on your content, scripts and pitches",
+  "Ask questions and get unstuck",
+  "Share wins (and the tough weeks) with people doing the same",
+  "Me in there, helping you towards your UGC goals",
+];
+
 export default function WaitlistPage() {
   return (
     <>
@@ -101,6 +144,80 @@ export default function WaitlistPage() {
             <WaitlistForm />
           </div>
         </div>
+
+        {/* ---------------- course outline ---------------- */}
+        <section className="mt-24 sm:mt-32">
+          <div className="max-w-2xl">
+            <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">What&apos;s inside</div>
+            <h2 className="mt-4 font-display text-4xl sm:text-5xl">
+              Anyone <em className="text-[color:var(--accent)]">Can Create.</em>
+            </h2>
+            <p className="mt-4 text-[color:var(--text-muted)]">
+              Zero experience, zero followers - it doesn&apos;t matter. Here&apos;s everything you get.
+            </p>
+          </div>
+
+          <div className="mt-10 rounded-2xl border border-[color:var(--accent)] bg-[color:var(--accent-soft)] p-6 sm:p-8">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full bg-[color:var(--accent)] px-3 py-1 text-xs font-semibold text-[color:var(--bg)]">
+                Free
+              </span>
+              <h3 className="text-xl font-semibold">The A to Z of UGC</h3>
+              <span className="text-sm text-[color:var(--text-dim)]">30 mins</span>
+            </div>
+            <p className="mt-3 text-[color:var(--text-muted)] max-w-2xl">
+              What UGC actually is, where the money is, and exactly how I&apos;d start from zero today. Anyone can
+              watch it.
+            </p>
+          </div>
+
+          <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {COURSES.map((c, i) => (
+              <div
+                key={c.title}
+                className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-6 flex flex-col"
+              >
+                <span className="font-display text-4xl text-[color:var(--accent)]">{String(i + 1).padStart(2, "0")}</span>
+                <h3 className="mt-3 font-semibold text-[color:var(--text)]">{c.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-[color:var(--text-muted)]">{c.body}</p>
+                {c.tag && (
+                  <span className="mt-4 self-start rounded-full border border-[color:var(--accent)] px-3 py-1 text-xs text-[color:var(--accent)]">
+                    {c.tag}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-6 sm:p-8 grid lg:grid-cols-[1fr_1.2fr] gap-6 lg:gap-10">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">On top of the course</div>
+              <h3 className="mt-3 font-display text-3xl sm:text-4xl">
+                The <em className="text-[color:var(--accent)]">mentorship</em>
+              </h3>
+              <p className="mt-3 text-[color:var(--text-muted)]">
+                You won&apos;t be doing this on your own. Mentorship members join a private group with me.
+              </p>
+            </div>
+            <ul className="flex flex-col gap-3 self-center">
+              {MENTORSHIP.map((m) => (
+                <li key={m} className="flex gap-3">
+                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[color:var(--accent)]" />
+                  <span className="text-[color:var(--text)]">{m}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-10 text-center">
+            <a
+              href="#join"
+              className="inline-flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-full bg-[color:var(--accent)] text-[color:var(--bg)] hover:bg-[color:var(--accent-hover)] transition-colors"
+            >
+              Join the waitlist
+            </a>
+          </div>
+        </section>
       </main>
 
       <footer className="relative z-10 border-t border-[color:var(--border)]">
