@@ -33,19 +33,15 @@ export default function AdPage({ params }: { params: Promise<{ id: string }> }) 
   const growth7d = ad.reachDelta7d ?? (history.length ? ad.reach! - weekAgo : null);
 
   function scriptToProject() {
-    const [hook, ...rest] = (ad.transcript ?? ad.body ?? "").split(/\n\n+/);
-    const cta = rest.length > 1 ? rest.pop()! : "";
     const p = newProject({
       brand: ad.brandName,
       title: `${ad.brandName} - ${ad.title?.slice(0, 40) ?? "ad"}`,
       stage: "Delivered",
-      hook: hook ?? "",
-      body: rest.join("\n\n"),
-      cta,
+      script: ad.transcript ?? ad.body ?? "",
       adIds: [ad.id],
     });
     save(p);
-    router.push(`/hub/projects?open=${p.id}`);
+    router.push(`/hub/projects/${p.id}`);
   }
 
   return (
@@ -119,7 +115,7 @@ export default function AdPage({ params }: { params: Promise<{ id: string }> }) 
               <p className="text-sm text-text-dim">
                 Linked to:{" "}
                 {linked.map((p) => (
-                  <Link key={p.id} href={`/hub/projects?open=${p.id}`} className="text-accent hover:underline">
+                  <Link key={p.id} href={`/hub/projects/${p.id}`} className="text-accent hover:underline">
                     {p.title || p.brand}
                   </Link>
                 ))}

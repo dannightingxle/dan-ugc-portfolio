@@ -5,10 +5,12 @@ your brand projects and your scripts. Not in the site nav and set to `noindex`.
 
 | Page | What it does |
 | --- | --- |
-| `/hub` | Your starred ads: reach, days running, trend line, still running or not. Plus a project summary. |
+| `/hub` | Home: money (earned, awaiting payment, pipeline), projects coming up, then your starred ads with reach, days running and trend line. |
+| `/hub/projects` | Board from Pitched to Paid. **+ New project** asks for the basics (brand, job, fee, delivery date) then opens the project page. |
+| `/hub/projects/[id]` | Everything about one job, saved as you type: payment (fee, invoiced/paid, invoice no., terms, due/overdue), dates, contact (with email/call/WhatsApp/Instagram buttons), deliverables checklist with quick-add presets, the brief (product, shipping, key messages, do's and don'ts, usage rights, exclusivity, revisions), links (Notion, Drive… auto-labelled), notes, a script box and the live ads it produced. |
 | `/hub/find` | Search a brand (name, website or @handle), browse its Meta ads, star the ones you're in. "Creator / partnership ads" filters to ads run with a creator's handle. |
 | `/hub/ads/[id]` | One ad: numbers, daily reach chart, a screenshot-ready share card, and the transcript, which you can save into a project. |
-| `/hub/projects` | Board from Pitched to Paid. Each project has fee, due date, a hook/body/CTA script editor with spoken-length estimate, and linked ads. |
+| `/hub/scripts` | "Coming soon" page for the scripting and shot-list tool. |
 
 ## Demo vs live data
 
