@@ -6,9 +6,10 @@ import { SourceBadge, useApi } from "./_lib/ui";
 import type { Source } from "./_lib/types";
 
 const LINKS = [
-  { href: "/hub", label: "My ads" },
-  { href: "/hub/find", label: "Find ads" },
+  { href: "/hub", label: "Home" },
   { href: "/hub/projects", label: "Projects" },
+  { href: "/hub/find", label: "Find ads" },
+  { href: "/hub/scripts", label: "Scripts", soon: true },
 ];
 
 export function HubNav() {
@@ -33,6 +34,7 @@ export function HubNav() {
                 }`}
               >
                 {l.label}
+                {l.soon && <span className="ml-1.5 rounded-full bg-text/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-text-dim">Soon</span>}
               </Link>
             );
           })}

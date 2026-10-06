@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Ad, AdDetail, Brand, Paged, Source } from "./_lib/types";
-import { STAGES, useProjects, useStars, type StarredAd } from "./_lib/store";
-import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, useApi } from "./_lib/ui";
+import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
+import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
 
-/* Dashboard: every starred ad with live numbers, plus the project pipeline. */
+/* Dashboard: projects and money first, then every starred ad with live numbers. */
 
 export default function HubHome() {
   const { stars, toggle } = useStars();
@@ -17,61 +17,105 @@ export default function HubHome() {
   const totalReach = ads.reduce((s, a) => s + (a.reach ?? 0), 0);
   const longest = ads.reduce((m, a) => Math.max(m, a.daysRunning ?? 0), 0);
 
-  const earned = projects.filter((p) => p.stage === "Paid").reduce((s, p) => s + (p.fee ?? 0), 0);
-  const pipeline = projects.filter((p) => p.stage !== "Paid").reduce((s, p) => s + (p.fee ?? 0), 0);
+  const earned = projects.filter((p) => p.paymentStatus === "Paid").reduce((s, p) => s + (p.fee ?? 0), 0);
+  const invoiced = projects.filter((p) => p.paymentStatus === "Invoiced");
+  const awaiting = invoiced.reduce((s, p) => s + (p.fee ?? 0), 0);
+  const overdue = invoiced.filter((p) => paymentDue(p)?.overdue).length;
+  const pipeline = projects.filter((p) => p.paymentStatus === "Not invoiced").reduce((s, p) => s + (p.fee ?? 0), 0);
+  const upNext = projects
+    .filter((p) => p.stage !== "Delivered" && p.stage !== "Paid")
+    .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"))
+    .slice(0, 4);
 
   return (
-    <div className="space-y-10">
-      <div>
-        <h1 className="font-serif text-4xl italic sm:text-5xl">My ads</h1>
-        <p className="mt-2 text-text-muted">The ads you&apos;re in, and how they&apos;re doing across each brand&apos;s accounts.</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label="Ads tracked" value={ads.length.toString()} />
-        <Tile label="Still running" value={running.toString()} accent={running > 0} />
-        <Tile label="Combined reach" value={compact(totalReach)} />
-        <Tile label="Longest run" value={longest ? `${longest} days` : "–"} />
-      </div>
-
-      {ads.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {ads.map((ad) => (
-            <TrackedAd key={ad.id} ad={ad} onUnstar={() => toggle(ad)} />
-          ))}
-        </div>
-      )}
-
-      <section className="space-y-4">
-        <div className="flex items-end justify-between">
-          <h2 className="text-xl font-semibold">Projects</h2>
-          <Link href="/hub/projects" className="text-sm text-accent hover:underline">
+    <div className="space-y-12">
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-serif text-4xl italic sm:text-5xl">Projects</h1>
+            <p className="mt-2 text-text-muted">Your brand deals and what you&apos;re owed.</p>
+          </div>
+          <Link href="/hub/projects" className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
             Open board →
           </Link>
         </div>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {STAGES.map((s) => (
-            <Link key={s} href="/hub/projects" className="rounded-xl border border-border bg-bg-card p-3 hover:border-border-strong">
-              <div className="text-xs text-text-dim">{s}</div>
-              <div className="mt-1 text-xl font-semibold">{projects.filter((p) => p.stage === s).length}</div>
-            </Link>
-          ))}
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Tile label="Earned" value={gbp(earned)} accent={earned > 0} />
+          <Tile label="Awaiting payment" value={gbp(awaiting)} note={overdue ? `${overdue} overdue` : undefined} />
+          <Tile label="In the pipeline" value={gbp(pipeline)} />
+          <Tile label="Active projects" value={projects.filter((p) => p.stage !== "Paid").length.toString()} />
         </div>
-        <p className="text-sm text-text-dim">
-          Earned {gbp(earned)} · {gbp(pipeline)} in the pipeline
-        </p>
+
+        <div className="rounded-2xl border border-border bg-bg-card">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <h2 className="font-medium">Coming up</h2>
+            <Link href="/hub/projects?new=1" className="text-sm text-accent hover:underline">
+              + New project
+            </Link>
+          </div>
+          {upNext.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-text-dim">Nothing in progress. Add a project when a brand deal lands.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {upNext.map((p) => {
+                const done = p.deliverables.filter((d) => d.done).length;
+                return (
+                  <li key={p.id}>
+                    <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-text-dim">{p.brand}</p>
+                        <p className="truncate text-sm font-medium">{p.title || "Untitled"}</p>
+                      </div>
+                      <span className="rounded-full bg-text/5 px-2 py-0.5 text-xs text-text-muted">{p.stage}</span>
+                      {p.deliverables.length > 0 && (
+                        <span className="text-xs text-text-dim">
+                          {done}/{p.deliverables.length} done
+                        </span>
+                      )}
+                      <span className="w-20 text-right text-xs text-text-dim">{p.due ? `Due ${shortDate(p.due)}` : "No date"}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-5">
+        <div>
+          <h2 className="font-serif text-3xl italic sm:text-4xl">My ads</h2>
+          <p className="mt-2 text-text-muted">The ads you&apos;re in, and how they&apos;re doing across each brand&apos;s accounts.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Tile label="Ads tracked" value={ads.length.toString()} />
+          <Tile label="Still running" value={running.toString()} accent={running > 0} />
+          <Tile label="Combined reach" value={compact(totalReach)} />
+          <Tile label="Longest run" value={longest ? `${longest} days` : "–"} />
+        </div>
+
+        {ads.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {ads.map((ad) => (
+              <TrackedAd key={ad.id} ad={ad} onUnstar={() => toggle(ad)} />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
-function Tile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Tile({ label, value, accent, note }: { label: string; value: string; accent?: boolean; note?: string }) {
   return (
     <div className="rounded-xl border border-border bg-bg-card p-4">
       <div className="text-xs text-text-dim">{label}</div>
       <div className={`mt-1 text-3xl font-semibold ${accent ? "text-good" : ""}`}>{value}</div>
+      {note && <div className="mt-1 text-xs font-medium text-accent">{note}</div>}
     </div>
   );
 }

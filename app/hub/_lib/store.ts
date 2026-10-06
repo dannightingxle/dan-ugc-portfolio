@@ -12,20 +12,103 @@ export type StarredAd = Ad & { starredAt: string; note?: string };
 export const STAGES = ["Pitched", "Briefed", "Scripting", "Filming", "Delivered", "Paid"] as const;
 export type Stage = (typeof STAGES)[number];
 
+export const PAYMENT_STATUSES = ["Not invoiced", "Invoiced", "Paid"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const SHIPPING = ["Not needed", "Waiting", "On its way", "Received"] as const;
+
+export type Deliverable = { id: string; item: string; qty: number; format: string; length: string; done: boolean };
+export type LinkItem = { id: string; label: string; url: string };
+
 export type Project = {
   id: string;
+  createdAt: string;
   brand: string;
   title: string;
   stage: Stage;
-  fee: number | null;
-  due: string;
-  hook: string;
-  body: string;
-  cta: string;
-  notes: string;
   adIds: string[];
-  createdAt: string;
+  // Dates
+  filmBy: string;
+  due: string;
+  goLive: string;
+  // Payment
+  fee: number | null;
+  paymentStatus: PaymentStatus;
+  invoiceNumber: string;
+  invoicedOn: string;
+  paymentTermsDays: number | null;
+  paidOn: string;
+  paymentNotes: string;
+  // Contact
+  contact: { name: string; role: string; company: string; email: string; phone: string; handle: string };
+  // Brief
+  deliverables: Deliverable[];
+  product: string;
+  shipping: (typeof SHIPPING)[number];
+  usageRights: string;
+  exclusivity: string;
+  revisions: string;
+  keyMessages: string;
+  dos: string;
+  donts: string;
+  links: LinkItem[];
+  notes: string;
+  // Script draft (full scripting tool is coming later)
+  script: string;
 };
+
+export function newProject(partial: Partial<Project> = {}): Project {
+  return {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    brand: "",
+    title: "",
+    stage: "Pitched",
+    adIds: [],
+    filmBy: "",
+    due: "",
+    goLive: "",
+    fee: null,
+    paymentStatus: "Not invoiced",
+    invoiceNumber: "",
+    invoicedOn: "",
+    paymentTermsDays: 30,
+    paidOn: "",
+    paymentNotes: "",
+    contact: { name: "", role: "", company: "", email: "", phone: "", handle: "" },
+    deliverables: [],
+    product: "",
+    shipping: "Not needed",
+    usageRights: "",
+    exclusivity: "",
+    revisions: "",
+    keyMessages: "",
+    dos: "",
+    donts: "",
+    links: [],
+    notes: "",
+    script: "",
+    ...partial,
+  };
+}
+
+/** Fill in fields added since a project was saved (and fold the old hook/body/CTA into script). */
+function upgrade(raw: Partial<Project> & { hook?: string; body?: string; cta?: string }): Project {
+  const { hook, body, cta, ...rest } = raw;
+  const p = newProject(rest);
+  p.contact = { ...newProject().contact, ...raw.contact };
+  if (!raw.script && (hook || body || cta)) p.script = [hook, body, cta].filter(Boolean).join("\n\n");
+  return p;
+}
+
+/** When an invoice is due, and whether it's late. */
+export function paymentDue(p: Project): { date: string; overdue: boolean } | null {
+  if (p.paymentStatus !== "Invoiced" || !p.invoicedOn) return null;
+  const d = new Date(p.invoicedOn);
+  d.setDate(d.getDate() + (p.paymentTermsDays ?? 0));
+  const date = d.toISOString().slice(0, 10);
+  return { date, overdue: date < new Date().toISOString().slice(0, 10) };
+}
 
 const listeners = new Set<() => void>();
 const cache = new Map<string, { raw: string | null; value: unknown }>();
@@ -64,6 +147,13 @@ function subscribe(l: () => void) {
 const EMPTY_STARS: Record<string, StarredAd> = {};
 const EMPTY_PROJECTS: Project[] = [];
 
+let upgraded: { from: Project[]; to: Project[] } | null = null;
+function readProjects(): Project[] {
+  const raw = read("hub:projects", EMPTY_PROJECTS);
+  if (upgraded?.from !== raw) upgraded = { from: raw, to: raw.map(upgrade) };
+  return upgraded.to;
+}
+
 export function useStars() {
   const stars = useSyncExternalStore(
     subscribe,
@@ -86,39 +176,17 @@ export function useStars() {
 }
 
 export function useProjects() {
-  const projects = useSyncExternalStore(
-    subscribe,
-    () => read("hub:projects", EMPTY_PROJECTS),
-    () => EMPTY_PROJECTS,
-  );
+  const projects = useSyncExternalStore(subscribe, readProjects, () => EMPTY_PROJECTS);
   const save = useCallback((p: Project) => {
-    const cur = read("hub:projects", EMPTY_PROJECTS);
+    const cur = readProjects();
     const i = cur.findIndex((x) => x.id === p.id);
     write("hub:projects", i === -1 ? [p, ...cur] : cur.map((x) => (x.id === p.id ? p : x)));
   }, []);
   const remove = useCallback((id: string) => {
     write(
       "hub:projects",
-      read("hub:projects", EMPTY_PROJECTS).filter((x) => x.id !== id),
+      readProjects().filter((x) => x.id !== id),
     );
   }, []);
   return { projects, save, remove };
-}
-
-export function newProject(partial: Partial<Project> = {}): Project {
-  return {
-    id: crypto.randomUUID(),
-    brand: "",
-    title: "",
-    stage: "Pitched",
-    fee: null,
-    due: "",
-    hook: "",
-    body: "",
-    cta: "",
-    notes: "",
-    adIds: [],
-    createdAt: new Date().toISOString(),
-    ...partial,
-  };
 }
