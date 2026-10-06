@@ -1,0 +1,53 @@
+/* Creator Hub look. Re-points the CSS variables the hub's Tailwind classes
+   read (bg-bg, text-accent, rounded-xl, font-serif…), so the whole style is
+   the block of values below. Fonts are loaded in app/hub/layout.tsx.
+   Unlayered on purpose so these win over Tailwind's utilities layer. */
+
+.hub {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+}
+.hub .font-serif {
+  font-style: var(--display-style);
+  font-weight: var(--display-weight);
+  letter-spacing: var(--display-tracking);
+}
+.hub-share {
+  background: linear-gradient(135deg, var(--share-a), var(--share-b));
+  color: var(--share-ink);
+}
+
+/* ---- Editorial: cream, forest green, tomato, soft serif ---- */
+.hub {
+  --bg: #f6f1e6;
+  --bg-elevated: #eee6d4;
+  --bg-card: #fbf8f1;
+  --border: #ddd2bd;
+  --border-strong: #c2b49b;
+  --grid: #e8dfcc;
+  --text: #1e2a22;
+  --text-muted: #4b584e;
+  --text-dim: #7d857c;
+  --accent: #d6452a;
+  --accent-hover: #bb371e;
+  --accent-soft: rgba(214, 69, 42, 0.1);
+  --on-accent: #fff8ee;
+  --good: #2e6b44;
+  --good-soft: #dceadf;
+  --warn: #8f6200;
+  --warn-soft: #f6e6bd;
+  --thumb-a: #e7dcc4;
+  --thumb-b: #d3e0d0;
+  --share-a: #1f3d2b;
+  --share-b: #335d43;
+  --share-ink: #f6f1e6;
+  --font-serif: var(--font-fraunces);
+  --font-sans: var(--font-manrope);
+  --display-style: normal;
+  --display-weight: 600;
+  --display-tracking: -0.02em;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
+}
