@@ -20,8 +20,8 @@ export const PRICE_ID = process.env.STRIPE_PRICE_ID ?? "";
 export const billingEnabled = Boolean(KEY && PRICE_ID) && adminEnabled;
 /** Live or test mode - subscriptions and trials from the other mode never count. */
 export const STRIPE_LIVE = /^(sk|rk)_live_/.test(KEY);
-/** Only the production deploy sets the database's paywall switch (previews and dev never do). */
-const MANAGES_CONFIG = process.env.VERCEL_ENV === "production" || process.env.HUB_MANAGE_CONFIG === "1";
+/** Vercel previews never set the database's paywall switch - only production (or a server outside Vercel). */
+const MANAGES_CONFIG = (process.env.VERCEL_ENV ?? "production") === "production";
 
 const num = (v: string | undefined, fallback: number) => (v && Number.isFinite(Number(v)) ? Number(v) : fallback);
 export const TRIAL = {

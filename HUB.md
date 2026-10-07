@@ -37,7 +37,7 @@ npx supabase start            # local Postgres, auth and a test inbox (needs Doc
 npm run build && npm start
 ```
 
-Only the Vercel production deploy updates `hub_config`; locally, set `HUB_MANAGE_CONFIG=1` so the database's paywall matches your env.
+Production (or any server outside Vercel) keeps `hub_config` in step with its env; Vercel previews never touch it.
 `STRIPE_API_HOST` points the Stripe client at a local mock - it's only for automated tests; never set it in Vercel.
 
 ## Style

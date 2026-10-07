@@ -18,13 +18,16 @@ export default async function Admin() {
   if (!user || !adminEnabled || !(await isOwner(user.email))) notFound();
   const admin = adminClient();
 
-  const [users, billing, feedback, usage, price] = await Promise.all([
+  const [users, billing, feedback, usage, price, config] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 15 }),
     admin.from("hub_billing").select("status, founder, cancel_at_period_end, comped, owner, livemode"),
     admin.from("hub_feedback").select("message, email, page, created_at").order("created_at", { ascending: false }).limit(20),
     admin.from("hub_usage").select("rows, via").gte("at", daysAgo(30)),
     priceLabel(),
+    admin.from("hub_config").select("enforce_billing, live_mode").maybeSingle<{ enforce_billing: boolean; live_mode: boolean }>(),
   ]);
+  // The database enforces the paywall (and counts founder spots) using hub_config, which this deploy keeps in step.
+  const outOfStep = config.data && (config.data.enforce_billing !== billingEnabled || (billingEnabled && config.data.live_mode !== STRIPE_LIVE));
 
   const all = billing.data ?? [];
   // Only subscriptions in the Stripe mode this deploy uses (test sign-ups don't count once you're live).
@@ -56,6 +59,12 @@ export default async function Admin() {
           {billingEnabled ? `Billing on${price ? ` · ${price}` : ""}` : "Billing off"} · trials: {TRIAL.founderDays} days for the first {TRIAL.founderSlots},
           then {TRIAL.days} days. Revenue and invoices live in your Stripe dashboard.
         </p>
+        {outOfStep && (
+          <p className="mt-3 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
+            The database&apos;s paywall setting doesn&apos;t match this deploy yet. Reload in a minute - if this stays, look for
+            &ldquo;hub_config&rdquo; in Vercel → Logs.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
