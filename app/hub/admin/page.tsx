@@ -20,7 +20,7 @@ export default async function Admin() {
 
   const [users, billing, feedback, usage, price] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 15 }),
-    admin.from("hub_billing").select("status, founder, cancel_at_period_end"),
+    admin.from("hub_billing").select("status, founder, cancel_at_period_end, comped"),
     admin.from("hub_feedback").select("message, email, page, created_at").order("created_at", { ascending: false }).limit(20),
     admin.from("hub_usage").select("rows, via").gte("at", daysAgo(30)),
     priceLabel(),
@@ -29,7 +29,8 @@ export default async function Admin() {
   const rows = billing.data ?? [];
   const count = (status: string) => rows.filter((r) => r.status === status).length;
   const total = "total" in users.data ? (users.data.total as number) : users.data.users.length;
-  const founders = rows.filter((r) => r.founder).length;
+  const founders = (await admin.rpc("hub_founder_spots_taken")).data ?? rows.filter((r) => r.founder).length;
+  const comped = rows.filter((r) => r.comped).length;
   const cancelling = rows.filter((r) => r.cancel_at_period_end && ["trialing", "active"].includes(r.status ?? "")).length;
   const sharedRows = (usage.data ?? []).filter((u) => u.via === "shared").reduce((s, u) => s + (u.rows ?? 0), 0);
 
@@ -40,7 +41,8 @@ export default async function Admin() {
     ["Payment failed", count("past_due")],
     ["Cancelling", cancelling],
     ["Founder spots taken", `${founders}/${TRIAL.founderSlots}`],
-    ["Signed up, no card yet", Math.max(0, total - rows.filter((r) => r.status).length)],
+    ["Signed up, no card yet", Math.max(0, total - rows.filter((r) => r.status || r.comped).length)],
+    ["Free (comped/owners)", comped],
     ["Shared TrendTrack rows (30d)", sharedRows],
   ];
 

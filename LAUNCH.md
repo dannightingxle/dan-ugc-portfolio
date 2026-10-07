@@ -57,7 +57,7 @@ Supabase's built-in email only sends a handful an hour - not enough for a launch
 ## 5. Stripe - payments (30 min, do it in **Test mode** first)
 
 1. **Product catalogue → Add product**: "Creator Desk", **recurring monthly price in GBP** (whatever you decide - £9.99? £14.99?). Copy the price ID (`price_...`). The site shows whatever price this is.
-2. **Settings → Billing → Subscriptions and emails**: turn on **reminder emails before free trials end**, plus receipts and failed-payment emails. (Card networks expect a reminder before a free trial turns into a paid subscription, and the FAQ promises one.)
+2. **Settings → Billing → Subscriptions and emails**: turn on **reminder emails before free trials end**, plus receipts and failed-payment emails. (Card networks expect a reminder before a free trial turns into a paid subscription, and the FAQ promises one.) Under **Manage failed payments**, set it to **cancel the subscription** once all retries fail - a failed card keeps the desk open while Stripe retries, and cancelling closes it.
 3. **Settings → Billing → Customer portal**: allow updating payment methods, viewing invoices, and **cancelling subscriptions (at the end of the billing period)**. Add your terms and privacy links (`APP/hub/terms`, `APP/hub/privacy`). Save.
 4. **Developers → Webhooks → Add endpoint**: `APP/api/hub/stripe/webhook`, with events
    `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
@@ -137,3 +137,6 @@ subscriptions and free trials apply to you.
 - No second free trial: anyone who's subscribed before goes straight to paid.
 - Cancel any time in the Stripe portal; access continues to the end of what's paid. A failed payment keeps the desk open (with a warning) while Stripe retries.
 - Owners (`HUB_OWNER_EMAILS`) never need a subscription.
+- **Give someone free access** (a collaborator, an influencer): Supabase → Table editor → `hub_billing` → find or insert a row with their `user_id` (from Authentication → Users) and tick **comped**.
+- The paywall is enforced by the database too: without a trial or subscription, creators can still read, export and delete their data, but not add or change anything.
+- Deleting an account cancels every Stripe subscription it has. A scrambled copy of the email is kept so the same person can't take a second free trial, and founder spots aren't freed up by deletions.

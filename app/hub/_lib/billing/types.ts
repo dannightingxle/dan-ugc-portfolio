@@ -4,6 +4,8 @@ export type Billing = {
   /** Stripe is set up; when false everyone signed in has full access. */
   enabled: boolean;
   owner: boolean;
+  /** Given free access (hub_billing.comped). */
+  comped: boolean;
   hasAccess: boolean;
   status: string | null;
   trialEnd: string | null;
@@ -24,6 +26,7 @@ export type Offer = {
 export const OPEN_ACCESS: Billing = {
   enabled: false,
   owner: false,
+  comped: false,
   hasAccess: true,
   status: null,
   trialEnd: null,

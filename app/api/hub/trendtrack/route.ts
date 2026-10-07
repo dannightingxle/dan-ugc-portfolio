@@ -1,6 +1,7 @@
 import { apiUser } from "../../../hub/_lib/api-auth";
 import { adminClient, adminEnabled } from "../../../hub/_lib/supabase/admin";
 import { checkKey, ownKey, trendTrackFor } from "../../../hub/_lib/trendtrack-access";
+import { crossSite } from "../../../hub/_lib/same-origin";
 
 /* A creator connecting their own TrendTrack account. The key is checked with
    TrendTrack, then stored where only the server can read it - this route never
@@ -24,6 +25,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const blocked = crossSite(request);
+  if (blocked) return blocked;
   const auth = await apiUser();
   if (!auth.ok) return auth.response;
   if (!auth.user || !adminEnabled) return Response.json({ error: "Connecting TrendTrack isn't available yet." }, { status: 400 });
@@ -44,7 +47,9 @@ export async function POST(request: Request) {
   return Response.json(await status(auth.user));
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const blocked = crossSite(request);
+  if (blocked) return blocked;
   const auth = await apiUser({ needsAccess: false });
   if (!auth.ok) return auth.response;
   if (auth.user && adminEnabled) await adminClient().from("hub_trendtrack_keys").delete().eq("user_id", auth.user.id);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "../../_lib/supabase/server";
-import { billingEnabled, stripe, syncSubscription } from "../../_lib/billing/stripe";
+import { billingEnabled, stripe, syncCustomer } from "../../_lib/billing/stripe";
 
 /* Where Stripe Checkout sends the creator after they've added their card.
    Syncs the subscription straight away (rather than waiting for the webhook)
@@ -17,10 +17,7 @@ export async function GET(request: Request) {
   try {
     const session = await stripe().checkout.sessions.retrieve(sessionId);
     if (session.client_reference_id !== user.id) return to("/hub/billing?error=1");
-    if (session.subscription) {
-      const id = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
-      await syncSubscription(id, user.id);
-    }
+    if (session.customer) await syncCustomer(session.customer, user.id);
     return to("/hub?welcome=1");
   } catch (e) {
     console.error("Creator Desk: checkout return failed", e);

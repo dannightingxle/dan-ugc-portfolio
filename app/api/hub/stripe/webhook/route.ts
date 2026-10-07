@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { billingEnabled, stripe, syncSubscription } from "../../../../hub/_lib/billing/stripe";
+import { billingEnabled, stripe, syncCustomer } from "../../../../hub/_lib/billing/stripe";
 
 /* Stripe tells us about subscription changes here (trial started, payment
    failed, cancelled…). Point a webhook at /api/hub/stripe/webhook in the
@@ -29,12 +29,11 @@ export async function POST(request: Request) {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      if (session.mode === "subscription" && session.subscription) {
-        const id = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
-        await syncSubscription(id, session.client_reference_id ?? undefined);
+      if (session.mode === "subscription" && session.customer) {
+        await syncCustomer(session.customer, session.client_reference_id ?? undefined);
       }
     } else if (SUBSCRIPTION_EVENTS.has(event.type)) {
-      await syncSubscription((event.data.object as Stripe.Subscription).id);
+      await syncCustomer((event.data.object as Stripe.Subscription).customer);
     }
   } catch (e) {
     // A 500 makes Stripe retry later.

@@ -25,10 +25,12 @@ export function BillingSection() {
   const [error, setError] = useState("");
   if (!billing.enabled) return null;
 
-  if (billing.owner) {
+  if (billing.owner || (billing.comped && !billing.status)) {
     return (
       <Section title="Plan">
-        <p className="text-sm text-text-muted">You&apos;re an owner of Creator Desk - no subscription needed.</p>
+        <p className="text-sm text-text-muted">
+          {billing.owner ? "You're an owner of Creator Desk - no subscription needed." : "You have complimentary access to Creator Desk - no subscription needed."}
+        </p>
       </Section>
     );
   }

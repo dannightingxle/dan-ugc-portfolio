@@ -31,7 +31,6 @@ export function FeedbackButton({ className = "" }: { className?: string }) {
 }
 
 function FeedbackDialog({ onClose }: { onClose: () => void }) {
-  const { user } = useAccount();
   const page = usePathname();
   const [message, setMessage] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -39,7 +38,8 @@ function FeedbackDialog({ onClose }: { onClose: () => void }) {
   async function send(e: React.FormEvent) {
     e.preventDefault();
     setState("sending");
-    const { error } = await browserClient().from("hub_feedback").insert({ message: message.trim(), page, email: user?.email ?? null });
+    // Who sent it is filled in by the database from the session.
+    const { error } = await browserClient().from("hub_feedback").insert({ message: message.trim(), page });
     setState(error ? "error" : "sent");
   }
 

@@ -20,14 +20,14 @@ export function useAccount() {
 
 /** Pages anyone can see, and the ones a creator without an active plan can still use. */
 export const PUBLIC_PATHS = ["/hub/welcome", "/hub/privacy", "/hub/terms", "/hub/login"];
-const WITHOUT_ACCESS = [...PUBLIC_PATHS, "/hub/billing", "/hub/account"];
+const WITHOUT_ACCESS = [...PUBLIC_PATHS, "/hub/billing", "/hub/account", "/hub/auth"];
 const matches = (path: string, list: string[]) => list.some((p) => path === p || path.startsWith(p + "/"));
 
 export function AccountProvider({ enabled, user, billing, children }: Account & { children: React.ReactNode }) {
   useEffect(() => {
     if (!enabled) initStore({ mode: "local" });
-    else if (user) initStore({ mode: "remote", db: browserClient(), userId: user.id });
-  }, [enabled, user]);
+    else if (user) initStore({ mode: "remote", db: browserClient(), userId: user.id, canWrite: billing.hasAccess });
+  }, [enabled, user, billing.hasAccess]);
 
   // Signing out in another tab (or the session expiring) sends this tab to the login page.
   useEffect(() => {

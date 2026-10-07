@@ -249,8 +249,8 @@ let backend: Backend | null = null;
 let loadedFor: string | null = null;
 
 /** Called once by AccountProvider: pick where data lives and load it. */
-export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: SupabaseClient; userId: string }) {
-  const key = opts.mode === "local" ? "local" : opts.userId;
+export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: SupabaseClient; userId: string; canWrite: boolean }) {
+  const key = opts.mode === "local" ? "local" : `${opts.userId}:${opts.canWrite}`;
   if (loadedFor === key) return;
   loadedFor = key;
 
@@ -284,7 +284,8 @@ export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: 
   });
   // New accounts get the example job once (remembered on the account, so deleting it sticks on every device).
   const { data } = await opts.db.auth.getUser();
-  if (data.user && !data.user.user_metadata?.example_added) {
+  // (Only once they can save - before their trial starts the database won't accept it.)
+  if (opts.canWrite && data.user && !data.user.user_metadata?.example_added) {
     if (state.projects.length === 0) {
       addExampleProject();
       await backend.flush();

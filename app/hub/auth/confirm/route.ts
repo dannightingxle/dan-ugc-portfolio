@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { serverClient } from "../../_lib/supabase/server";
 
 /* Where the links in sign-up and password-reset emails land. Exchanges the
-   one-time code for a session cookie, then carries on to `next`. */
+   one-time token for a session cookie, then shows who's signed in
+   (/hub/auth/continue) before carrying on to `next`. */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const next = url.searchParams.get("next")?.startsWith("/hub") ? url.searchParams.get("next")! : "/hub";
@@ -18,5 +19,11 @@ export async function GET(request: Request) {
       ? await db.auth.verifyOtp({ token_hash: tokenHash, type })
       : { error: new Error("missing code") };
 
-  return NextResponse.redirect(new URL(error ? "/hub/login?error=link" : next, url.origin));
+  if (error) return NextResponse.redirect(new URL("/hub/login?error=link", url.origin));
+  // Show who's now signed in before carrying on, so a link to someone else's
+  // account (sent to trick you into using it) can't go unnoticed.
+  const to = new URL("/hub/auth/continue", url.origin);
+  to.searchParams.set("next", next);
+  if (type === "recovery") to.searchParams.set("reset", "1");
+  return NextResponse.redirect(to);
 }
