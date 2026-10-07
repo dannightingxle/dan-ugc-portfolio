@@ -1,15 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { accountsEnabled } from "../_lib/supabase/config";
 import { browserClient } from "../_lib/supabase/browser";
+import { BRAND } from "../_lib/brand";
 
 /* Sign in / create account (Supabase), or the single shared password when
    accounts aren't set up. */
 
 const ERRORS: Record<string, string> = {
-  not_invited: "This email hasn't been invited to Creator Hub yet.",
+  not_invited: `This email hasn't been invited to ${BRAND.name} yet.`,
   link: "That link has expired or was already used. Try again below.",
 };
 
@@ -18,8 +20,10 @@ export default function HubLogin() {
     <div className="flex min-h-[80vh] items-center justify-center">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <p className="font-serif text-3xl">Creator Hub</p>
-          <p className="mt-1 text-sm text-text-muted">Your brand deals, briefs and ads in one place.</p>
+          <Link href="/hub/welcome" className="font-serif text-3xl">
+            {BRAND.logo[0]} <span className="text-accent">{BRAND.logo[1]}</span>
+          </Link>
+          <p className="mt-1 text-sm text-text-muted">{BRAND.tagline}</p>
         </div>
         <Suspense>{accountsEnabled ? <AccountForm /> : <PasswordForm />}</Suspense>
       </div>
@@ -32,7 +36,7 @@ type Mode = "signin" | "signup" | "forgot";
 function AccountForm() {
   const params = useSearchParams();
   const next = params.get("next")?.startsWith("/hub") ? params.get("next")! : "/hub";
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(params.get("mode") === "signup" ? "signup" : "signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +50,9 @@ function AccountForm() {
     setError("");
     setNotice("");
     const db = browserClient();
-    const confirmUrl = `${location.origin}/hub/auth/confirm?next=${encodeURIComponent(next)}`;
+    // New accounts go straight on to card details (the billing page skips this when billing is off).
+    const afterSignup = "/hub/billing?start=1";
+    const confirmUrl = `${location.origin}/hub/auth/confirm?next=${encodeURIComponent(afterSignup)}`;
 
     if (mode === "signin") {
       const { error } = await db.auth.signInWithPassword({ email, password });
@@ -55,8 +61,8 @@ function AccountForm() {
     } else if (mode === "signup") {
       const { data, error } = await db.auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: confirmUrl } });
       if (error) setError(error.message);
-      else if (data.session) return (window.location.href = next);
-      else setNotice(`Nearly there - we've sent a confirmation link to ${email}.`);
+      else if (data.session) return (window.location.href = afterSignup);
+      else setNotice(`Nearly there - we've sent a confirmation link to ${email}. Open it on this device to carry on.`);
     } else {
       const { error } = await db.auth.resetPasswordForEmail(email, {
         redirectTo: `${location.origin}/hub/auth/confirm?next=${encodeURIComponent("/hub/account?reset=1")}`,
@@ -103,6 +109,19 @@ function AccountForm() {
             minLength={mode === "signup" ? 8 : undefined}
             required
           />
+        )}
+        {mode === "signup" && (
+          <p className="text-xs text-text-dim">
+            By creating an account you agree to the{" "}
+            <Link href="/hub/terms" className="underline hover:text-text">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/hub/privacy" className="underline hover:text-text">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         )}
         {error && <p className="text-sm text-accent">{error}</p>}
         {notice && <p className="rounded-lg bg-good-soft px-3 py-2 text-sm text-good">{notice}</p>}

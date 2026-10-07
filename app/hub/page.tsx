@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import type { Ad, AdDetail, Brand, Paged, Source } from "./_lib/types";
 import { ImportLocal } from "./import-local";
+import { WelcomeBanner } from "./welcome-banner";
 import { ExampleTag } from "./projects/fields";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
@@ -31,6 +32,9 @@ export default function HubHome() {
 
   return (
     <div className="space-y-12">
+      <Suspense>
+        <WelcomeBanner />
+      </Suspense>
       <ImportLocal />
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -66,7 +70,7 @@ export default function HubHome() {
                 return (
                   <li key={p.id}>
                     <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                         <p className="flex items-center gap-1.5 text-xs text-text-dim">
                           {p.brand}
                           {p.example && <ExampleTag />}
@@ -79,7 +83,7 @@ export default function HubHome() {
                           {done}/{p.deliverables.length} done
                         </span>
                       )}
-                      <span className="w-20 text-right text-xs text-text-dim">{p.due ? `Due ${shortDate(p.due)}` : "No date"}</span>
+                      <span className="ml-auto text-right text-xs text-text-dim sm:ml-0 sm:w-20">{p.due ? `Due ${shortDate(p.due)}` : "No date"}</span>
                     </Link>
                   </li>
                 );

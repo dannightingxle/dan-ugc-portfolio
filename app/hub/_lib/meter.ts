@@ -1,18 +1,19 @@
-import { accountsEnabled } from "./supabase/config";
-import { currentUser, serverClient } from "./supabase/server";
+import "server-only";
+import { serverClient, type HubUser } from "./supabase/server";
+import type { TrendTrack } from "./trendtrack-access";
 
-/* Usage metering - the basis for billing each creator for their own TrendTrack
-   usage. Every live call is recorded against the signed-in user with the rows
-   it returned (TrendTrack charges per row), in the hub_usage table. Without
+/* Usage metering: every live TrendTrack call is recorded against the creator,
+   with the rows it returned (TrendTrack charges per row) and whose key paid -
+   the basis for billing usage if the shared key is ever switched on. Without
    accounts it's logged to the server console instead. */
 
-export async function meter(endpoint: string, rows: number) {
-  const user = accountsEnabled ? await currentUser() : null;
+export async function meter(user: HubUser | null, ctx: TrendTrack, endpoint: string, rows: number) {
+  if (ctx.mode !== "live") return;
   if (!user) {
-    console.log(JSON.stringify({ at: new Date().toISOString(), user: "single-user", endpoint, rows }));
+    console.log(JSON.stringify({ at: new Date().toISOString(), user: "single-user", endpoint, rows, via: ctx.via }));
     return;
   }
   const db = await serverClient();
-  const { error } = await db.from("hub_usage").insert({ endpoint, rows });
-  if (error) console.error("Creator Hub: usage not recorded", error);
+  const { error } = await db.from("hub_usage").insert({ endpoint, rows, via: ctx.via });
+  if (error) console.error("Creator Desk: usage not recorded", error);
 }

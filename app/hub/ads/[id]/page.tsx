@@ -23,9 +23,11 @@ export default function AdPage({ params }: { params: Promise<{ id: string }> }) 
   }, [data, refresh]);
 
   if (loading) return <p className="text-text-dim">Loading ad…</p>;
-  if (error || !data) return <p className="text-red-400">{error ?? "Ad not found."}</p>;
+  // Can't fetch fresh numbers (e.g. TrendTrack not connected)? Show the last ones we saved.
+  const saved = stars[adId];
+  if (!data && !saved) return <p className="text-accent">{error ?? "Ad not found."}</p>;
 
-  const { ad, history } = data;
+  const { ad, history } = data ?? { ad: saved, history: [] };
   const starred = Boolean(stars[ad.id]);
   const linked = projects.filter((p) => p.adIds.includes(ad.id));
   const first = history[0]?.reach ?? 0;
@@ -50,7 +52,17 @@ export default function AdPage({ params }: { params: Promise<{ id: string }> }) 
         <Link href="/hub" className="text-sm text-text-dim hover:text-text">
           ← My ads
         </Link>
-        <SourceBadge source={data.source} />
+        {data ? (
+          <SourceBadge source={data.source} />
+        ) : (
+          <span className="text-sm text-text-dim">
+            Showing the last numbers we saved -{" "}
+            <Link href="/hub/account#trendtrack" className="text-accent hover:underline">
+              connect TrendTrack
+            </Link>{" "}
+            for live ones.
+          </span>
+        )}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[320px_1fr]">
@@ -121,7 +133,7 @@ export default function AdPage({ params }: { params: Promise<{ id: string }> }) 
                 ))}
               </p>
             )}
-            {ad.landingPage && (
+            {ad.landingPage && /^https?:\/\//i.test(ad.landingPage) && (
               <p className="truncate text-sm text-text-dim">
                 Landing page:{" "}
                 <a href={ad.landingPage} target="_blank" rel="noreferrer" className="text-text-muted hover:text-accent">

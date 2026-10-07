@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Ad, ReachPoint, Source } from "./types";
+import type { Ad, DataSource, ReachPoint } from "./types";
 
 /* Small shared pieces for the hub pages. */
 
@@ -51,13 +51,21 @@ export function useApi<T>(url: string | null) {
   };
 }
 
-export function SourceBadge({ source }: { source: Source | undefined }) {
+export function SourceBadge({ source }: { source: DataSource | undefined }) {
   if (!source) return null;
-  return source === "live" ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-good/30 bg-good-soft px-2.5 py-0.5 text-xs text-good">
-      <span className="h-1.5 w-1.5 rounded-full bg-good" /> Live TrendTrack data
-    </span>
-  ) : (
+  if (source === "live")
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-good/30 bg-good-soft px-2.5 py-0.5 text-xs text-good">
+        <span className="h-1.5 w-1.5 rounded-full bg-good" /> Live TrendTrack data
+      </span>
+    );
+  if (source === "none")
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs text-text-dim">
+        <span className="h-1.5 w-1.5 rounded-full bg-text-dim" /> TrendTrack not connected
+      </span>
+    );
+  return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-warn/30 bg-warn-soft px-2.5 py-0.5 text-xs text-warn">
       <span className="h-1.5 w-1.5 rounded-full bg-warn" /> Demo data
     </span>

@@ -5,15 +5,26 @@ import { SUPABASE_KEY, SUPABASE_URL, accountsEnabled, isAllowed } from "./app/hu
 
 /* Guards /hub. With Supabase accounts set up, each visitor must be signed in
    (and on HUB_ALLOWED_EMAILS, if that's set); this also keeps their session
-   fresh. Without accounts, the older single HUB_PASSWORD gate applies. */
+   fresh. Signed-out visitors to /hub see the landing page. Without accounts,
+   the older single HUB_PASSWORD gate applies. Whether a signed-in creator has
+   paid is checked by the pages and API routes themselves. */
 
-const PUBLIC = ["/hub/login", "/hub/auth", "/api/hub/login"];
+const PUBLIC = [
+  "/hub/welcome", // landing page (and its share image)
+  "/hub/privacy",
+  "/hub/terms",
+  "/hub/login",
+  "/hub/auth", // email links
+  "/api/hub/login",
+  "/api/hub/stripe", // Stripe webhooks, verified by signature
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"));
   const deny = (reason?: string) => {
     if (pathname.startsWith("/api/")) return Response.json({ error: "Not signed in." }, { status: 401 });
+    if (pathname === "/hub" && !reason && accountsEnabled) return NextResponse.redirect(new URL("/hub/welcome", request.url));
     const to = new URL("/hub/login", request.url);
     if (pathname !== "/hub") to.searchParams.set("next", pathname);
     if (reason) to.searchParams.set("error", reason);

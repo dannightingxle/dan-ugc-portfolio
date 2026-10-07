@@ -185,7 +185,7 @@ function remoteBackend(db: SupabaseClient): Backend {
     const { error } = await op();
     inFlight--;
     if (error) {
-      console.error("Creator Hub: save failed", error);
+      console.error("Creator Desk: save failed", error);
       setState({ sync: "error" });
     } else if (inFlight === 0 && pending.size === 0) {
       setState({ sync: "idle" });
@@ -273,7 +273,7 @@ export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: 
     opts.db.from("hub_starred_ads").select("data"),
   ]);
   if (p.error || s.error) {
-    console.error("Creator Hub: load failed", p.error ?? s.error);
+    console.error("Creator Desk: load failed", p.error ?? s.error);
     setState({ ready: true, sync: "error" });
     return;
   }

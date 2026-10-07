@@ -1,80 +1,46 @@
-# Creator Hub (demo)
+# Creator Desk (developer notes)
 
-A private section of the site at **`/hub`** for tracking the ads you're in,
-your brand projects and your scripts. Not in the site nav and set to `noindex`.
+Creator Desk is a paid web app for UGC creators that lives under `/hub` in this
+repo (optionally on its own domain - see `HUB_APP_HOST`). **To set it up or
+launch it, follow [LAUNCH.md](LAUNCH.md).** This file explains how it's built.
 
-| Page | What it does |
+## Pages
+
+| Path | What it is |
 | --- | --- |
-| `/hub` | Home: money (earned, awaiting payment, pipeline), projects coming up, then your starred ads with reach, days running and trend line. |
-| `/hub/projects` | Board from Pitched to Paid. **+ New project** asks for the basics (brand, job, fee, delivery date) then opens the project page. |
-| `/hub/projects/[id]` | Everything about one job, saved as you type: payment (fee, invoiced/paid, invoice no., terms, due/overdue), dates, contact (with email/call/WhatsApp/Instagram buttons), deliverables checklist with quick-add presets, the brief (product, shipping, key messages, do's and don'ts, usage rights, exclusivity, revisions), links (Notion, Drive… auto-labelled), notes, a script box and the live ads it produced. |
-| `/hub/find` | Search a brand (name, website or @handle), browse its Meta ads, star the ones you're in. "Creator / partnership ads" filters to ads run with a creator's handle. |
-| `/hub/ads/[id]` | One ad: numbers, daily reach chart, a screenshot-ready share card, and the transcript, which you can save into a project. |
-| `/hub/scripts` | "Coming soon" page for the scripting and shot-list tool. |
-| `/hub/login`, `/hub/account` | Sign in / create account / forgot password, and the account page (name, password, sign out). Only when accounts are set up. |
+| `/hub/welcome` | Public landing page with pricing, founding offer counter and share image. Signed-out visitors to `/hub` land here. |
+| `/hub/login` | Sign in / create account / forgot password (`?mode=signup` opens sign-up). |
+| `/hub/billing` | Paywall: add a card to start the trial (or restart a subscription). New sign-ups arrive with `?start=1` and go straight to Stripe Checkout. |
+| `/hub` | Home: earnings, coming up, tracked ads. `?welcome=1` shows the first-steps banner after checkout. |
+| `/hub/projects`, `/hub/projects/[id]` | Deal board and full project page (payment, contact, brief, deliverables, links, notes, script). |
+| `/hub/find`, `/hub/ads/[id]` | Find and track ads via TrendTrack; sample data for creators without it. |
+| `/hub/account` | Plan & billing (Stripe portal), profile, TrendTrack connection, password, CSV/JSON export, feedback, delete account. |
+| `/hub/admin` | Owners only: sign-ups, trials, paying, founder spots, feedback. |
+| `/hub/privacy`, `/hub/terms` | Legal pages. |
+| `/hub/scripts` | "Coming soon". |
 
-## Accounts (Supabase)
+## How it fits together
 
-Each creator signs up with email + password and gets their own projects, starred ads and
-usage history. Data lives in Supabase with row-level security, so nobody can see anyone
-else's data - even by calling the database directly. Without Supabase set up, the hub
-runs single-user and saves to the browser like before.
+- **Modes.** No env vars: single-user, data in the browser, demo ad data. Supabase vars: accounts. Plus Stripe vars and `SUPABASE_SECRET_KEY`: paid accounts with trials. Every feature checks which mode it's in, so partial setups degrade gracefully.
+- **Auth** - Supabase email + password (`app/hub/_lib/supabase/`). `proxy.ts` refreshes sessions and sends signed-out visitors to the landing page or login.
+- **Data** - `app/hub/_lib/store.ts`: the browser talks to Supabase directly, protected by row-level security (each creator only sees their own rows). Edits save in the background, debounced while typing and flushed when the page is hidden.
+- **Billing** - `app/hub/_lib/billing/stripe.ts`. Checkout (`/api/hub/billing/checkout`) takes a card and starts the trial; the webhook (`/api/hub/stripe/webhook`) and the checkout return (`/hub/billing/success`) both re-read the subscription from Stripe into `hub_billing`, which creators can read but only the server can write. Access = subscription `trialing`, `active` or `past_due`, or an owner email. Pages are gated by `AccessGate` (`account-provider.tsx`); API routes by `apiUser()` (`_lib/api-auth.ts`).
+- **TrendTrack** - `_lib/trendtrack-access.ts` decides whose key a request uses: the creator's own (stored in `hub_trendtrack_keys`, which only the server can read), the owner's, or a shared key once TrendTrack allows it (`TRENDTRACK_SHARED=true`). `_lib/trendtrack.ts` calls the API with that key; responses are cached per key. Live calls are logged in `hub_usage`.
+- **Database** - `supabase/migrations/` (apply in order). `supabase/config.toml` and `supabase/templates/` are for local development and the email templates.
 
-**One-off setup (~10 minutes):**
+## Running it locally with accounts and billing
 
-1. Create a free project at [supabase.com](https://supabase.com) (pick a London/EU region).
-2. In the project: **SQL Editor → New query**, paste everything from
-   `supabase/migrations/20261006120000_creator_hub.sql`, and **Run**.
-3. **Authentication → URL Configuration**:
-   - Site URL: `https://www.dannightingxle.com/hub`
-   - Redirect URLs: add `https://www.dannightingxle.com/hub/**` and `https://*-daniels-projects-05fa8574.vercel.app/**` (previews)
-4. **Project Settings → API Keys**: copy the **Project URL** and the **Publishable key**.
-5. In Vercel → Project → Settings → Environment Variables, add:
-   - `NEXT_PUBLIC_SUPABASE_URL` = the Project URL
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = the Publishable key
-   - optional `HUB_ALLOWED_EMAILS` = `you@example.com,friend@example.com` to make it
-     invite-only (unset = anyone with the link can sign up)
-6. Redeploy. `/hub` now shows sign in / create account. Anything you'd saved in your
-   browser before shows a one-click "Add to my account" banner.
+```sh
+npx supabase start            # local Postgres, auth and a test inbox (needs Docker)
+# then set NEXT_PUBLIC_SUPABASE_URL / _PUBLISHABLE_KEY / SUPABASE_SECRET_KEY from `npx supabase status`,
+# and Stripe test keys, then:
+npm run build && npm start
+```
 
-**Emails:** Supabase's built-in email sender only allows a few emails an hour - fine for
-testing. Before inviting other creators, connect a proper sender (e.g. Resend) under
-**Authentication → Emails → SMTP Settings**, and edit the email templates there.
-
-## Demo vs live data
-
-With no TrendTrack key it runs on **made-up brands** (badge says "Demo data"). To switch to
-real data add `TRENDTRACK_API_KEY` in Vercel and redeploy. Live data only switches on when
-`/hub` is protected - by accounts (above) or, without accounts, a single `HUB_PASSWORD` -
-so strangers can't spend your credits. Every live call is recorded per user in the
-`hub_usage` table (the basis for billing). Responses are cached (1h lists, 6h ad detail).
-
-## How it's built
-
-- `app/hub/_lib/trendtrack.ts` - server-only TrendTrack client (lookup, advertiser ads,
-  ad detail + reach history). Spec: https://api.trendtrack.io/v1/openapi.json
-- `app/hub/_lib/demo-data.ts` - the fake brands.
-- `app/api/hub/*` - routes the pages call; the key never reaches the browser.
-- `app/hub/_lib/meter.ts` - logs each live call per user and rows returned: the hook
-  for billing each creator for their own usage.
-- `app/hub/_lib/store.ts` - stars and projects; saves to the user's Supabase rows when
-  signed in, otherwise to this browser.
-- `app/hub/_lib/supabase/` - Supabase clients and the accounts on/off switch.
-- `app/hub/account-provider.tsx`, `app/hub/login`, `app/hub/account`, `app/hub/auth/confirm` -
-  sign in/up, account page, and where email links land.
-- `supabase/` - database migration (tables + security rules) and local dev config.
-- `proxy.ts` - sends signed-out visitors to the login page (or checks `HUB_PASSWORD`).
-
-## Not built yet (needed before other creators pay for it)
-
-1. Stripe billing per creator, reading from `hub_usage`.
-2. Written OK from TrendTrack to serve their data to other users (their terms limit it
-   to personal/internal use otherwise).
-3. A proper email sender (see Accounts above) and its own domain/brand, which is also
-   the natural point to move it into its own repo.
+`STRIPE_API_HOST` points the Stripe client at a local mock - it's only for automated tests; never set it in Vercel.
 
 ## Style
 
 The "Sky" look - cool white, slate text, blue accent, Plus Jakarta Sans. Colours, font
-and corner radii all live in one block in `app/hub/hub.css`; change values there to
-restyle the whole hub.
+and corner radii all live in one block in `app/hub/hub.css`; product name and copy in
+`app/hub/_lib/brand.ts`.

@@ -1,4 +1,4 @@
-/* Creator Hub look. Re-points the CSS variables the hub's Tailwind classes
+/* Creator Desk look. Re-points the CSS variables the hub's Tailwind classes
    read (bg-bg, text-accent, rounded-xl, font-serif…), so the whole style is
    the block of values below. The font is loaded in app/hub/layout.tsx.
    Unlayered on purpose so these win over Tailwind's utilities layer. */
