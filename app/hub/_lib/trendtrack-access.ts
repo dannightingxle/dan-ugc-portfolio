@@ -24,7 +24,7 @@ export async function trendTrackFor(user: HubUser | null): Promise<TrendTrack> {
   if (!user) return { mode: "none" };
   const own = await ownKey(user.id);
   if (own) return { mode: "live", key: own.api_key, via: "own" };
-  if (SERVER_KEY && isOwner(user.email)) return { mode: "live", key: SERVER_KEY, via: "owner" };
+  if (SERVER_KEY && (await isOwner(user.email))) return { mode: "live", key: SERVER_KEY, via: "owner" };
   if (SERVER_KEY && process.env.TRENDTRACK_SHARED === "true") return { mode: "live", key: SERVER_KEY, via: "shared" };
   return { mode: "none" };
 }

@@ -19,29 +19,38 @@ create table public.hub_billing (
   founder boolean not null default false,
   -- Has ever started a subscription (no second free trial).
   had_subscription boolean not null default false,
-  -- Free access without a subscription: owners, or anyone you choose to comp.
+  -- Free access you've given someone (tick it in the Table editor).
   comped boolean not null default false,
+  -- An owner (HUB_OWNER_EMAILS with a confirmed email). Set and cleared by the server.
+  owner boolean not null default false,
+  -- Stripe live or test mode, so test sign-ups never count once you're live.
+  livemode boolean,
   updated_at timestamptz not null default now()
 );
 alter table public.hub_billing enable row level security;
 create policy "Read own billing" on public.hub_billing for select to authenticated
   using ((select auth.uid()) = user_id);
 
--- Whether the paywall applies. The server keeps this in step with whether
--- Stripe is set up, so a half-configured deploy never locks people out.
+-- Whether the paywall applies, and in which Stripe mode. The production
+-- deploy keeps this in step with its settings (previews never touch it).
 create table public.hub_config (
   id boolean primary key default true check (id),
-  enforce_billing boolean not null default false
+  enforce_billing boolean not null default false,
+  -- Whether production uses Stripe live mode.
+  live_mode boolean not null default false
 );
 insert into public.hub_config default values;
 alter table public.hub_config enable row level security;
 
 -- Who has had a free trial, kept even after an account is deleted so a trial
--- can't be claimed twice. Holds a one-way hash of the normalised email only.
+-- can't be claimed twice. Holds a keyed hash of the normalised email only.
+-- Kept per Stripe mode, so test sign-ups never use up real trials or founder spots.
 create table public.hub_trial_history (
-  email_key text primary key,
+  email_key text not null,
+  livemode boolean not null default false,
   founder boolean not null default false,
-  first_trial_at timestamptz not null default now()
+  first_trial_at timestamptz not null default now(),
+  primary key (email_key, livemode)
 );
 alter table public.hub_trial_history enable row level security;
 
@@ -54,16 +63,18 @@ create table public.hub_founder_reservations (
 );
 alter table public.hub_founder_reservations enable row level security;
 
--- Founder spots taken = founder trials started + spots held in checkout.
--- Callable by anyone so the landing page can show "N spots left".
+-- Founder spots taken = founder trials started (in the Stripe mode production
+-- uses) + spots held in checkout. Callable by anyone so the landing page can
+-- show "N spots left".
 create function public.hub_founder_spots_taken() returns integer
   language sql stable security definer set search_path = ''
 as $$
+  with mode as (select coalesce((select live_mode from public.hub_config limit 1), false) as live)
   select (
-    (select count(*) from public.hub_trial_history where founder)
+    (select count(*) from public.hub_trial_history h, mode where h.founder and h.livemode = mode.live)
     + (select count(*) from public.hub_founder_reservations r
        where r.expires_at > now()
-         and not exists (select 1 from public.hub_trial_history h where h.email_key = r.email_key))
+         and not exists (select 1 from public.hub_trial_history h, mode where h.email_key = r.email_key and h.livemode = mode.live))
   )::integer
 $$;
 revoke all on function public.hub_founder_spots_taken() from public;
@@ -77,7 +88,11 @@ create function public.hub_reserve_founder_spot(p_user uuid, p_email_key text, p
 as $$
 begin
   perform pg_advisory_xact_lock(hashtext('hub_founder_spots'));
-  if exists (select 1 from public.hub_trial_history where email_key = p_email_key) then
+  if exists (
+    select 1 from public.hub_trial_history h
+    where h.email_key = p_email_key
+      and h.livemode = coalesce((select live_mode from public.hub_config limit 1), false)
+  ) then
     return false;
   end if;
   if exists (select 1 from public.hub_founder_reservations where user_id = p_user and expires_at > now()) then
@@ -104,9 +119,13 @@ create function public.hub_has_access() returns boolean
 as $$
   select not coalesce((select enforce_billing from public.hub_config limit 1), false)
     or exists (
-      select 1 from public.hub_billing b
+      select 1 from public.hub_billing b, public.hub_config c
       where b.user_id = auth.uid()
-        and (b.comped or b.status in ('trialing', 'active', 'past_due'))
+        and (
+          b.comped
+          or b.owner
+          or (b.status in ('trialing', 'active', 'past_due') and b.livemode is not distinct from c.live_mode)
+        )
     )
 $$;
 revoke all on function public.hub_has_access() from public, anon;

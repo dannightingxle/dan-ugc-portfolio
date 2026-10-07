@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_KEY, SUPABASE_URL } from "../supabase/config";
@@ -18,6 +18,10 @@ import { OPEN_ACCESS, type Billing, type Offer } from "./types";
 const KEY = process.env.STRIPE_SECRET_KEY ?? "";
 export const PRICE_ID = process.env.STRIPE_PRICE_ID ?? "";
 export const billingEnabled = Boolean(KEY && PRICE_ID) && adminEnabled;
+/** Live or test mode - subscriptions and trials from the other mode never count. */
+export const STRIPE_LIVE = /^(sk|rk)_live_/.test(KEY);
+/** Only the production deploy sets the database's paywall switch (previews and dev never do). */
+const MANAGES_CONFIG = process.env.VERCEL_ENV === "production" || process.env.HUB_MANAGE_CONFIG === "1";
 
 const num = (v: string | undefined, fallback: number) => (v && Number.isFinite(Number(v)) ? Number(v) : fallback);
 export const TRIAL = {
@@ -32,6 +36,7 @@ const HOLD_MINUTES = 33;
 
 /** Subscription states that keep the desk open (past_due = card failed, Stripe is retrying). */
 const LIVE = new Set(["trialing", "active", "past_due"]);
+const ENDED = new Set(["canceled", "incomplete_expired"]);
 
 let client: Stripe | null = null;
 export function stripe() {
@@ -43,7 +48,11 @@ export function stripe() {
   return client;
 }
 
-/** One-way key for "has this person had a trial": lower-case, no +tags, and no dots for Gmail. */
+/** Keyed one-way hash for "has this person had a trial": lower-case, no
+    +tags, no dots for Gmail. Keyed with a server secret so a leaked table
+    can't be reversed with a list of emails - set HUB_HASH_SECRET once and
+    never change it. */
+const HASH_SECRET = process.env.HUB_HASH_SECRET || process.env.SUPABASE_SECRET_KEY || "creator-desk";
 export function emailKey(email: string) {
   const [rawLocal = "", rawDomain = ""] = email.trim().toLowerCase().split("@");
   let local = rawLocal.split("+")[0];
@@ -52,27 +61,30 @@ export function emailKey(email: string) {
     local = local.replace(/\./g, "");
     domain = "gmail.com";
   }
-  return createHash("sha256").update(`${local}@${domain}`).digest("hex");
+  return createHmac("sha256", HASH_SECRET).update(`${local}@${domain}`).digest("hex");
 }
 
 /* ---- Keeping the database's paywall switch in step with this deploy ---- */
 
 let configSynced = false;
 async function syncConfig() {
-  if (configSynced || !adminEnabled) return;
+  if (configSynced || !adminEnabled || !MANAGES_CONFIG) return;
   configSynced = true;
-  const { error } = await adminClient().from("hub_config").update({ enforce_billing: billingEnabled }).eq("id", true);
+  const { error } = await adminClient().from("hub_config").update({ enforce_billing: billingEnabled, live_mode: STRIPE_LIVE }).eq("id", true);
   if (error) {
     configSynced = false;
     console.error("Creator Desk: couldn't update hub_config", error);
   }
 }
 
-const compedOwners = new Set<string>();
-async function compOwner(userId: string) {
-  if (compedOwners.has(userId) || !adminEnabled) return;
-  const { error } = await adminClient().from("hub_billing").upsert({ user_id: userId, comped: true, updated_at: new Date().toISOString() });
-  if (!error) compedOwners.add(userId);
+/** Mark owners in hub_billing so the database lets them save without a
+    subscription. Checked in the database each time (not remembered per
+    server), so it's back straight away if it was ever cleared. */
+async function markOwner(userId: string) {
+  if (!adminEnabled) return;
+  const { data } = await adminClient().from("hub_billing").select("owner").eq("user_id", userId).maybeSingle<{ owner: boolean }>();
+  if (data?.owner) return;
+  await adminClient().from("hub_billing").upsert({ user_id: userId, owner: true, updated_at: new Date().toISOString() });
 }
 
 /* ---- Reading a creator's billing ---- */
@@ -88,19 +100,21 @@ type Row = {
   founder: boolean;
   had_subscription: boolean;
   comped: boolean;
+  owner: boolean;
+  livemode: boolean | null;
 };
 
 /** A trial or paid period that should have rolled over by now means we missed an update from Stripe. */
 function isStale(r: Row) {
-  if (!r.stripe_customer_id || !LIVE.has(r.status ?? "")) return false;
+  if (!r.stripe_customer_id || !LIVE.has(r.status ?? "") || r.livemode !== STRIPE_LIVE) return false;
   const end = r.status === "trialing" ? r.trial_end : r.current_period_end;
   return Boolean(end && new Date(end).getTime() + 60 * 60_000 < Date.now());
 }
 
 export async function billingFor(user: HubUser): Promise<Billing> {
   await syncConfig();
-  if (isOwner(user.email)) {
-    await compOwner(user.id);
+  if (await isOwner(user.email)) {
+    await markOwner(user.id);
     return { ...OPEN_ACCESS, enabled: billingEnabled, owner: true };
   }
   if (!billingEnabled) return OPEN_ACCESS;
@@ -108,20 +122,28 @@ export async function billingFor(user: HubUser): Promise<Billing> {
   const db = await serverClient();
   const read = async () => (await db.from("hub_billing").select("*").eq("user_id", user.id).maybeSingle<Row>()).data;
   let data = await read();
+  if (data?.owner && adminEnabled) {
+    // No longer an owner (taken off HUB_OWNER_EMAILS): remove the free access that came with it.
+    await adminClient().from("hub_billing").update({ owner: false }).eq("user_id", user.id);
+    data = { ...data, owner: false };
+  }
   if (data && isStale(data)) {
     await syncCustomer(data.stripe_customer_id!, user.id).catch((e) => console.error("Creator Desk: re-sync failed", e));
     data = await read();
   }
+  // A subscription from the other Stripe mode (e.g. a test sign-up before going live) doesn't count.
+  const current = data?.livemode === STRIPE_LIVE ? data : null;
+  const subscribed = LIVE.has(current?.status ?? "");
   return {
     enabled: true,
     owner: false,
     comped: Boolean(data?.comped),
-    hasAccess: Boolean(data && (data.comped || LIVE.has(data.status ?? ""))),
-    status: data?.status ?? null,
-    trialEnd: data?.trial_end ?? null,
-    periodEnd: data?.current_period_end ?? null,
-    cancelAtPeriodEnd: data?.cancel_at_period_end ?? false,
-    founder: data?.founder ?? false,
+    hasAccess: Boolean(data?.comped) || subscribed,
+    status: current?.status ?? null,
+    trialEnd: current?.trial_end ?? null,
+    periodEnd: current?.current_period_end ?? null,
+    cancelAtPeriodEnd: current?.cancel_at_period_end ?? false,
+    founder: current?.founder ?? false,
   };
 }
 
@@ -165,13 +187,20 @@ export async function founderSpotsTaken(): Promise<number> {
 
 /** Has this person had a free trial before - on this account, or one they deleted? */
 export async function hadTrialBefore(user: HubUser, row: Row | null) {
-  if (row?.had_subscription) return true;
-  const { data } = await adminClient().from("hub_trial_history").select("email_key").eq("email_key", emailKey(user.email)).maybeSingle();
+  if (row?.had_subscription && row.livemode === STRIPE_LIVE) return true;
+  const { data, error } = await adminClient()
+    .from("hub_trial_history")
+    .select("email_key")
+    .eq("email_key", emailKey(user.email))
+    .eq("livemode", STRIPE_LIVE)
+    .maybeSingle();
+  if (error) throw error;
   return Boolean(data);
 }
 
 /** What to show someone: the price, and the trial they'd get if they started now. */
 export async function currentOffer(hadTrial = false): Promise<Offer> {
+  await syncConfig(); // the landing page is usually the first thing a new deploy serves
   const [price, taken] = await Promise.all([priceLabel(), founderSpotsTaken()]);
   const spotsLeft = Math.max(0, TRIAL.founderSlots - taken);
   const founder = !hadTrial && spotsLeft > 0;
@@ -203,18 +232,77 @@ export async function billingRow(userId: string): Promise<Row | null> {
   return data;
 }
 
-/** The creator's Stripe customer, created on first checkout. */
+/** The creator's Stripe customer in the current mode, created on first checkout. */
 export async function ensureCustomer(user: HubUser): Promise<string> {
   const row = await billingRow(user.id);
-  if (row?.stripe_customer_id) return row.stripe_customer_id;
+  if (row?.stripe_customer_id && row.livemode === STRIPE_LIVE) return row.stripe_customer_id;
   const customer = await stripe().customers.create(
     { email: user.email, name: user.name, metadata: { user_id: user.id } },
     // A double click mustn't create two customers.
-    { idempotencyKey: `creator-desk-customer-${user.id}` },
+    { idempotencyKey: `creator-desk-customer-${STRIPE_LIVE ? "live" : "test"}-${user.id}` },
   );
-  const { error } = await adminClient().from("hub_billing").upsert({ user_id: user.id, stripe_customer_id: customer.id, updated_at: new Date().toISOString() });
+  // Starting afresh in this mode (e.g. after test sign-ups before going live).
+  const { error } = await adminClient().from("hub_billing").upsert({
+    user_id: user.id,
+    stripe_customer_id: customer.id,
+    livemode: customer.livemode,
+    ...(row?.livemode !== customer.livemode && {
+      stripe_subscription_id: null,
+      status: null,
+      price_id: null,
+      trial_end: null,
+      current_period_end: null,
+      cancel_at_period_end: false,
+      founder: false,
+      had_subscription: false,
+    }),
+    updated_at: new Date().toISOString(),
+  });
   if (error) throw error;
   return customer.id;
+}
+
+/** Close any other checkout this customer has open, so they can't end up paying twice. */
+export async function expireOpenCheckouts(customerId: string) {
+  const open = await stripe().checkout.sessions.list({ customer: customerId, status: "open", limit: 10 });
+  for (const s of open.data) await stripe().checkout.sessions.expire(s.id).catch(() => {});
+}
+
+/** Remember that this person has had a trial (kept even after they delete their account). */
+export async function recordTrial(email: string, founder: boolean, livemode: boolean, userId?: string) {
+  const admin = adminClient();
+  const key = emailKey(email);
+  const { data: prior, error: readError } = await admin
+    .from("hub_trial_history")
+    .select("founder")
+    .eq("email_key", key)
+    .eq("livemode", livemode)
+    .maybeSingle<{ founder: boolean }>();
+  if (readError) throw readError;
+  const { error } = await admin
+    .from("hub_trial_history")
+    .upsert({ email_key: key, livemode, founder: Boolean(prior?.founder) || founder }, { onConflict: "email_key,livemode" });
+  if (error) throw error;
+  if (userId) await admin.from("hub_founder_reservations").delete().eq("user_id", userId);
+}
+
+/** Cancel straight away every subscription that hasn't already ended. */
+async function cancelAll(subs: Stripe.Subscription[]) {
+  for (const s of subs.filter((s) => !ENDED.has(s.status))) await stripe().subscriptions.cancel(s.id);
+}
+
+/** Before an account is deleted: stop anything that could still charge them,
+    and remember they've had a trial so signing up again doesn't give another. */
+export async function closeBilling(user: HubUser) {
+  const row = await billingRow(user.id);
+  // A customer from Stripe's other mode (a test sign-up before going live) can't be charged from here.
+  if (!row?.stripe_customer_id || row.livemode !== STRIPE_LIVE) return;
+  await expireOpenCheckouts(row.stripe_customer_id);
+  const subs = await subscriptionsOf(row.stripe_customer_id);
+  await cancelAll(subs);
+  if (subs.some((s) => s.trial_end != null)) {
+    await recordTrial(user.email, row.founder || subs.some((s) => s.metadata?.founder === "true"), STRIPE_LIVE);
+  }
 }
 
 const customerIdOf = (c: string | Stripe.Customer | Stripe.DeletedCustomer) => (typeof c === "string" ? c : c.id);
@@ -239,7 +327,16 @@ const iso = (s: number | null | undefined) => (s ? new Date(s * 1000).toISOStrin
 export async function syncCustomer(customerRef: string | Stripe.Customer | Stripe.DeletedCustomer, userIdHint?: string) {
   const customerId = customerIdOf(customerRef);
   const admin = adminClient();
-  const subs = await subscriptionsOf(customerId);
+  let subs = await subscriptionsOf(customerId);
+  // Never two at once (say, two checkouts finished side by side): keep the first, cancel the rest.
+  const running = subs.filter((s) => LIVE.has(s.status));
+  if (running.length > 1) {
+    for (const extra of running.slice(0, -1)) {
+      // (Another update may be cancelling it at the same moment.)
+      await stripe().subscriptions.cancel(extra.id).catch((e) => console.error("Creator Desk: couldn't cancel a duplicate subscription", extra.id, e));
+    }
+    subs = await subscriptionsOf(customerId);
+  }
   const sub = best(subs);
 
   let userId = sub?.metadata?.user_id || userIdHint || null;
@@ -255,9 +352,16 @@ export async function syncCustomer(customerRef: string | Stripe.Customer | Strip
     console.error("Creator Desk: Stripe customer with no matching user", customerId);
     return;
   }
-  // Updates about an account that's since been deleted are expected - nothing to keep in sync.
-  const { data: found } = await admin.auth.admin.getUserById(userId);
-  if (!found?.user || !sub) return;
+  // Any error other than "no such account" is thrown, so Stripe retries the webhook later.
+  const { data: found, error: lookupError } = await admin.auth.admin.getUserById(userId);
+  if (lookupError && lookupError.status !== 404) throw lookupError;
+  if (!found?.user) {
+    // The account's been deleted: make sure nothing of theirs can still charge them.
+    await expireOpenCheckouts(customerId);
+    await cancelAll(subs);
+    return;
+  }
+  if (!sub) return;
 
   const existing = await billingRow(userId);
   const item = sub.items.data[0];
@@ -273,6 +377,7 @@ export async function syncCustomer(customerRef: string | Stripe.Customer | Strip
     cancel_at_period_end: sub.cancel_at_period_end || Boolean(sub.cancel_at),
     founder,
     had_subscription: true,
+    livemode: sub.livemode,
     updated_at: new Date().toISOString(),
   });
   if (error) {
@@ -281,10 +386,5 @@ export async function syncCustomer(customerRef: string | Stripe.Customer | Strip
   }
 
   // Remember that this person has had a trial, even if they later delete their account.
-  if (found.user.email && subs.some((s) => s.trial_end != null)) {
-    const key = emailKey(found.user.email);
-    const { data: prior } = await admin.from("hub_trial_history").select("founder").eq("email_key", key).maybeSingle<{ founder: boolean }>();
-    await admin.from("hub_trial_history").upsert({ email_key: key, founder: Boolean(prior?.founder) || founder });
-    await admin.from("hub_founder_reservations").delete().eq("user_id", userId);
-  }
+  if (found.user.email && subs.some((s) => s.trial_end != null)) await recordTrial(found.user.email, founder, sub.livemode, userId);
 }

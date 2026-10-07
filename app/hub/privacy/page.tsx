@@ -72,9 +72,9 @@ export default function Privacy() {
       <h2>How long we keep it</h2>
       <p>
         We keep your data while you have an account. You can delete your account at any time from your account page, which permanently deletes
-        your projects, tracked ads and settings straight away (backups are cleared within 30 days). We keep only a one-way scrambled (hashed)
-        version of your email address, so the free trial can&apos;t be claimed twice - it can&apos;t be turned back into your address. Stripe
-        keeps payment records for as long as tax law requires.
+        your projects, tracked ads and settings straight away (backups are cleared within 30 days). So that free trials can&apos;t be claimed
+        twice, we keep a scrambled (hashed) code made from your email address and whether you had a trial - not your address itself - and use it
+        for nothing else. Stripe keeps payment records for as long as tax law requires.
       </p>
 
       <h2>Your rights</h2>

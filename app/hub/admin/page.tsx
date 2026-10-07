@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { currentUser } from "../_lib/supabase/server";
 import { adminClient, adminEnabled } from "../_lib/supabase/admin";
 import { isOwner } from "../_lib/owners";
-import { TRIAL, billingEnabled, priceLabel } from "../_lib/billing/stripe";
+import { STRIPE_LIVE, TRIAL, billingEnabled, priceLabel } from "../_lib/billing/stripe";
 
 export const metadata: Metadata = { title: "Admin" };
 
@@ -15,22 +15,24 @@ function daysAgo(days: number) {
    paying members, founder spots and the latest feedback. */
 export default async function Admin() {
   const user = await currentUser();
-  if (!user || !isOwner(user.email) || !adminEnabled) notFound();
+  if (!user || !adminEnabled || !(await isOwner(user.email))) notFound();
   const admin = adminClient();
 
   const [users, billing, feedback, usage, price] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 15 }),
-    admin.from("hub_billing").select("status, founder, cancel_at_period_end, comped"),
+    admin.from("hub_billing").select("status, founder, cancel_at_period_end, comped, owner, livemode"),
     admin.from("hub_feedback").select("message, email, page, created_at").order("created_at", { ascending: false }).limit(20),
     admin.from("hub_usage").select("rows, via").gte("at", daysAgo(30)),
     priceLabel(),
   ]);
 
-  const rows = billing.data ?? [];
+  const all = billing.data ?? [];
+  // Only subscriptions in the Stripe mode this deploy uses (test sign-ups don't count once you're live).
+  const rows = all.filter((r) => r.livemode === STRIPE_LIVE);
   const count = (status: string) => rows.filter((r) => r.status === status).length;
   const total = "total" in users.data ? (users.data.total as number) : users.data.users.length;
   const founders = (await admin.rpc("hub_founder_spots_taken")).data ?? rows.filter((r) => r.founder).length;
-  const comped = rows.filter((r) => r.comped).length;
+  const free = all.filter((r) => r.comped || r.owner).length;
   const cancelling = rows.filter((r) => r.cancel_at_period_end && ["trialing", "active"].includes(r.status ?? "")).length;
   const sharedRows = (usage.data ?? []).filter((u) => u.via === "shared").reduce((s, u) => s + (u.rows ?? 0), 0);
 
@@ -41,8 +43,8 @@ export default async function Admin() {
     ["Payment failed", count("past_due")],
     ["Cancelling", cancelling],
     ["Founder spots taken", `${founders}/${TRIAL.founderSlots}`],
-    ["Signed up, no card yet", Math.max(0, total - rows.filter((r) => r.status || r.comped).length)],
-    ["Free (comped/owners)", comped],
+    ["Signed up, no card yet", Math.max(0, total - all.filter((r) => (r.status && r.livemode === STRIPE_LIVE) || r.comped || r.owner).length)],
+    ["Free (comped/owners)", free],
     ["Shared TrendTrack rows (30d)", sharedRows],
   ];
 

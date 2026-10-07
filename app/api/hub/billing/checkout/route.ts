@@ -8,6 +8,7 @@ import {
   billingFor,
   billingRow,
   ensureCustomer,
+  expireOpenCheckouts,
   hadTrialBefore,
   reserveFounderSpot,
   stripe,
@@ -34,6 +35,9 @@ export async function POST(request: Request) {
       await syncCustomer(customer, user.id);
       return Response.json({ url: "/hub" });
     }
+
+    // Only the newest checkout can be completed, so nobody pays twice (two tabs, a double click).
+    await expireOpenCheckouts(customer);
 
     const row = await billingRow(user.id);
     const hadTrial = (await hadTrialBefore(user, row)) || subs.some((s) => s.trial_end != null);

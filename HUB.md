@@ -24,7 +24,7 @@ launch it, follow [LAUNCH.md](LAUNCH.md).** This file explains how it's built.
 - **Modes.** No env vars: single-user, data in the browser, demo ad data. Supabase vars: accounts. Plus Stripe vars and `SUPABASE_SECRET_KEY`: paid accounts with trials. Every feature checks which mode it's in, so partial setups degrade gracefully.
 - **Auth** - Supabase email + password (`app/hub/_lib/supabase/`). `proxy.ts` refreshes sessions and sends signed-out visitors to the landing page or login.
 - **Data** - `app/hub/_lib/store.ts`: the browser talks to Supabase directly, protected by row-level security (each creator only sees their own rows). Edits save in the background, debounced while typing and flushed when the page is hidden.
-- **Billing** - `app/hub/_lib/billing/stripe.ts`. Checkout (`/api/hub/billing/checkout`) takes a card and starts the trial; the webhook (`/api/hub/stripe/webhook`) and the checkout return (`/hub/billing/success`) both re-read the subscription from Stripe into `hub_billing`, which creators can read but only the server can write. Access = subscription `trialing`, `active` or `past_due`, or an owner email. Pages are gated by `AccessGate` (`account-provider.tsx`); API routes by `apiUser()` (`_lib/api-auth.ts`).
+- **Billing** - `app/hub/_lib/billing/stripe.ts`. Checkout (`/api/hub/billing/checkout`) takes a card and starts the trial; the webhook (`/api/hub/stripe/webhook`) and the checkout return (`/hub/billing/success`) both re-read the subscription from Stripe into `hub_billing`, which creators can read but only the server can write. Access = a `trialing`, `active` or `past_due` subscription in the Stripe mode this deploy uses (test-mode sign-ups stop counting once you're live), `comped`, or an owner email (`_lib/owners.ts` - only honoured while Supabase requires email confirmation). Pages are gated by `AccessGate` (`account-provider.tsx`); API routes by `apiUser()` (`_lib/api-auth.ts`); writes by row-level security via `hub_has_access()`, which reads `hub_config` (paywall on/off and Stripe mode, kept in step by the production deploy). Trial history (`hub_trial_history`) is a keyed hash of the email (`HUB_HASH_SECRET`), per Stripe mode.
 - **TrendTrack** - `_lib/trendtrack-access.ts` decides whose key a request uses: the creator's own (stored in `hub_trendtrack_keys`, which only the server can read), the owner's, or a shared key once TrendTrack allows it (`TRENDTRACK_SHARED=true`). `_lib/trendtrack.ts` calls the API with that key; responses are cached per key. Live calls are logged in `hub_usage`.
 - **Database** - `supabase/migrations/` (apply in order). `supabase/config.toml` and `supabase/templates/` are for local development and the email templates.
 
@@ -37,6 +37,7 @@ npx supabase start            # local Postgres, auth and a test inbox (needs Doc
 npm run build && npm start
 ```
 
+Only the Vercel production deploy updates `hub_config`; locally, set `HUB_MANAGE_CONFIG=1` so the database's paywall matches your env.
 `STRIPE_API_HOST` points the Stripe client at a local mock - it's only for automated tests; never set it in Vercel.
 
 ## Style

@@ -2,10 +2,11 @@ import { apiUser } from "../../../../hub/_lib/api-auth";
 import { crossSite } from "../../../../hub/_lib/same-origin";
 import { serverClient } from "../../../../hub/_lib/supabase/server";
 import { adminClient, adminEnabled } from "../../../../hub/_lib/supabase/admin";
-import { billingEnabled, billingRow, stripe, subscriptionsOf } from "../../../../hub/_lib/billing/stripe";
+import { billingEnabled, closeBilling } from "../../../../hub/_lib/billing/stripe";
 
 /* Deletes the signed-in creator's account and everything in it. Every Stripe
-   subscription they have is cancelled first, so they're never charged again. */
+   subscription (and open checkout) they have is cancelled first, so they're
+   never charged again. */
 export async function POST(request: Request) {
   const blocked = crossSite(request);
   if (blocked) return blocked;
@@ -17,17 +18,11 @@ export async function POST(request: Request) {
   if (body?.confirm !== "DELETE") return Response.json({ error: "Type DELETE to confirm." }, { status: 400 });
 
   if (billingEnabled) {
-    const row = await billingRow(auth.user.id);
-    if (row?.stripe_customer_id) {
-      try {
-        const subs = await subscriptionsOf(row.stripe_customer_id);
-        for (const s of subs.filter((s) => !["canceled", "incomplete_expired"].includes(s.status))) {
-          await stripe().subscriptions.cancel(s.id);
-        }
-      } catch (e) {
-        console.error("Creator Desk: couldn't cancel subscriptions on delete", e);
-        return Response.json({ error: "Couldn't cancel your subscription, so nothing was deleted. Please try again." }, { status: 500 });
-      }
+    try {
+      await closeBilling(auth.user);
+    } catch (e) {
+      console.error("Creator Desk: couldn't close billing on delete", e);
+      return Response.json({ error: "Couldn't cancel your subscription, so your account wasn't deleted. Please try again." }, { status: 500 });
     }
   }
 
