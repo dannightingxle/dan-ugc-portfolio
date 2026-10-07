@@ -10,7 +10,7 @@
             <tr><td style="padding-top:12px;font-size:15px;line-height:1.6;color:#475569">Someone (hopefully you) asked to reset the password for your Creator Desk account. This link works once and expires soon.</td></tr>
             <tr>
               <td style="padding-top:24px">
-                <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:10px">Choose a new password</a>
+                <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=%2Fhub%2Faccount%3Freset%3D1" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:10px">Choose a new password</a>
               </td>
             </tr>
             <tr><td style="padding-top:24px;font-size:13px;line-height:1.6;color:#8391a7">Didn't ask for this? You can ignore this email - your password won't change.</td></tr>
