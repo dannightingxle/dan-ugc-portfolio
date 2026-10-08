@@ -33,8 +33,8 @@ const POINTS = [
     body: "No big following, no fancy kit. Your phone and a plan.",
   },
   {
-    title: "One-time fee + 14-day guarantee",
-    body: "No subscription. Land your first paid deal in 14 days, or I work with you 1:1 until you do.",
+    title: "One-time fee + 30-day guarantee",
+    body: "No subscription. Land your first paid deal in 30 days, or I work with you 1:1 until you do.",
   },
 ];
 
@@ -154,6 +154,9 @@ export default function WaitlistPage() {
             </h2>
             <p className="mt-4 text-[color:var(--text-muted)]">
               Zero experience, zero followers - it doesn&apos;t matter. Here&apos;s everything you get.
+            </p>
+            <p className="mt-3 text-sm text-[color:var(--text-dim)]">
+              The A to Z and Course 1 open on launch day, then a new module drops every Monday.
             </p>
           </div>
 
