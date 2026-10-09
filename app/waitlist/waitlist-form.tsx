@@ -251,7 +251,7 @@ export default function WaitlistForm() {
               onChange={(v) => set("price", v)}
             />
             <Choice
-              label="I'm planning a guarantee: land your first paid deal within 14 days, or I work with you 1:1 until you do. How much does that matter to you?"
+              label="I'm planning a guarantee: land your first paid deal within 30 days, or I work with you 1:1 until you do. How much does that matter to you?"
               options={GUARANTEE}
               value={data.guarantee}
               onChange={(v) => set("guarantee", v)}
