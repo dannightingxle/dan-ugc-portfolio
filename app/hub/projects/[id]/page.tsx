@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use } from "react";
+import { useFeature } from "../../account-provider";
 import {
   PAYMENT_STATUSES,
   SHIPPING,
   STAGES,
+  TECH_STAGES,
   paymentDue,
   useDataReady,
   useProjects,
@@ -36,6 +38,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const router = useRouter();
   const ready = useDataReady();
   const sync = useSyncStatus();
+  const studio = useFeature("studio");
+  const followups = useFeature("followups");
   const p = projects.find((x) => x.id === id);
 
   if (!ready) return null;
@@ -127,9 +131,43 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         </div>
       </header>
 
+      {studio && (
+        <Link
+          href={`/hub/projects/${project.id}/studio`}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 transition hover:border-accent"
+        >
+          <span>
+            <span className="block font-semibold text-accent">Studio</span>
+            <span className="text-sm text-text-muted">Brief, app notes, winners and script bank for this job. Weekly shoot sheets and the Friday review.</span>
+          </span>
+          <span className="text-accent">→</span>
+        </Link>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         {/* Sidebar first on phones: money, dates and contact are what you look up most. */}
         <aside className="space-y-5 lg:order-2">
+          {followups && (
+            <Section title="Tech job & follow-up">
+              <Field label="Tech UGC stage" hint="For a dedicated account posting for an app. Leave as 'Not a tech job' for brand deals.">
+                <select className={input} value={project.techStage} onChange={(e) => set("techStage", e.target.value as Project["techStage"])}>
+                  <option value="">Not a tech job</option>
+                  {TECH_STAGES.map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Pay model">
+                <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="$20/video via SideShift, paid weekly + view bonuses" />
+              </Field>
+              <Field label="Waiting on" hint="Done only when they've replied or paid.">
+                <input className={input} value={project.waitingOn} onChange={(e) => set("waitingOn", e.target.value)} placeholder="Thomas to approve V3, invoice paid…" />
+              </Field>
+              <Field label="Chase on">
+                <input type="date" className={input} value={project.chaseOn} onChange={(e) => set("chaseOn", e.target.value)} />
+              </Field>
+            </Section>
+          )}
           <Section title="Payment" action={<PaymentPill project={project} />}>
             <Field label="Fee (£)">
               <input
