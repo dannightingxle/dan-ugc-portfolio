@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
 import { gbp, shortDate } from "../_lib/ui";
-import { useAccount } from "../account-provider";
+import { useFeature } from "../account-provider";
 import { ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
 
 /* Project board: every brand deal from pitch to paid. */
@@ -77,7 +77,7 @@ function Board() {
 }
 
 function ProjectCard({ p }: { p: Project }) {
-  const { billing } = useAccount();
+  const followups = useFeature("followups");
   const done = p.deliverables.filter((d) => d.done).length;
   const chaseLate = Boolean(p.chaseOn && p.chaseOn <= new Date().toISOString().slice(0, 10));
   return (
@@ -98,7 +98,7 @@ function ProjectCard({ p }: { p: Project }) {
         <span>{p.due ? `Due ${shortDate(p.due)}` : ""}</span>
       </div>
       {p.contact.name && <p className="truncate text-xs text-text-dim">👤 {p.contact.name}</p>}
-      {billing.owner && (p.techStage || p.waitingOn) && (
+      {followups && (p.techStage || p.waitingOn) && (
         <div className="flex flex-wrap gap-1.5 text-[11px]">
           {p.techStage && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent">Tech · {p.techStage}</span>}
           {p.waitingOn && (

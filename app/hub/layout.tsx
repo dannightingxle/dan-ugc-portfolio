@@ -7,6 +7,7 @@ import { HubNav } from "./nav";
 import { BRAND } from "./_lib/brand";
 import { billingFor } from "./_lib/billing/stripe";
 import { OPEN_ACCESS } from "./_lib/billing/types";
+import { featuresFor } from "./_lib/features";
 import { Analytics } from "@vercel/analytics/next";
 import "./hub.css";
 
@@ -21,10 +22,10 @@ export const metadata: Metadata = {
 
 export default async function HubLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
-  const billing = user ? await billingFor(user) : OPEN_ACCESS;
+  const [billing, features] = user ? await Promise.all([billingFor(user), featuresFor(user)]) : [OPEN_ACCESS, []];
   return (
     <div className={`hub ${jakarta.variable} min-h-screen`}>
-      <AccountProvider enabled={accountsEnabled} user={user} billing={billing}>
+      <AccountProvider enabled={accountsEnabled} user={user} billing={billing} features={features}>
         <HubNav />
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 sm:px-6 md:pb-24">
           <AccessGate>{children}</AccessGate>

@@ -4,6 +4,8 @@ import { currentUser } from "../_lib/supabase/server";
 import { adminClient, adminEnabled } from "../_lib/supabase/admin";
 import { isOwner } from "../_lib/owners";
 import { STRIPE_LIVE, TRIAL, billingEnabled, priceLabel } from "../_lib/billing/stripe";
+import { audiences } from "../_lib/features";
+import { Rollout } from "./rollout";
 
 export const metadata: Metadata = { title: "Admin" };
 
@@ -18,13 +20,15 @@ export default async function Admin() {
   if (!user || !adminEnabled || !(await isOwner(user.email))) notFound();
   const admin = adminClient();
 
-  const [users, billing, feedback, usage, price, config] = await Promise.all([
+  const [users, billing, feedback, usage, price, config, featureAudiences, beta] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 15 }),
     admin.from("hub_billing").select("status, founder, cancel_at_period_end, comped, owner, livemode"),
     admin.from("hub_feedback").select("message, email, page, created_at").order("created_at", { ascending: false }).limit(20),
     admin.from("hub_usage").select("rows, via").gte("at", daysAgo(30)),
     priceLabel(),
     admin.from("hub_config").select("enforce_billing, live_mode").maybeSingle<{ enforce_billing: boolean; live_mode: boolean }>(),
+    audiences(),
+    admin.from("hub_beta_members").select("email").order("added_at", { ascending: false }),
   ]);
   // The database enforces the paywall (and counts founder spots) using hub_config, which this deploy keeps in step.
   const outOfStep = config.data && (config.data.enforce_billing !== billingEnabled || (billingEnabled && config.data.live_mode !== STRIPE_LIVE));
@@ -75,6 +79,8 @@ export default async function Admin() {
           </div>
         ))}
       </div>
+
+      <Rollout audiences={featureAudiences} beta={(beta.data ?? []).map((b) => b.email as string)} />
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Newest accounts</h2>

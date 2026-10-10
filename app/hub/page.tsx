@@ -7,7 +7,7 @@ import { ImportLocal } from "./import-local";
 import { WelcomeBanner } from "./welcome-banner";
 import { ExampleTag } from "./projects/fields";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
-import { useAccount } from "./account-provider";
+import { useFeature } from "./account-provider";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
 
 /* Dashboard: projects and money first, then every starred ad with live numbers. */
@@ -15,7 +15,7 @@ import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useA
 export default function HubHome() {
   const { stars, toggle } = useStars();
   const { projects } = useProjects();
-  const { billing } = useAccount();
+  const followups = useFeature("followups");
   const ads = useMemo(() => Object.values(stars).sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0)), [stars]);
 
   const running = ads.filter((a) => a.status === "active").length;
@@ -59,7 +59,7 @@ export default function HubHome() {
           <Tile label="Active projects" value={projects.filter((p) => p.stage !== "Paid").length.toString()} />
         </div>
 
-        {billing.owner && waiting.length > 0 && (
+        {followups && waiting.length > 0 && (
           <div className="rounded-2xl border border-border bg-bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h2 className="font-medium">Waiting on</h2>

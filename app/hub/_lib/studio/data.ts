@@ -2,22 +2,25 @@ import "server-only";
 import { adminClient, adminEnabled } from "../supabase/admin";
 import { accountsEnabled } from "../supabase/config";
 import { currentUser, type HubUser } from "../supabase/server";
-import { isOwner } from "../owners";
+import { canUse } from "../features";
+import { billingFor } from "../billing/stripe";
 import { readWorkspace, type SheetData, type SheetSummary, type Workspace } from "./types";
 
-/* Studio storage. Owners only for now, so the tables are server-only and
-   every read and write is scoped to the signed-in owner's own rows here. */
+/* Studio storage. Who can use Studio is a staged feature (owners, then the
+   beta group, then everyone), so the tables are server-only and every read
+   and write is scoped to the signed-in person's own rows here. */
 
 export const claudeEnabled = Boolean(process.env.ANTHROPIC_API_KEY);
 
-/** The signed-in owner, or null (Studio stays hidden from everyone else). */
+/** The signed-in person if Studio is switched on for them, else null (it stays hidden). */
 export async function studioUser(): Promise<HubUser | null> {
   if (!accountsEnabled || !adminEnabled) return null;
   const user = await currentUser();
-  return user && (await isOwner(user.email)) ? user : null;
+  // Studio writes go through the server, so the paywall is checked here too (owners always pass).
+  return user && (await canUse(user, "studio")) && (await billingFor(user)).hasAccess ? user : null;
 }
 
-/** For API routes: the owner, or a 404 so Studio's existence isn't revealed. */
+/** For API routes: the user, or a 404 so Studio's existence isn't revealed. */
 export async function studioApiUser(): Promise<{ ok: true; user: HubUser } | { ok: false; response: Response }> {
   const user = await studioUser();
   return user ? { ok: true, user } : { ok: false, response: Response.json({ error: "Not found." }, { status: 404 }) };

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use } from "react";
-import { useAccount } from "../../account-provider";
+import { useFeature } from "../../account-provider";
 import {
   PAYMENT_STATUSES,
   SHIPPING,
@@ -38,7 +38,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const router = useRouter();
   const ready = useDataReady();
   const sync = useSyncStatus();
-  const { billing } = useAccount();
+  const studio = useFeature("studio");
+  const followups = useFeature("followups");
   const p = projects.find((x) => x.id === id);
 
   if (!ready) return null;
@@ -130,7 +131,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         </div>
       </header>
 
-      {billing.owner && (
+      {studio && (
         <Link
           href={`/hub/projects/${project.id}/studio`}
           className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 transition hover:border-accent"
@@ -146,7 +147,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         {/* Sidebar first on phones: money, dates and contact are what you look up most. */}
         <aside className="space-y-5 lg:order-2">
-          {billing.owner && (
+          {followups && (
             <Section title="Tech job & follow-up">
               <Field label="Tech UGC stage" hint="For a dedicated account posting for an app. Leave as 'Not a tech job' for brand deals.">
                 <select className={input} value={project.techStage} onChange={(e) => set("techStage", e.target.value as Project["techStage"])}>
