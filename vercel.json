@@ -1,3 +1,0 @@
-{
-  "crons": [{ "path": "/api/instagram/trial-reels", "schedule": "0 6 * * *" }]
-}

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "compress": "bash compress.sh"
+    "compress": "bash compress.sh",
+    "trial-reels": "node scripts/trial-reels.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
