@@ -20,6 +20,10 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const SHIPPING = ["Not needed", "Waiting", "On its way", "Received"] as const;
 
+/** Tech UGC jobs (a dedicated account posting for an app) move through these instead. */
+export const TECH_STAGES = ["Negotiating", "Account creation", "Setup", "Warm-up", "Active", "Ended"] as const;
+export type TechStage = (typeof TECH_STAGES)[number];
+
 export type Deliverable = { id: string; item: string; qty: number; format: string; length: string; done: boolean };
 export type LinkItem = { id: string; label: string; url: string };
 
@@ -60,6 +64,11 @@ export type Project = {
   notes: string;
   // Script draft (full scripting tool is coming later)
   script: string;
+  // Tech UGC jobs and follow-ups (owners for now)
+  techStage: TechStage | "";
+  waitingOn: string;
+  chaseOn: string;
+  payModel: string;
 };
 
 export function newProject(partial: Partial<Project> = {}): Project {
@@ -93,6 +102,10 @@ export function newProject(partial: Partial<Project> = {}): Project {
     links: [],
     notes: "",
     script: "",
+    techStage: "",
+    waitingOn: "",
+    chaseOn: "",
+    payModel: "",
     ...partial,
   };
 }

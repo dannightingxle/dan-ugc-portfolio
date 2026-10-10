@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
 import { gbp, shortDate } from "../_lib/ui";
+import { useAccount } from "../account-provider";
 import { ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
 
 /* Project board: every brand deal from pitch to paid. */
@@ -76,7 +77,9 @@ function Board() {
 }
 
 function ProjectCard({ p }: { p: Project }) {
+  const { billing } = useAccount();
   const done = p.deliverables.filter((d) => d.done).length;
+  const chaseLate = Boolean(p.chaseOn && p.chaseOn <= new Date().toISOString().slice(0, 10));
   return (
     <Link href={`/hub/projects/${p.id}`} className="block space-y-2 rounded-lg border border-border bg-bg-card p-3 transition hover:border-border-strong">
       <div>
@@ -95,6 +98,17 @@ function ProjectCard({ p }: { p: Project }) {
         <span>{p.due ? `Due ${shortDate(p.due)}` : ""}</span>
       </div>
       {p.contact.name && <p className="truncate text-xs text-text-dim">👤 {p.contact.name}</p>}
+      {billing.owner && (p.techStage || p.waitingOn) && (
+        <div className="flex flex-wrap gap-1.5 text-[11px]">
+          {p.techStage && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent">Tech · {p.techStage}</span>}
+          {p.waitingOn && (
+            <span className={`rounded-full px-2 py-0.5 ${chaseLate ? "bg-warn-soft font-medium text-warn" : "bg-text/5 text-text-dim"}`}>
+              Waiting: {p.waitingOn}
+              {p.chaseOn && ` · chase ${chaseLate ? "now" : shortDate(p.chaseOn)}`}
+            </span>
+          )}
+        </div>
+      )}
     </Link>
   );
 }

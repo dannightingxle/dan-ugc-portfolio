@@ -34,7 +34,7 @@ or `https://creatordesk.co.uk`.
 ## 3. Supabase - accounts and database (20 min)
 
 1. [supabase.com](https://supabase.com) → **New project**. Region: **London (eu-west-2)**. Save the database password somewhere safe.
-2. **SQL Editor → New query** → paste all of `supabase/migrations/20261006120000_creator_hub.sql` → **Run**. Then do the same with `supabase/migrations/20261007090000_creator_desk_launch.sql`. (Order matters.)
+2. **SQL Editor → New query** → paste all of `supabase/migrations/20261006120000_creator_hub.sql` → **Run**. Then do the same with `supabase/migrations/20261007090000_creator_desk_launch.sql`, then `supabase/migrations/20261010120000_creator_studio.sql`. (Order matters.)
 3. **Authentication → URL Configuration**
    - Site URL: `APP/hub`
    - Redirect URLs: add `APP/hub/**`
@@ -89,6 +89,7 @@ in the old single-user demo mode.
 | `NEXT_PUBLIC_SUPPORT_EMAIL` | where creators can reach you (shown on legal pages) |
 | `NEXT_PUBLIC_LEGAL_NAME` | who runs Creator Desk, e.g. your business name |
 | `HUB_APP_HOST` | optional, see step 2 |
+| `ANTHROPIC_API_KEY` | from [console.anthropic.com](https://console.anthropic.com) → API keys. Switches on Studio (owners only for now). Set a monthly spend limit in the console |
 
 Optional: `FOUNDER_SLOTS` (default 50), `FOUNDER_TRIAL_DAYS` (90), `TRIAL_DAYS` (7),
 `NEXT_PUBLIC_TRENDTRACK_URL` (e.g. a TrendTrack affiliate link), `HUB_ALLOWED_EMAILS`

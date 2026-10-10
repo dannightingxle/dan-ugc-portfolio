@@ -7,6 +7,7 @@ import { ImportLocal } from "./import-local";
 import { WelcomeBanner } from "./welcome-banner";
 import { ExampleTag } from "./projects/fields";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
+import { useAccount } from "./account-provider";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
 
 /* Dashboard: projects and money first, then every starred ad with live numbers. */
@@ -14,6 +15,7 @@ import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useA
 export default function HubHome() {
   const { stars, toggle } = useStars();
   const { projects } = useProjects();
+  const { billing } = useAccount();
   const ads = useMemo(() => Object.values(stars).sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0)), [stars]);
 
   const running = ads.filter((a) => a.status === "active").length;
@@ -29,6 +31,9 @@ export default function HubHome() {
     .filter((p) => p.stage !== "Delivered" && p.stage !== "Paid")
     .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"))
     .slice(0, 4);
+  // Anything waiting on someone else, soonest chase first (no date goes last).
+  const today = new Date().toISOString().slice(0, 10);
+  const waiting = projects.filter((p) => p.waitingOn.trim()).sort((a, b) => (a.chaseOn || "9999").localeCompare(b.chaseOn || "9999"));
 
   return (
     <div className="space-y-12">
@@ -53,6 +58,33 @@ export default function HubHome() {
           <Tile label="In the pipeline" value={gbp(pipeline)} />
           <Tile label="Active projects" value={projects.filter((p) => p.stage !== "Paid").length.toString()} />
         </div>
+
+        {billing.owner && waiting.length > 0 && (
+          <div className="rounded-2xl border border-border bg-bg-card">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="font-medium">Waiting on</h2>
+              <span className="text-xs text-text-dim">Done only when they&apos;ve replied or paid</span>
+            </div>
+            <ul className="divide-y divide-border">
+              {waiting.map((p) => {
+                const due = Boolean(p.chaseOn && p.chaseOn <= today);
+                return (
+                  <li key={p.id}>
+                    <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
+                      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+                        <p className="text-xs text-text-dim">{p.brand}</p>
+                        <p className="text-sm font-medium">{p.waitingOn}</p>
+                      </div>
+                      <span className={`ml-auto rounded-full px-2 py-0.5 text-xs sm:ml-0 ${due ? "bg-warn-soft font-medium text-warn" : "bg-text/5 text-text-dim"}`}>
+                        {!p.chaseOn ? "No chase date" : due ? "Chase today" : `Chase ${shortDate(p.chaseOn)}`}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         <div className="rounded-2xl border border-border bg-bg-card">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
