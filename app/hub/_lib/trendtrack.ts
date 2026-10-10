@@ -1,29 +1,33 @@
 import type { Ad, AdDetail, Brand, Paged, ReachPoint, Source } from "./types";
 import * as demo from "./demo-data";
-import { accountsEnabled } from "./supabase/config";
+import type { TrendTrack } from "./trendtrack-access";
 
 /* Server-side TrendTrack client. The API key never reaches the browser: pages
-   call /api/hub/*, those routes call this file.
-
-   Live calls need TRENDTRACK_API_KEY plus a gate in front of /hub, so
-   strangers can't spend your credits: either Supabase accounts
-   (NEXT_PUBLIC_SUPABASE_*) or the single HUB_PASSWORD. Otherwise demo data. Spec: api.trendtrack.io/v1/openapi.json */
+   call /api/hub/*, those routes work out whose key to use (trendtrack-access.ts)
+   and call this file. Spec: api.trendtrack.io/v1/openapi.json */
 
 const BASE = "https://api.trendtrack.io/v1";
 
-export function source(): Source {
-  const gated = Boolean(process.env.HUB_PASSWORD) || accountsEnabled;
-  return process.env.TRENDTRACK_API_KEY && gated ? "live" : "demo";
+/** This creator hasn't connected TrendTrack (and isn't asking for sample data). */
+export class NotConnected extends Error {}
+
+/** The key to call TrendTrack with, or null to answer from the made-up demo brands. */
+function keyFor(ctx: TrendTrack, sample: boolean): string | null {
+  if (sample || ctx.mode === "demo") return null;
+  if (ctx.mode === "none") throw new NotConnected("Connect TrendTrack to search real ads.");
+  return ctx.key;
 }
 
-async function tt<T>(path: string, revalidate: number): Promise<T> {
+async function tt<T>(key: string, path: string, revalidate: number): Promise<T> {
   const res = await fetch(BASE + path, {
-    headers: { Authorization: `Bearer ${process.env.TRENDTRACK_API_KEY}` },
-    // Cache upstream responses so repeat views don't burn credits.
+    headers: { Authorization: `Bearer ${key}` },
+    // Cache upstream responses so repeat views don't burn credits. The key is
+    // part of the cache key, so creators never see each other's cached calls.
     next: { revalidate },
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    if (res.status === 401) throw new Error("TrendTrack rejected the API key - reconnect TrendTrack in your account.");
     throw new Error(`TrendTrack ${res.status} on ${path}: ${text.slice(0, 200)}`);
   }
   return res.json() as Promise<T>;
@@ -90,9 +94,10 @@ function normalizeAd(a: RawAd): Ad {
 /* ---- Public functions used by the API routes ---- */
 
 /** Brand name / domain / Instagram handle -> advertisers. Zero credits. */
-export async function lookupBrands(q: string): Promise<Paged<Brand>> {
-  if (source() === "demo") return demo.lookupBrands(q);
-  const raw = await tt<RawLookup>(`/lookup?q=${encodeURIComponent(q)}&limit=10`, 3600);
+export async function lookupBrands(ctx: TrendTrack, q: string, sample = false): Promise<Paged<Brand>> {
+  const key = keyFor(ctx, sample);
+  if (!key) return demo.lookupBrands(q);
+  const raw = await tt<RawLookup>(key, `/lookup?q=${encodeURIComponent(q)}&limit=10`, 3600);
   const seen = new Set<string>();
   const items: Brand[] = [];
   for (const r of raw.data) {
@@ -118,8 +123,10 @@ export type AdsQuery = {
 };
 
 /** A brand's Meta ads. Costs credits per row returned. */
-export async function brandAds(brandId: string, q: AdsQuery): Promise<Paged<Ad>> {
-  if (source() === "demo") return demo.brandAds(brandId, q);
+export async function brandAds(ctx: TrendTrack, brandId: string, q: AdsQuery, sample = false): Promise<Paged<Ad>> {
+  // Demo brands always answer from demo data (e.g. sample ads starred earlier).
+  const key = brandId.startsWith("demo-") ? null : keyFor(ctx, sample);
+  if (!key) return demo.brandAds(brandId, q);
   const params = new URLSearchParams({
     limit: "24",
     offset: String(q.offset),
@@ -129,6 +136,7 @@ export async function brandAds(brandId: string, q: AdsQuery): Promise<Paged<Ad>>
     order: "desc",
   });
   const raw = await tt<{ data: RawAd[]; pagination: { total: number } }>(
+    key,
     `/advertisers/${encodeURIComponent(brandId)}/ads?${params}`,
     3600,
   );
@@ -136,12 +144,13 @@ export async function brandAds(brandId: string, q: AdsQuery): Promise<Paged<Ad>>
 }
 
 /** One ad plus its daily reach history - the "track over time" data. */
-export async function adDetail(adId: string): Promise<AdDetail & { source: Source }> {
-  if (source() === "demo") return { source: "demo", ...demo.adDetail(adId) };
+export async function adDetail(ctx: TrendTrack, adId: string): Promise<AdDetail & { source: Source }> {
+  const key = adId.startsWith("demo-") ? null : keyFor(ctx, false);
+  if (!key) return { source: "demo", ...demo.adDetail(adId) };
   const id = encodeURIComponent(adId);
   const [ad, history] = await Promise.all([
-    tt<{ data: RawAd }>(`/ads/${id}`, 6 * 3600),
-    tt<{ data: { date: string; reach: number | null }[] }>(`/ads/${id}/reach-history?limit=365`, 6 * 3600),
+    tt<{ data: RawAd }>(key, `/ads/${id}`, 6 * 3600),
+    tt<{ data: { date: string; reach: number | null }[] }>(key, `/ads/${id}/reach-history?limit=365`, 6 * 3600),
   ]);
   const points: ReachPoint[] = history.data
     .filter((p): p is ReachPoint => typeof p.reach === "number")

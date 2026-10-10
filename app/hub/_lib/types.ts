@@ -43,4 +43,7 @@ export type AdDetail = { ad: Ad; history: ReachPoint[] };
 /** Every API response says whether it came from TrendTrack or demo data. */
 export type Source = "live" | "demo";
 
+/** Where a creator's ad data comes from; "none" = they haven't connected TrendTrack. */
+export type DataSource = Source | "none";
+
 export type Paged<T> = { source: Source; items: T[]; total: number };

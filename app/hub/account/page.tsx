@@ -7,9 +7,13 @@ import { ImportLocal } from "../import-local";
 import { useProjects, useStars } from "../_lib/store";
 import { browserClient } from "../_lib/supabase/browser";
 import { Field, Section, input } from "../projects/fields";
+import { BillingSection, DataSection, DeleteSection, TrendTrackSection } from "./sections";
+import { FeedbackButton } from "../feedback";
+import Link from "next/link";
 
-/* The signed-in creator's account: name, password, sign out, and bringing
-   over anything saved in this browser before accounts existed. */
+/* The signed-in creator's account: plan and billing, profile, TrendTrack,
+   password, data export, sign out and delete - plus bringing over anything
+   saved in this browser before accounts existed. */
 
 export default function AccountPage() {
   return (
@@ -21,7 +25,7 @@ export default function AccountPage() {
 
 
 function Account() {
-  const { enabled, user } = useAccount();
+  const { enabled, user, billing } = useAccount();
   const params = useSearchParams();
   const resetting = params.get("reset") === "1";
   const { projects } = useProjects();
@@ -31,7 +35,8 @@ function Account() {
     return (
       <div className="mx-auto max-w-xl space-y-3 py-10">
         <h1 className="font-serif text-4xl">Account</h1>
-        <p className="text-text-muted">Accounts aren&apos;t switched on for this hub yet, so everything is saved in this browser.</p>
+        <p className="text-text-muted">Accounts aren&apos;t switched on yet, so everything is saved in this browser.</p>
+        <DataSection />
       </div>
     );
   }
@@ -47,8 +52,11 @@ function Account() {
       </div>
       <ImportLocal />
       {resetting && <PasswordSection highlight />}
+      <BillingSection />
       <ProfileSection name={user.name} email={user.email} />
+      <TrendTrackSection />
       {!resetting && <PasswordSection />}
+      <DataSection />
       <Section title="Sign out">
         <button
           type="button"
@@ -61,6 +69,18 @@ function Account() {
           Sign out
         </button>
       </Section>
+      <Section title="Help us improve">
+        <p className="text-sm text-text-muted">Found a bug, or wish it did something it doesn&apos;t? We read everything.</p>
+        <FeedbackButton className="rounded-lg border border-border px-4 py-2 hover:border-accent hover:text-accent" />
+      </Section>
+      {billing.owner && (
+        <Section title="Owner">
+          <Link href="/hub/admin" className="text-sm text-accent hover:underline">
+            Open the admin page →
+          </Link>
+        </Section>
+      )}
+      <DeleteSection />
     </div>
   );
 }

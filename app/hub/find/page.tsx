@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { Ad, Brand, Paged } from "../_lib/types";
+import type { Ad, Brand, DataSource, Paged } from "../_lib/types";
 import { useStars } from "../_lib/store";
 import { StarButton, StatusPill, Thumb, compact, useApi } from "../_lib/ui";
 
@@ -10,16 +10,30 @@ import { StarButton, StatusPill, Thumb, compact, useApi } from "../_lib/ui";
 
 type Filters = { status: "active" | "all"; mediaType: "all" | "video"; sortBy: "reach" | "longestRunning" | "newest" };
 
+const TRENDTRACK_URL = process.env.NEXT_PUBLIC_TRENDTRACK_URL || "https://www.trendtrack.io";
+
 export default function FindAds() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [brand, setBrand] = useState<Brand | null>(null);
+  const [sample, setSample] = useState(false);
 
-  const brands = useApi<Paged<Brand>>(submitted.length >= 2 ? `/api/hub/lookup?q=${encodeURIComponent(submitted)}` : null);
+  const status = useApi<{ source: DataSource }>("/api/hub/status");
+  const source = status.data?.source;
+  const notConnected = source === "none" && !sample;
+  const demo = source === "demo" || sample;
+  const extra = sample ? "&sample=1" : "";
 
-  // In demo mode, open with a brand loaded so there's something to see.
-  const demoStart = useApi<Paged<Brand>>("/api/hub/lookup?q=northmoor");
-  const shownBrand = brand ?? (!submitted && demoStart.data?.source === "demo" ? demoStart.data.items[0] : null);
+  const brands = useApi<Paged<Brand>>(
+    submitted.length >= 2 && source && !notConnected ? `/api/hub/lookup?q=${encodeURIComponent(submitted)}${extra}` : null,
+  );
+
+  // With sample data, open with a brand loaded so there's something to see.
+  const demoStart = useApi<Paged<Brand>>(demo ? `/api/hub/lookup?q=northmoor${extra}` : null);
+  const shownBrand = brand ?? (!submitted && demo && demoStart.data ? demoStart.data.items[0] : null);
+
+  if (status.loading) return <p className="text-text-dim">Loading…</p>;
+  if (notConnected) return <ConnectTrendTrack onSample={() => setSample(true)} />;
 
   return (
     <div className="space-y-8">
@@ -71,19 +85,74 @@ export default function FindAds() {
         </section>
       )}
 
-      {shownBrand && <BrandAds key={shownBrand.id} brand={shownBrand} onBack={submitted ? () => setBrand(null) : undefined} />}
+      {sample && (
+        <p className="rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
+          You&apos;re exploring with made-up sample brands.{" "}
+          <Link href="/hub/account#trendtrack" className="font-medium underline">
+            Connect TrendTrack
+          </Link>{" "}
+          to search real ads.
+        </p>
+      )}
+
+      {shownBrand && (
+        <BrandAds key={shownBrand.id + extra} brand={shownBrand} sample={sample} onBack={submitted ? () => setBrand(null) : undefined} />
+      )}
     </div>
   );
 }
 
-function BrandAds({ brand, onBack }: { brand: Brand; onBack?: () => void }) {
+function ConnectTrendTrack({ onSample }: { onSample: () => void }) {
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 py-6">
+      <div className="space-y-2">
+        <h1 className="font-serif text-4xl sm:text-5xl">Find your ads</h1>
+        <p className="text-text-muted">
+          Search the brands you&apos;ve made content for, star the ads you&apos;re in, and watch their reach grow. Ad data comes from
+          TrendTrack, so connect your TrendTrack account to get started.
+        </p>
+      </div>
+      <div className="space-y-4 rounded-2xl border border-border bg-bg-card p-6">
+        <ol className="space-y-2 text-sm text-text-muted">
+          <li>
+            <strong className="text-text">1.</strong> In TrendTrack, go to <em>Settings → API</em> and create an API key (needs a plan with API
+            access).
+          </li>
+          <li>
+            <strong className="text-text">2.</strong> Paste it into your Creator Desk account - it&apos;s checked and stored securely.
+          </li>
+          <li>
+            <strong className="text-text">3.</strong> Come back here and search any brand.
+          </li>
+        </ol>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/hub/account#trendtrack" className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
+            Connect TrendTrack
+          </Link>
+          <button type="button" onClick={onSample} className="rounded-xl border border-border px-5 py-2.5 hover:border-accent hover:text-accent">
+            Explore with sample data
+          </button>
+        </div>
+        <p className="text-xs text-text-dim">
+          Don&apos;t use TrendTrack yet?{" "}
+          <a href={TRENDTRACK_URL} target="_blank" rel="noreferrer" className="underline hover:text-text">
+            See their plans
+          </a>
+          . Everything else in Creator Desk works without it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function BrandAds({ brand, sample, onBack }: { brand: Brand; sample: boolean; onBack?: () => void }) {
   const [filters, setFilters] = useState<Filters>({ status: "active", mediaType: "all", sortBy: "reach" });
   const [partnerOnly, setPartnerOnly] = useState(false);
   const [offset, setOffset] = useState(0);
   const [earlier, setEarlier] = useState<Ad[]>([]);
   const { stars, toggle } = useStars();
 
-  const params = new URLSearchParams({ ...filters, offset: String(offset) });
+  const params = new URLSearchParams({ ...filters, offset: String(offset), ...(sample && { sample: "1" }) });
   const page = useApi<Paged<Ad>>(`/api/hub/advertisers/${encodeURIComponent(brand.id)}/ads?${params}`);
 
   const ads = [...earlier, ...(page.data?.items ?? [])];

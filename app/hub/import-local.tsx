@@ -9,13 +9,13 @@ const noop = () => () => {};
 
 /** Offer to move projects/stars saved in this browser (from before accounts) into the account. */
 export function ImportLocal() {
-  const { user } = useAccount();
+  const { user, billing } = useAccount();
   const ready = useDataReady();
   const mounted = useSyncExternalStore(noop, () => true, () => false);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const local = user && mounted && ready && !done ? localDataToImport() : null;
+  const local = user && billing.hasAccess && mounted && ready && !done ? localDataToImport() : null;
   if (!local) return null;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent-soft p-4">
