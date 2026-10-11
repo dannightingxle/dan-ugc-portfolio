@@ -15,6 +15,8 @@ const LINKS = [
   { href: "/hub/find", label: "Find ads", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4.35-4.35" },
   { href: "/hub/scripts", label: "Scripts", soon: true, icon: "M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4" },
 ];
+/* Where Scripts goes once someone has Studio (a staged feature). */
+const STUDIO = { href: "/hub/studio", label: "Studio", soon: false, icon: "M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4" };
 
 function isActive(path: string, href: string) {
   return href === "/hub" ? path === "/hub" || path.startsWith("/hub/ads") : path.startsWith(href);
@@ -30,7 +32,8 @@ export function Logo() {
 
 export function HubNav() {
   const path = usePathname();
-  const { user, billing } = useAccount();
+  const { user, billing, features } = useAccount();
+  const links = features.includes("studio") || features.includes("brand") ? LINKS.map((l) => (l.href === "/hub/scripts" ? STUDIO : l)) : LINKS;
   const isPublic = isPublicPath(path);
   const appVisible = !isPublic && billing.hasAccess;
   const { data } = useApi<{ source: DataSource }>(appVisible ? "/api/hub/status" : null);
@@ -45,7 +48,7 @@ export function HubNav() {
           <Logo />
           {appVisible && (
             <nav className="hidden gap-1 text-sm md:flex">
-              {LINKS.map((l) => (
+              {links.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
@@ -90,7 +93,7 @@ export function HubNav() {
       {appVisible && (
         <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
           <div className="mx-auto grid max-w-md grid-cols-4">
-            {LINKS.map((l) => {
+            {links.map((l) => {
               const active = isActive(path, l.href);
               return (
                 <Link key={l.href} href={l.href} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium ${active ? "text-accent" : "text-text-dim"}`}>

@@ -11,7 +11,7 @@ import { Field, Section, input } from "../../fields";
    shoot sheet, the Friday review and the account checklist. Edits save by
    themselves; the Claude actions take a minute or two. */
 
-type Upload = { name: string; type: string; data: string };
+export type Upload = { name: string; type: string; data: string };
 type Tab = "week" | "setup" | "files" | "review" | "account";
 const TABS: [Tab, string][] = [
   ["week", "This week"],
@@ -35,7 +35,7 @@ async function readUploads(files: FileList | null): Promise<Upload[]> {
   );
 }
 
-async function call<T>(url: string, method: string, body?: unknown): Promise<T> {
+export async function call<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error ?? `Something went wrong (${res.status}).`);
@@ -148,7 +148,7 @@ export function Studio({ projectId }: { projectId: string }) {
 
 /* ---- Running a Claude action: a button that shows how long it's been going ---- */
 
-function useAction() {
+export function useAction() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [seconds, setSeconds] = useState(0);
@@ -172,7 +172,7 @@ function useAction() {
   return { busy, error, seconds, run };
 }
 
-function ActionButton({ busy, seconds, label, busyLabel }: { busy: boolean; seconds: number; label: string; busyLabel: string }) {
+export function ActionButton({ busy, seconds, label, busyLabel }: { busy: boolean; seconds: number; label: string; busyLabel: string }) {
   return (
     <button disabled={busy} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
       {busy ? `${busyLabel} ${seconds}s` : label}
@@ -180,7 +180,7 @@ function ActionButton({ busy, seconds, label, busyLabel }: { busy: boolean; seco
   );
 }
 
-function FilePicker({ accept, label, onChange }: { accept: string; label: string; onChange: (u: Upload[]) => void }) {
+export function FilePicker({ accept, label, onChange }: { accept: string; label: string; onChange: (u: Upload[]) => void }) {
   const [names, setNames] = useState<string[]>([]);
   return (
     <Field label={label} hint={names.length ? names.join(", ") : "Up to 3 MB in total."}>
@@ -199,7 +199,7 @@ function FilePicker({ accept, label, onChange }: { accept: string; label: string
   );
 }
 
-function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button
@@ -302,35 +302,7 @@ function WeekTab({
         )}
       </Section>
 
-      <Section title="Shoot sheets">
-        {sheets.length === 0 ? (
-          <p className="text-sm text-text-dim">None yet. Each one opens as its own page - add it to your phone&apos;s home screen for filming days.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {sheets.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                <a href={`/hub/studio/sheets/${s.id}`} target="_blank" rel="noopener" className="min-w-0 font-medium hover:text-accent">
-                  {s.title}
-                  <span className="ml-2 text-xs font-normal text-text-dim">
-                    {s.videos} videos · {shortDate(s.createdAt)}
-                  </span>
-                </a>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!confirm(`Delete "${s.title}"? Its hooks stay in the script bank.`)) return;
-                    await call(`/api/hub/studio/sheets/${s.id}`, "DELETE");
-                    setSheets(sheets.filter((x) => x.id !== s.id));
-                  }}
-                  className="text-xs text-text-dim hover:text-accent"
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      <SheetList sheets={sheets} setSheets={setSheets} />
     </div>
   );
 }
@@ -536,5 +508,39 @@ function AccountTab({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => void 
         <textarea rows={4} className={input} value={a.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Feed test results, first-video views, phone used for verification…" />
       </Section>
     </div>
+  );
+}
+
+export function SheetList({ sheets, setSheets }: { sheets: SheetSummary[]; setSheets: (s: SheetSummary[]) => void }) {
+  return (
+    <Section title="Shoot sheets">
+      {sheets.length === 0 ? (
+        <p className="text-sm text-text-dim">None yet. Each one opens as its own page - add it to your phone&apos;s home screen for filming days.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {sheets.map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+              <a href={`/hub/studio/sheets/${s.id}`} target="_blank" rel="noopener" className="min-w-0 font-medium hover:text-accent">
+                {s.title}
+                <span className="ml-2 text-xs font-normal text-text-dim">
+                  {s.videos} videos · {shortDate(s.createdAt)}
+                </span>
+              </a>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm(`Delete "${s.title}"? Its hooks stay in the script bank.`)) return;
+                  await call(`/api/hub/studio/sheets/${s.id}`, "DELETE");
+                  setSheets(sheets.filter((x) => x.id !== s.id));
+                }}
+                className="text-xs text-text-dim hover:text-accent"
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
   );
 }

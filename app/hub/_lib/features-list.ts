@@ -5,6 +5,7 @@
 export const FEATURES = [
   { key: "studio", name: "Studio", about: "Claude workspace per job: set-up from a brief, weekly shoot sheets, Friday review, account checklist." },
   { key: "followups", name: "Tech jobs & follow-ups", about: "Tech UGC stages, pay model, 'waiting on' and chase dates, and the Waiting on list on the home page." },
+  { key: "brand", name: "Personal brand plan", about: "Weekly content plan from your own top posts and the creators you track (stats via Apify)." },
 ] as const;
 
 export type FeatureKey = (typeof FEATURES)[number]["key"];

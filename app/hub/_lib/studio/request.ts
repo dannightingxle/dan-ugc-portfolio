@@ -1,7 +1,8 @@
 import "server-only";
 import { z } from "zod";
 import { crossSite } from "../same-origin";
-import { claudeEnabled, studioApiUser, validProjectId } from "./data";
+import { BRAND_ID, claudeEnabled, studioApiUser, validProjectId } from "./data";
+import type { FeatureKey } from "../features-list";
 import { studioErrorMessage } from "./claude";
 import type { HubUser } from "../supabase/server";
 
@@ -35,6 +36,19 @@ export const WeekBody = z.object({
 });
 export const ReviewBody = z.object({ numbers: text(20_000), uploads: Uploads });
 
+const Handle = z.object({ platform: z.enum(["tiktok", "instagram"]), handle: z.string().trim().min(1).max(200), note: text(300) });
+export const BrandBody = z.object({
+  about: text(20_000),
+  accounts: z.array(Handle).max(10).default([]),
+  tracked: z.array(Handle).max(40).default([]),
+  winners: text(200_000),
+  scriptBank: text(400_000),
+  notes: text(5_000),
+  autoPlan: z.boolean().default(false),
+});
+export const BrandPlanBody = z.object({ videos: z.number().int().min(1).max(21).default(5), filmingOn: text(500), notes: text(5_000), uploads: Uploads });
+export const Empty = z.object({}).passthrough();
+
 const File = text(400_000);
 export const WorkspaceBody = z.object({
   instructions: text(50_000),
@@ -53,12 +67,18 @@ export const WorkspaceBody = z.object({
 type Handler<B> = (args: { user: HubUser; projectId: string; body: B }) => Promise<unknown>;
 
 /** Runs a Studio action for the signed-in owner on one of their jobs. */
-export async function studioAction<S extends z.ZodType>(request: Request, projectId: string, schema: S, run: Handler<z.infer<S>>, { needsClaude = true } = {}) {
+export async function studioAction<S extends z.ZodType>(
+  request: Request,
+  projectId: string,
+  schema: S,
+  run: Handler<z.infer<S>>,
+  { needsClaude = true, feature = "studio" as FeatureKey } = {},
+) {
   const blocked = crossSite(request);
   if (blocked) return blocked;
-  const auth = await studioApiUser();
+  const auth = await studioApiUser(feature);
   if (!auth.ok) return auth.response;
-  if (!validProjectId(projectId)) return Response.json({ error: "Unknown job." }, { status: 400 });
+  if (!(feature === "brand" ? projectId === BRAND_ID : validProjectId(projectId))) return Response.json({ error: "Unknown job." }, { status: 400 });
   if (needsClaude && !claudeEnabled) return Response.json({ error: "Add ANTHROPIC_API_KEY in Vercel to switch on Claude." }, { status: 503 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Bad request." }, { status: 400 });
