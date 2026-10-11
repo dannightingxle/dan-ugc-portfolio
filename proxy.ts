@@ -17,6 +17,7 @@ const PUBLIC = [
   "/hub/auth", // email links
   "/api/hub/login",
   "/api/hub/stripe", // Stripe webhooks, verified by signature
+  "/api/hub/cron", // Vercel's scheduled jobs, checked against CRON_SECRET
 ];
 
 export async function proxy(request: NextRequest) {

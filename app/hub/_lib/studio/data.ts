@@ -3,6 +3,7 @@ import { adminClient, adminEnabled } from "../supabase/admin";
 import { accountsEnabled } from "../supabase/config";
 import { currentUser, type HubUser } from "../supabase/server";
 import { canUse } from "../features";
+import type { FeatureKey } from "../features-list";
 import { billingFor } from "../billing/stripe";
 import { readWorkspace, type SheetData, type SheetSummary, type Workspace } from "./types";
 
@@ -12,18 +13,23 @@ import { readWorkspace, type SheetData, type SheetSummary, type Workspace } from
 
 export const claudeEnabled = Boolean(process.env.ANTHROPIC_API_KEY);
 
-/** The signed-in person if Studio is switched on for them, else null (it stays hidden). */
-export async function studioUser(): Promise<HubUser | null> {
+/** The signed-in person if this feature is switched on for them, else null (it stays hidden). */
+export async function studioUser(feature: FeatureKey = "studio"): Promise<HubUser | null> {
   if (!accountsEnabled || !adminEnabled) return null;
   const user = await currentUser();
   // Studio writes go through the server, so the paywall is checked here too (owners always pass).
-  return user && (await canUse(user, "studio")) && (await billingFor(user)).hasAccess ? user : null;
+  return user && (await canUse(user, feature)) && (await billingFor(user)).hasAccess ? user : null;
 }
 
-/** For API routes: the user, or a 404 so Studio's existence isn't revealed. */
-export async function studioApiUser(): Promise<{ ok: true; user: HubUser } | { ok: false; response: Response }> {
-  const user = await studioUser();
+/** For API routes: the user, or a 404 so the feature's existence isn't revealed. */
+export async function studioApiUser(feature: FeatureKey = "studio"): Promise<{ ok: true; user: HubUser } | { ok: false; response: Response }> {
+  const user = await studioUser(feature);
   return user ? { ok: true, user } : { ok: false, response: Response.json({ error: "Not found." }, { status: 404 }) };
+}
+
+/** For shoot sheets, which come from jobs (Studio) or the personal brand plan. */
+export async function sheetUser(): Promise<HubUser | null> {
+  return (await studioUser("studio")) ?? (await studioUser("brand"));
 }
 
 export async function getWorkspace(userId: string, projectId: string): Promise<Workspace> {
@@ -87,5 +93,8 @@ export async function deleteSheet(userId: string, id: string) {
 
 /** Project ids come from the browser: keep them to the shape the app makes. */
 export function validProjectId(id: unknown): id is string {
-  return typeof id === "string" && /^[\w-]{1,80}$/.test(id);
+  return typeof id === "string" && /^[\w-]{1,80}$/.test(id) && id !== BRAND_ID;
 }
+
+/** The personal brand's workspace and shoot sheets are stored under this id. */
+export const BRAND_ID = "personal-brand";

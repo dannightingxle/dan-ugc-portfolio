@@ -4,6 +4,9 @@ Everything in the app is built and tested. What's left is setting up the account
 it runs on and pasting their keys into Vercel. Do the steps in order - about
 **2 hours** in total, most of it waiting for verification emails and DNS.
 
+Once you can sign in, **`/hub/admin` → Setup** ticks off what's done and says
+exactly what's still missing, so you can check your work as you go.
+
 > Until the Supabase and Stripe keys are in Vercel, the live site keeps working
 > exactly as it does now (single user, no sign-ups), so nothing breaks while you
 > set things up.
@@ -89,6 +92,8 @@ in the old single-user demo mode.
 | `NEXT_PUBLIC_SUPPORT_EMAIL` | where creators can reach you (shown on legal pages) |
 | `NEXT_PUBLIC_LEGAL_NAME` | who runs Creator Desk, e.g. your business name |
 | `HUB_APP_HOST` | optional, see step 2 |
+| `APIFY_TOKEN` | optional: from apify.com → Settings → API & Integrations. Pulls public TikTok/Instagram stats for the personal brand plan (pay per post, roughly £5-8 a month for you) |
+| `CRON_SECRET` | optional: any long random value. Lets Vercel run the Monday-morning personal brand plan |
 | `ANTHROPIC_API_KEY` | from [console.anthropic.com](https://console.anthropic.com) → API keys. Switches on Studio. Everyone you give Studio to uses this key, so set a monthly spend limit in the console |
 
 Optional: `FOUNDER_SLOTS` (default 50), `FOUNDER_TRIAL_DAYS` (90), `TRIAL_DAYS` (7),

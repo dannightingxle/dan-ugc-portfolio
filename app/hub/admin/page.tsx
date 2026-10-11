@@ -6,6 +6,7 @@ import { isOwner } from "../_lib/owners";
 import { STRIPE_LIVE, TRIAL, billingEnabled, priceLabel } from "../_lib/billing/stripe";
 import { audiences } from "../_lib/features";
 import { Rollout } from "./rollout";
+import { setupChecks } from "./setup";
 
 export const metadata: Metadata = { title: "Admin" };
 
@@ -32,6 +33,8 @@ export default async function Admin() {
   ]);
   // The database enforces the paywall (and counts founder spots) using hub_config, which this deploy keeps in step.
   const outOfStep = config.data && (config.data.enforce_billing !== billingEnabled || (billingEnabled && config.data.live_mode !== STRIPE_LIVE));
+  const checks = await setupChecks(!outOfStep);
+  const launchReady = checks.filter((c) => c.group === "launch").every((c) => c.ok);
 
   const all = billing.data ?? [];
   // Only subscriptions in the Stripe mode this deploy uses (test sign-ups don't count once you're live).
@@ -70,6 +73,38 @@ export default async function Admin() {
           </p>
         )}
       </div>
+
+      <details open={!launchReady} className="rounded-xl border border-border bg-bg-card">
+        <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <span className="font-semibold">Setup</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${launchReady ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>
+            {launchReady ? "Ready for public sign-ups" : `${checks.filter((c) => c.group === "launch" && !c.ok).length} to do before public sign-ups`}
+          </span>
+        </summary>
+        {(["launch", "tools"] as const).map((group) => (
+          <div key={group} className="border-t border-border px-4 py-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">{group === "launch" ? "For the public launch" : "For your own tools"}</p>
+            <ul className="space-y-2">
+              {checks
+                .filter((c) => c.group === group)
+                .map((c) => (
+                  <li key={c.label} className="flex gap-3 text-sm">
+                    <span className={c.ok ? "text-good" : "text-warn"} aria-label={c.ok ? "Done" : "To do"}>
+                      {c.ok ? "✓" : "○"}
+                    </span>
+                    <span>
+                      <span className={c.ok ? "" : "font-medium"}>{c.label}</span>
+                      {!c.ok && <span className="block text-text-dim">{c.fix}</span>}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
+        <p className="border-t border-border px-4 py-3 text-xs text-text-dim">
+          Can&apos;t be checked from here: sign-up emails sending in volume (Resend, LAUNCH.md step 4) and Vercel Pro (needed to take payments).
+        </p>
+      </details>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {tiles.map(([label, value]) => (
