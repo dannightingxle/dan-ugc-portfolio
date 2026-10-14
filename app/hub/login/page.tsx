@@ -36,7 +36,9 @@ type Mode = "signin" | "signup" | "forgot";
 function AccountForm() {
   const params = useSearchParams();
   const next = params.get("next")?.startsWith("/hub") ? params.get("next")! : "/hub";
-  const [mode, setMode] = useState<Mode>(params.get("mode") === "signup" ? "signup" : "signin");
+  // While Creator Desk is on a waitlist, "Create account" is hidden unless the link carries invite=1 (for testers).
+  const signupOpen = !BRAND.waitlist || params.get("invite") === "1";
+  const [mode, setMode] = useState<Mode>(params.get("mode") === "signup" && signupOpen ? "signup" : "signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -77,7 +79,16 @@ function AccountForm() {
 
   return (
     <div className="space-y-4 rounded-2xl border border-border bg-bg-card p-6">
-      {mode !== "forgot" && (
+      {!signupOpen && params.get("mode") === "signup" && (
+        <p className="rounded-lg bg-bg-elevated px-3 py-2 text-sm text-text-muted">
+          {BRAND.name} isn&apos;t open yet.{" "}
+          <Link href="/hub/welcome#waitlist" className="text-accent underline">
+            Join the waitlist
+          </Link>{" "}
+          and you&apos;ll be first in.
+        </p>
+      )}
+      {mode !== "forgot" && signupOpen && (
         <div className="grid grid-cols-2 gap-1 rounded-lg bg-bg-elevated p-1 text-sm">
           {(["signin", "signup"] as const).map((m) => (
             <button

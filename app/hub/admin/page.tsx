@@ -21,16 +21,30 @@ export default async function Admin() {
   if (!user || !adminEnabled || !(await isOwner(user.email))) notFound();
   const admin = adminClient();
 
-  const [users, billing, feedback, usage, price, config, featureAudiences, beta] = await Promise.all([
+  const [users, billing, feedback, usage, price, config, featureAudiences, beta, waitlist] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 15 }),
     admin.from("hub_billing").select("status, founder, cancel_at_period_end, comped, owner, livemode"),
-    admin.from("hub_feedback").select("message, email, page, created_at").order("created_at", { ascending: false }).limit(20),
+    admin
+      .from("hub_feedback")
+      .select("message, email, page, created_at")
+      .or("page.is.null,page.neq.waitlist")
+      .order("created_at", { ascending: false })
+      .limit(20),
     admin.from("hub_usage").select("rows, via").gte("at", daysAgo(30)),
     priceLabel(),
     admin.from("hub_config").select("enforce_billing, live_mode").maybeSingle<{ enforce_billing: boolean; live_mode: boolean }>(),
     audiences(),
     admin.from("hub_beta_members").select("email").order("added_at", { ascending: false }),
+    admin.from("hub_feedback").select("message, created_at").eq("page", "waitlist").order("created_at", { ascending: false }).limit(500),
   ]);
+  // Waitlist entries (see /api/hub/waitlist) store name, email and handle as JSON in the message.
+  const waitlistEntries = (waitlist.data ?? []).map((w) => {
+    let e: { name?: string; email?: string; handle?: string } = {};
+    try {
+      e = JSON.parse(w.message);
+    } catch {}
+    return { name: e.name ?? "", email: e.email ?? w.message, handle: e.handle ?? "", at: w.created_at as string };
+  });
   // The database enforces the paywall (and counts founder spots) using hub_config, which this deploy keeps in step.
   const outOfStep = config.data && (config.data.enforce_billing !== billingEnabled || (billingEnabled && config.data.live_mode !== STRIPE_LIVE));
   const checks = await setupChecks(!outOfStep);
@@ -129,6 +143,33 @@ export default async function Admin() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">
+          Waitlist <span className="font-normal text-text-dim">· {waitlistEntries.length}</span>
+        </h2>
+        {waitlistEntries.length === 0 ? (
+          <p className="text-sm text-text-dim">Nobody yet. The form is on the landing page while waitlist mode is on.</p>
+        ) : (
+          <>
+            <div className="divide-y divide-border rounded-xl border border-border bg-bg-card text-sm">
+              {waitlistEntries.map((w, i) => (
+                <div key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5">
+                  <span>
+                    <strong>{w.name}</strong> · {w.email}
+                    {w.handle && <span className="text-text-muted"> · {w.handle}</span>}
+                  </span>
+                  <span className="text-xs text-text-dim">{new Date(w.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</span>
+                </div>
+              ))}
+            </div>
+            <details className="text-sm">
+              <summary className="cursor-pointer text-text-muted">All emails, to copy</summary>
+              <textarea readOnly className="mt-2 h-24 w-full rounded-lg border border-border bg-bg p-2 text-xs" value={waitlistEntries.map((w) => w.email).join(", ")} />
+            </details>
+          </>
+        )}
       </section>
 
       <section className="space-y-3">

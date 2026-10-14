@@ -54,7 +54,7 @@ const STAGES = [
   },
 ];
 
-const BRANDS = [
+const BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = [
   { name: "Canva", logo: "/logos/canva.webp" },
   { name: "Sure", logo: "/logos/sure.jpg" },
   { name: "B&M", logo: "/logos/bm-color.png" },

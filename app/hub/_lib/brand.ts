@@ -10,4 +10,9 @@ export const BRAND = {
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "",
   /** The person or company that runs Creator Desk, for the legal pages. */
   legalName: process.env.NEXT_PUBLIC_LEGAL_NAME ?? "",
+  /** Waitlist mode: the landing page collects names for a waitlist instead of
+      sign-ups, and the login page hides "Create account" (existing accounts still
+      sign in; /hub/login?mode=signup&invite=1 still opens sign-up for testers).
+      Set to false on launch day. */
+  waitlist: true,
 };

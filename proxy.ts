@@ -16,6 +16,7 @@ const PUBLIC = [
   "/hub/login",
   "/hub/auth", // email links
   "/api/hub/login",
+  "/api/hub/waitlist", // the landing page's waitlist form (signed-out visitors)
   "/api/hub/stripe", // Stripe webhooks, verified by signature
   "/api/hub/cron", // Vercel's scheduled jobs, checked against CRON_SECRET
 ];
