@@ -27,7 +27,7 @@ type LinkItem = {
 
 /* The A to Z of UGC on YouTube - paste the video link here and an "or watch it on YouTube"
    link appears under the free card. The card itself goes to the free Skool community. */
-const AZ_YOUTUBE = "";
+const AZ_YOUTUBE = "https://youtu.be/aUcrnv3luu8";
 
 const LINKS: LinkItem[] = [
   {
