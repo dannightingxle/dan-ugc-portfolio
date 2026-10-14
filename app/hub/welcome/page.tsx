@@ -11,6 +11,7 @@ import board from "../../../public/hub/screens/board.webp";
 import project from "../../../public/hub/screens/project.webp";
 import ad from "../../../public/hub/screens/ad.webp";
 import avatar from "../../../public/dan-avatar.jpg";
+import WaitlistForm from "./waitlist-form";
 
 /* The public landing page - what people see when you share the link. */
 
@@ -67,9 +68,17 @@ export default async function Welcome({ searchParams }: { searchParams: Promise<
   const params = await searchParams;
   const [user, offer] = await Promise.all([currentUser(), billingEnabled ? currentOffer() : null]);
   const signedIn = Boolean(user) || !accountsEnabled;
-  const cta = signedIn ? { href: "/hub", label: "Open your desk" } : { href: "/hub/login?mode=signup", label: "Start your free trial" };
+  // Waitlist mode: signed-out visitors join a waitlist instead of signing up (BRAND.waitlist).
+  const waitlist = BRAND.waitlist && !signedIn;
+  const cta = signedIn
+    ? { href: "/hub", label: "Open your desk" }
+    : waitlist
+      ? { href: "#waitlist", label: "Join the waitlist" }
+      : { href: "/hub/login?mode=signup", label: "Start your free trial" };
   const trial = offer && offer.trialDays > 0 ? trialLength(offer.trialDays) : null;
-  const small = offer
+  const small = waitlist
+    ? `Opening soon. Join the waitlist and you'll be first in${offer?.founder ? ", with the founding offer" : ""}.`
+    : offer
     ? `${trial ? `${trial} free, then ` : ""}${offer.price ?? "one simple monthly price"}. Card required - cancel any time before your trial ends and you won't pay a thing.`
     : "Free while we're in early access.";
 
@@ -86,9 +95,11 @@ export default async function Welcome({ searchParams }: { searchParams: Promise<
         {offer?.founder && (
           <p className="mx-auto inline-flex flex-wrap items-center justify-center gap-x-2 rounded-full border border-accent/20 bg-accent-soft px-4 py-1.5 text-sm text-accent">
             <strong>Founding offer:</strong> {trialLength(offer.trialDays)} free for the first {offer.founderSlots} creators
-            <span className="font-semibold">
-              · {offer.spotsLeft} spot{offer.spotsLeft === 1 ? "" : "s"} left
-            </span>
+            {!waitlist && (
+              <span className="font-semibold">
+                · {offer.spotsLeft} spot{offer.spotsLeft === 1 ? "" : "s"} left
+              </span>
+            )}
           </p>
         )}
         <div className="mx-auto max-w-3xl space-y-5">
@@ -97,6 +108,17 @@ export default async function Welcome({ searchParams }: { searchParams: Promise<
             Brand deals, briefs, invoices and the ads you&apos;re in - all in one place. Built by a UGC creator, for UGC creators.
           </p>
         </div>
+        {waitlist ? (
+          <div id="waitlist" className="mx-auto max-w-md scroll-mt-24 space-y-3">
+            <WaitlistForm />
+            <p className="text-sm text-text-dim">
+              {small}{" "}
+              <a href="#features" className="underline hover:text-text">
+                See how it works
+              </a>
+            </p>
+          </div>
+        ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap justify-center gap-3">
             <Link href={cta.href} className="rounded-xl bg-accent px-6 py-3.5 text-base font-semibold text-on-accent shadow-sm transition hover:bg-accent-hover">
@@ -108,6 +130,7 @@ export default async function Welcome({ searchParams }: { searchParams: Promise<
           </div>
           {!signedIn && <p className="text-sm text-text-dim">{small}</p>}
         </div>
+        )}
         <div className="relative mx-auto max-w-5xl">
           <Frame>
             <Image src={home} alt="The Creator Desk home screen: earnings, upcoming projects and tracked ads" priority sizes="(min-width: 1024px) 1024px, 100vw" className="h-auto w-full" />
@@ -224,9 +247,15 @@ export default async function Welcome({ searchParams }: { searchParams: Promise<
       {!signedIn && (
         <section className="mx-auto max-w-3xl space-y-5 rounded-3xl bg-accent px-6 py-12 text-center text-on-accent sm:px-12">
           <h2 className="font-serif text-4xl">Give your UGC business a proper desk.</h2>
-          <Link href={cta.href} className="inline-block rounded-xl bg-bg-card px-6 py-3.5 font-semibold text-accent hover:opacity-90">
-            {cta.label}
-          </Link>
+          {waitlist ? (
+            <div className="mx-auto max-w-md">
+              <WaitlistForm tone="accent" />
+            </div>
+          ) : (
+            <Link href={cta.href} className="inline-block rounded-xl bg-bg-card px-6 py-3.5 font-semibold text-accent hover:opacity-90">
+              {cta.label}
+            </Link>
+          )}
         </section>
       )}
 

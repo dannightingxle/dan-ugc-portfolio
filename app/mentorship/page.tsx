@@ -54,15 +54,15 @@ const STAGES = [
   },
 ];
 
-const BRANDS = [
-  { name: "Puma", logo: "/logos/puma.svg", whiteAsset: true },
-  { name: "Huel", logo: "/logos/huel.png" },
-  { name: "MyProtein", logo: "/logos/myprotein.svg", whiteAsset: true },
-  { name: "Anker", logo: "/logos/anker.svg", whiteAsset: true },
+const BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = [
   { name: "Canva", logo: "/logos/canva.webp" },
+  { name: "Sure", logo: "/logos/sure.jpg" },
+  { name: "B&M", logo: "/logos/bm-color.png" },
+  { name: "Avios", logo: "/logos/avios.png" },
   { name: "Manchester City", logo: "/logos/mancity.webp" },
   { name: "Coors", logo: "/logos/coors.webp" },
   { name: "Shark", logo: "/logos/shark.png" },
+  { name: "P&O Ferries", logo: "/logos/po-ferries.jpg" },
 ];
 
 const FAQS = [
