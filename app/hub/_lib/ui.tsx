@@ -17,7 +17,7 @@ export function gbp(n: number | null | undefined) {
 
 export function money(n: number | null | undefined, currency: "GBP" | "USD") {
   if (n == null) return "–";
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency, maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency, currencyDisplay: "narrowSymbol", maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
 }
 
 export function shortDate(d: string | null | undefined) {
