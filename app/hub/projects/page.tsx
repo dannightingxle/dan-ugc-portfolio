@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
+import { STAGES, TECH_STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
 import { gbp, shortDate } from "../_lib/ui";
 import { useFeature } from "../account-provider";
 import { ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
@@ -22,7 +22,8 @@ function Board() {
   const { projects } = useProjects();
   const ready = useDataReady();
   const params = useSearchParams();
-  const [adding, setAdding] = useState(params.get("new") === "1");
+  // ?new=1 opens the add form; ?new=tech opens it set up for a tech UGC job.
+  const [adding, setAdding] = useState(params.get("new") === "1" || params.get("new") === "tech");
 
   return (
     <div className="space-y-6">
@@ -71,7 +72,7 @@ function Board() {
         })}
       </div>
 
-      {adding && <QuickAdd onClose={() => setAdding(false)} />}
+      {adding && <QuickAdd tech={params.get("new") === "tech"} onClose={() => setAdding(false)} />}
     </div>
   );
 }
@@ -114,34 +115,54 @@ function ProjectCard({ p }: { p: Project }) {
 }
 
 /** The few things you know when a deal lands. Everything else lives on the project page. */
-function QuickAdd({ onClose }: { onClose: () => void }) {
+function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
   const { save } = useProjects();
   const router = useRouter();
-  const [p, setP] = useState(() => newProject());
+  const followups = useFeature("followups");
+  const studio = useFeature("studio");
+  const [p, setP] = useState(() => newProject(tech ? { techStage: "Setup", stage: "Filming" } : {}));
   const [fee, setFee] = useState("");
 
   function create(e: React.FormEvent) {
     e.preventDefault();
     const project = { ...p, fee: parseMoney(fee) };
     save(project);
-    router.push(`/hub/projects/${project.id}`);
+    // A tech job's next step is its Studio: paste the brief and set it up.
+    router.push(p.techStage && studio ? `/hub/projects/${project.id}/studio` : `/hub/projects/${project.id}`);
   }
 
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={create} className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-bg-card p-5 shadow-xl">
         <div className="flex items-center justify-between">
-          <h2 className="font-serif text-2xl">New project</h2>
+          <h2 className="font-serif text-2xl">{p.techStage ? "New tech job" : "New project"}</h2>
           <button type="button" onClick={onClose} className="text-text-dim hover:text-text" aria-label="Close">
             ✕
           </button>
         </div>
         <Field label="Brand">
-          <input autoFocus required className={input} value={p.brand} onChange={(e) => setP({ ...p, brand: e.target.value })} placeholder="e.g. Fussy" />
+          <input autoFocus required className={input} value={p.brand} onChange={(e) => setP({ ...p, brand: e.target.value })} placeholder={p.techStage ? "e.g. the app's name" : "e.g. Fussy"} />
         </Field>
         <Field label="What's the job?">
-          <input className={input} value={p.title} onChange={(e) => setP({ ...p, title: e.target.value })} placeholder="e.g. 3 x video ads for summer launch" />
+          <input
+            className={input}
+            value={p.title}
+            onChange={(e) => setP({ ...p, title: e.target.value })}
+            placeholder={p.techStage ? "e.g. 7 videos a week on @account" : "e.g. 3 x video ads for summer launch"}
+          />
         </Field>
+        {(followups || tech) && (
+          <Field label="Tech UGC job?">
+            <select className={input} value={p.techStage} onChange={(e) => setP({ ...p, techStage: e.target.value as Project["techStage"] })}>
+              <option value="">No - a brand deal</option>
+              {TECH_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  Yes - {s}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Fee (£)">
             <input className={input} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="750" />
@@ -157,7 +178,9 @@ function QuickAdd({ onClose }: { onClose: () => void }) {
             ))}
           </select>
         </Field>
-        <button className="w-full rounded-xl bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover">Create and add the brief →</button>
+        <button className="w-full rounded-xl bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover">
+          {p.techStage && studio ? "Create and set it up in Studio →" : "Create and add the brief →"}
+        </button>
       </form>
     </div>
   );

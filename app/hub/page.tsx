@@ -8,6 +8,7 @@ import { WelcomeBanner } from "./welcome-banner";
 import { ExampleTag } from "./projects/fields";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { useFeature } from "./account-provider";
+import { TechJobs } from "./studio/tech-jobs";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
 
 /* Dashboard: projects and money first, then every starred ad with live numbers. */
@@ -16,6 +17,7 @@ export default function HubHome() {
   const { stars, toggle } = useStars();
   const { projects } = useProjects();
   const followups = useFeature("followups");
+  const studio = useFeature("studio");
   const ads = useMemo(() => Object.values(stars).sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0)), [stars]);
 
   const running = ads.filter((a) => a.status === "active").length;
@@ -27,8 +29,9 @@ export default function HubHome() {
   const awaiting = invoiced.reduce((s, p) => s + (p.fee ?? 0), 0);
   const overdue = invoiced.filter((p) => paymentDue(p)?.overdue).length;
   const pipeline = projects.filter((p) => p.paymentStatus === "Not invoiced").reduce((s, p) => s + (p.fee ?? 0), 0);
+  // Tech jobs have their own list above when Studio is on.
   const upNext = projects
-    .filter((p) => p.stage !== "Delivered" && p.stage !== "Paid")
+    .filter((p) => p.stage !== "Delivered" && p.stage !== "Paid" && !(studio && p.techStage))
     .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"))
     .slice(0, 4);
   // Anything waiting on someone else, soonest chase first (no date goes last).
@@ -41,6 +44,7 @@ export default function HubHome() {
         <WelcomeBanner />
       </Suspense>
       <ImportLocal />
+      {studio && <TechJobs title="Tech UGC jobs" studioLink />}
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
