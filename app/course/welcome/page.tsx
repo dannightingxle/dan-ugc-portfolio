@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { OFFER } from "../../mentorship/offer";
+import OnboardingForm from "../../mentorship/onboarding-form";
 import { Shell, Steps } from "../../mentorship/parts";
 
 /* Where Stripe sends people after they buy the course on its own. */
@@ -43,8 +44,15 @@ export default function CourseWelcomePage() {
                 title: "I'll unlock the course within 24 hours",
                 body: "You'll see it in the Skool classroom. Start with the module that matches where you're at.",
               },
+              {
+                title: "Tell me about you",
+                body: "Fill in the short form below so I know where you're at.",
+              },
             ]}
           />
+        </div>
+        <div className="mt-12">
+          <OnboardingForm />
         </div>
       </div>
     </Shell>

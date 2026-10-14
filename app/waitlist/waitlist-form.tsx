@@ -304,10 +304,10 @@ export default function WaitlistForm() {
   );
 }
 
-const inputClass =
+export const inputClass =
   "w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-elevated)] px-4 py-3 text-[15px] text-[color:var(--text)] placeholder:text-[color:var(--text-dim)] outline-none transition-colors focus:border-[color:var(--accent)]";
 
-function Field({ label, optional, children }: { label: string; optional?: boolean; children: React.ReactNode }) {
+export function Field({ label, optional, children }: { label: string; optional?: boolean; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-2">
       <span className="text-sm font-medium text-[color:var(--text)]">
@@ -320,7 +320,7 @@ function Field({ label, optional, children }: { label: string; optional?: boolea
 }
 
 /* Chip-style choices: single-select when `value` is a string, multi when it's an array. */
-function Choice({
+export function Choice({
   label,
   hint,
   options,
