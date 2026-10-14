@@ -15,6 +15,11 @@ export function gbp(n: number | null | undefined) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(n);
 }
 
+export function money(n: number | null | undefined, currency: "GBP" | "USD") {
+  if (n == null) return "–";
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency, currencyDisplay: "narrowSymbol", maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
+}
+
 export function shortDate(d: string | null | undefined) {
   if (!d) return "–";
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
