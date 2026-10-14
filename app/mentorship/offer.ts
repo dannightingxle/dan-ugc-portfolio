@@ -17,7 +17,7 @@ export const OFFER = {
     checkoutUrl: "https://buy.stripe.com/dRm3cv1R98TbbVZ37KfQI07",
   },
   // The Skool group, e.g. "https://www.skool.com/your-group"
-  skoolUrl: "",
+  skoolUrl: "https://www.skool.com/anyone-can-create-5406/about",
 };
 
 /* The course modules, in the same order as the Skool classroom. Shared by the
