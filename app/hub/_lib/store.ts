@@ -23,6 +23,9 @@ export const SHIPPING = ["Not needed", "Waiting", "On its way", "Received"] as c
 /** Tech UGC jobs (a dedicated account posting for an app) move through these instead. */
 export const TECH_STAGES = ["Negotiating", "Account creation", "Setup", "Warm-up", "Active", "On hold", "Ended"] as const;
 export type TechStage = (typeof TECH_STAGES)[number];
+/** Tech jobs are paid per video, in either currency. */
+export const CURRENCIES = ["USD", "GBP"] as const;
+export type Currency = (typeof CURRENCIES)[number];
 
 export type Deliverable = { id: string; item: string; qty: number; format: string; length: string; done: boolean };
 export type LinkItem = { id: string; label: string; url: string };
@@ -69,6 +72,9 @@ export type Project = {
   waitingOn: string;
   chaseOn: string;
   payModel: string;
+  perVideo: number | null;
+  currency: Currency;
+  videosPerDay: number | null;
 };
 
 export function newProject(partial: Partial<Project> = {}): Project {
@@ -106,6 +112,9 @@ export function newProject(partial: Partial<Project> = {}): Project {
     waitingOn: "",
     chaseOn: "",
     payModel: "",
+    perVideo: null,
+    currency: "USD",
+    videosPerDay: null,
     ...partial,
   };
 }
@@ -120,6 +129,11 @@ function upgrade(raw: Partial<Project> & { hook?: string; body?: string; cta?: s
 }
 
 /** When an invoice is due, and whether it's late. */
+/** Rough monthly pay for a tech job: rate × videos a day × 30 days (bonuses not included). */
+export function techMonthly(p: Project) {
+  return p.perVideo != null && p.videosPerDay ? p.perVideo * p.videosPerDay * 30 : null;
+}
+
 export function paymentDue(p: Project): { date: string; overdue: boolean } | null {
   if (p.paymentStatus !== "Invoiced" || !p.invoicedOn) return null;
   const d = new Date(p.invoicedOn);

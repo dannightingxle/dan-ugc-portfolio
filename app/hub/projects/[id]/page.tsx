@@ -8,8 +8,10 @@ import {
   PAYMENT_STATUSES,
   SHIPPING,
   STAGES,
+  CURRENCIES,
   TECH_STAGES,
   paymentDue,
+  techMonthly,
   useDataReady,
   useProjects,
   useSyncStatus,
@@ -17,7 +19,7 @@ import {
   type Deliverable,
   type Project,
 } from "../../_lib/store";
-import { compact, gbp, shortDate } from "../../_lib/ui";
+import { compact, gbp, money, shortDate } from "../../_lib/ui";
 import { Field, PaymentPill, Section, input, parseMoney } from "../fields";
 
 /* One project: dates, payment, contact, the full brief, links and notes.
@@ -157,8 +159,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   ))}
                 </select>
               </Field>
-              <Field label="Pay model">
-                <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="$20/video via SideShift, paid weekly + view bonuses" />
+              {project.techStage && <TechPay project={project} set={set} />}
+              <Field label="Pay notes">
+                <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="Paid weekly via SideShift + view bonuses" />
               </Field>
               <Field label="Waiting on" hint="Done only when they've replied or paid.">
                 <input className={input} value={project.waitingOn} onChange={(e) => set("waitingOn", e.target.value)} placeholder="Thomas to approve V3, invoice paid…" />
@@ -564,5 +567,40 @@ function LinkedAds({ project, onChange }: { project: Project; onChange: (ids: st
         </p>
       )}
     </Section>
+  );
+}
+
+/** Tech jobs: paid per video, so the estimate is rate × videos a day × 30. */
+function TechPay({ project, set }: { project: Project; set: <K extends keyof Project>(k: K, v: Project[K]) => void }) {
+  const monthly = techMonthly(project);
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-2">
+        <Field label="Currency">
+          <select className={input} value={project.currency} onChange={(e) => set("currency", e.target.value as Project["currency"])}>
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c === "GBP" ? "£ GBP" : "$ USD"}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Per video">
+          <input className={input} inputMode="decimal" defaultValue={project.perVideo ?? ""} onChange={(e) => set("perVideo", parseMoney(e.target.value))} placeholder="20" />
+        </Field>
+        <Field label="Videos a day">
+          <input className={input} inputMode="decimal" defaultValue={project.videosPerDay ?? ""} onChange={(e) => set("videosPerDay", parseMoney(e.target.value))} placeholder="2" />
+        </Field>
+      </div>
+      <p className="text-sm text-text-muted">
+        {monthly == null ? (
+          "Add the rate and videos a day to see a monthly estimate."
+        ) : (
+          <>
+            About <span className="font-semibold text-text">{money(monthly, project.currency)}</span> a month (30 days, before bonuses)
+          </>
+        )}
+      </p>
+    </div>
   );
 }

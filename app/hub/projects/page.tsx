@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { STAGES, TECH_STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
+import { CURRENCIES, STAGES, TECH_STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
 import { gbp, shortDate } from "../_lib/ui";
 import { useFeature } from "../account-provider";
 import { ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
@@ -122,10 +122,11 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
   const studio = useFeature("studio");
   const [p, setP] = useState(() => newProject(tech ? { techStage: "Setup", stage: "Filming" } : {}));
   const [fee, setFee] = useState("");
+  const [perDay, setPerDay] = useState("");
 
   function create(e: React.FormEvent) {
     e.preventDefault();
-    const project = { ...p, fee: parseMoney(fee) };
+    const project = p.techStage ? { ...p, perVideo: parseMoney(fee), videosPerDay: parseMoney(perDay) } : { ...p, fee: parseMoney(fee) };
     save(project);
     // A tech job's next step is its Studio: paste the brief and set it up.
     router.push(p.techStage && studio ? `/hub/projects/${project.id}/studio` : `/hub/projects/${project.id}`);
@@ -163,14 +164,34 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
             </select>
           </Field>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Fee (£)">
-            <input className={input} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="750" />
-          </Field>
-          <Field label="Delivery date">
-            <input type="date" className={input} value={p.due} onChange={(e) => setP({ ...p, due: e.target.value })} />
-          </Field>
-        </div>
+        {p.techStage ? (
+          <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-3">
+            <Field label="Currency">
+              <select className={input} value={p.currency} onChange={(e) => setP({ ...p, currency: e.target.value as Project["currency"] })}>
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c === "GBP" ? "£ GBP" : "$ USD"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Per video">
+              <input className={input} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="20" />
+            </Field>
+            <Field label="Videos a day">
+              <input className={input} inputMode="decimal" value={perDay} onChange={(e) => setPerDay(e.target.value)} placeholder="2" />
+            </Field>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Fee (£)">
+              <input className={input} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="750" />
+            </Field>
+            <Field label="Delivery date">
+              <input type="date" className={input} value={p.due} onChange={(e) => setP({ ...p, due: e.target.value })} />
+            </Field>
+          </div>
+        )}
         <Field label="Stage">
           <select className={input} value={p.stage} onChange={(e) => setP({ ...p, stage: e.target.value as Project["stage"] })}>
             {STAGES.map((s) => (
