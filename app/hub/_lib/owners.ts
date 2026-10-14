@@ -1,5 +1,5 @@
 import "server-only";
-import { SUPABASE_KEY, SUPABASE_URL } from "./supabase/config";
+import { SUPABASE_KEY, SUPABASE_URL, emailList } from "./supabase/config";
 
 /* Owners (HUB_OWNER_EMAILS, comma-separated) never pay, can use the server's
    TrendTrack key and can open /hub/admin. Because that's decided by email,
@@ -8,11 +8,7 @@ import { SUPABASE_KEY, SUPABASE_URL } from "./supabase/config";
 
 export function isOwnerEmail(email: string | null | undefined) {
   if (!email) return false;
-  return (process.env.HUB_OWNER_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean)
-    .includes(email.toLowerCase());
+  return emailList(process.env.HUB_OWNER_EMAILS).includes(email.trim().toLowerCase());
 }
 
 let settings: { until: number; confirming: boolean } | null = null;
