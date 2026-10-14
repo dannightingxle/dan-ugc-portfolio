@@ -40,10 +40,10 @@ export function parseJobs(text: string): Raw[] {
   const body = text.replace(/^\s*```[a-z]*\s*$/gim, "");
   const start = body.search(/[[{]/);
   const end = Math.max(body.lastIndexOf("]"), body.lastIndexOf("}"));
-  if (start < 0 || end < start) throw new Error("No JSON found - paste the whole reply, including the [ ... ] part.");
+  if (start < 0) throw new Error("No JSON found - paste the whole reply, including the [ ... ] part.");
   let data: unknown;
   try {
-    data = JSON.parse(body.slice(start, end + 1));
+    data = JSON.parse(body.slice(start, end < start ? undefined : end + 1));
   } catch {
     throw new Error("That JSON is cut off or broken. If the reply was split, paste every part, in order.");
   }
