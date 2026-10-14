@@ -60,7 +60,7 @@ export function TechJobs({ title, studioLink }: { title: string; studioLink?: bo
               <Link
                 key={p.id}
                 href={`/hub/projects/${p.id}/studio`}
-                className={`rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong ${p.techStage === "On hold" ? "opacity-60" : ""}`}
+                className={`min-w-0 rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong ${p.techStage === "On hold" ? "opacity-60" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate font-medium">{p.brand || "Untitled"}</p>
