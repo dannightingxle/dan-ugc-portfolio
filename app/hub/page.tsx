@@ -9,7 +9,8 @@ import { ExampleTag } from "./projects/fields";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { useFeature } from "./account-provider";
 import { TechJobs } from "./studio/tech-jobs";
-import { Sparkline, StarButton, StatusPill, Thumb, compact, gbp, shortDate, useApi } from "./_lib/ui";
+import { Sparkline, StarButton, StatusPill, Thumb, compact, shortDate, useApi } from "./_lib/ui";
+import { useMoney } from "./_lib/money";
 
 /* Dashboard: projects and money first, then every starred ad with live numbers. */
 
@@ -24,11 +25,15 @@ export default function HubHome() {
   const totalReach = ads.reduce((s, a) => s + (a.reach ?? 0), 0);
   const longest = ads.reduce((m, a) => Math.max(m, a.daysRunning ?? 0), 0);
 
-  const earned = projects.filter((p) => p.paymentStatus === "Paid").reduce((s, p) => s + (p.fee ?? 0), 0);
+  // Every fee in the account's currency, converted at today's rates.
+  const { convert, format, base } = useMoney();
+  const total = (list: typeof projects) => list.reduce((s, p) => s + (p.fee == null ? 0 : convert(p.fee, p.feeCurrency)), 0);
+  const earned = total(projects.filter((p) => p.paymentStatus === "Paid"));
   const invoiced = projects.filter((p) => p.paymentStatus === "Invoiced");
-  const awaiting = invoiced.reduce((s, p) => s + (p.fee ?? 0), 0);
+  const awaiting = total(invoiced);
   const overdue = invoiced.filter((p) => paymentDue(p)?.overdue).length;
-  const pipeline = projects.filter((p) => p.paymentStatus === "Not invoiced").reduce((s, p) => s + (p.fee ?? 0), 0);
+  const pipeline = total(projects.filter((p) => p.paymentStatus === "Not invoiced"));
+  const converted = projects.some((p) => p.fee != null && p.feeCurrency !== base);
   // Tech jobs have their own list above when Studio is on.
   const upNext = projects
     .filter((p) => p.stage !== "Delivered" && p.stage !== "Paid" && !(studio && p.techStage))
@@ -57,11 +62,12 @@ export default function HubHome() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Tile label="Earned" value={gbp(earned)} accent={earned > 0} />
-          <Tile label="Awaiting payment" value={gbp(awaiting)} note={overdue ? `${overdue} overdue` : undefined} />
-          <Tile label="In the pipeline" value={gbp(pipeline)} />
+          <Tile label="Earned" value={format(earned)} accent={earned > 0} />
+          <Tile label="Awaiting payment" value={format(awaiting)} note={overdue ? `${overdue} overdue` : undefined} />
+          <Tile label="In the pipeline" value={format(pipeline)} />
           <Tile label="Active projects" value={projects.filter((p) => p.stage !== "Paid").length.toString()} />
         </div>
+        {converted && <p className="-mt-2 text-xs text-text-dim">Fees in other currencies are converted to {base} at today&apos;s rates.</p>}
 
         {followups && waiting.length > 0 && (
           <div className="rounded-2xl border border-border bg-bg-card">

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { CURRENCIES, STAGES, TECH_STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
-import { gbp, shortDate } from "../_lib/ui";
-import { useFeature } from "../account-provider";
-import { ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
+import { STAGES, TECH_STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
+import { money, shortDate } from "../_lib/ui";
+import { useAccount, useFeature } from "../account-provider";
+import { CurrencySelect, ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
 
 /* Project board: every brand deal from pitch to paid. */
 
@@ -99,7 +99,7 @@ function ProjectCard({ p }: { p: Project }) {
         <p className="text-sm font-medium">{p.title || "Untitled"}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-text-dim">
-        {p.fee != null && <span className="font-medium text-text">{gbp(p.fee)}</span>}
+        {p.fee != null && <span className="font-medium text-text">{money(p.fee, p.feeCurrency)}</span>}
         <PaymentPill project={p} />
       </div>
       <div className="flex justify-between text-xs text-text-dim">
@@ -128,7 +128,8 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
   const router = useRouter();
   const followups = useFeature("followups");
   const studio = useFeature("studio");
-  const [p, setP] = useState(() => newProject(tech ? { techStage: "Setup", stage: "Filming" } : {}));
+  const currency = useAccount().user?.currency ?? "GBP";
+  const [p, setP] = useState(() => newProject(tech ? { techStage: "Setup", stage: "Filming", feeCurrency: currency } : { feeCurrency: currency }));
   const [fee, setFee] = useState("");
   const [perDay, setPerDay] = useState("");
 
@@ -175,13 +176,7 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
         {p.techStage ? (
           <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-3">
             <Field label="Currency">
-              <select className={input} value={p.currency} onChange={(e) => setP({ ...p, currency: e.target.value as Project["currency"] })}>
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c === "GBP" ? "£ GBP" : "$ USD"}
-                  </option>
-                ))}
-              </select>
+              <CurrencySelect value={p.currency} onChange={(currency) => setP({ ...p, currency })} />
             </Field>
             <Field label="Per video">
               <input className={input} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="20" />
@@ -191,8 +186,11 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
             </Field>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Fee (£)">
+          <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-3">
+            <Field label="Currency">
+              <CurrencySelect value={p.feeCurrency} onChange={(feeCurrency) => setP({ ...p, feeCurrency })} />
+            </Field>
+            <Field label="Fee">
               <input className={input} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="750" />
             </Field>
             <Field label="Delivery date">

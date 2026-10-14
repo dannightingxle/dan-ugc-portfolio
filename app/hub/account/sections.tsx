@@ -190,12 +190,13 @@ const csvCell = (v: unknown) => {
 };
 
 function projectsCsv(projects: Project[]) {
-  const head = ["Brand", "Project", "Stage", "Fee (GBP)", "Payment", "Invoice no.", "Invoiced on", "Paid on", "Deliver by", "Contact", "Contact email"];
+  const head = ["Brand", "Project", "Stage", "Fee", "Currency", "Payment", "Invoice no.", "Invoiced on", "Paid on", "Deliver by", "Contact", "Contact email"];
   const rows = projects.map((p) => [
     p.brand,
     p.title,
     p.stage,
     p.fee ?? "",
+    p.feeCurrency,
     p.paymentStatus,
     p.invoiceNumber,
     p.invoicedOn,

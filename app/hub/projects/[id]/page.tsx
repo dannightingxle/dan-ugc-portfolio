@@ -8,7 +8,6 @@ import {
   PAYMENT_STATUSES,
   SHIPPING,
   STAGES,
-  CURRENCIES,
   TECH_STAGES,
   paymentDue,
   techMonthly,
@@ -19,8 +18,8 @@ import {
   type Deliverable,
   type Project,
 } from "../../_lib/store";
-import { compact, gbp, money, shortDate } from "../../_lib/ui";
-import { Field, PaymentPill, Section, input, parseMoney } from "../fields";
+import { compact, money, shortDate } from "../../_lib/ui";
+import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "../fields";
 
 /* One project: dates, payment, contact, the full brief, links and notes.
    Every change saves straight away - there's no save button. */
@@ -172,15 +171,20 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </Section>
           )}
           <Section title="Payment" action={<PaymentPill project={project} />}>
-            <Field label="Fee (£)">
-              <input
-                className={`${input} text-lg font-semibold`}
-                inputMode="decimal"
-                defaultValue={project.fee ?? ""}
-                onBlur={(e) => set("fee", parseMoney(e.target.value))}
-                placeholder="0"
-              />
-            </Field>
+            <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+              <Field label="Currency">
+                <CurrencySelect value={project.feeCurrency} onChange={(c) => set("feeCurrency", c)} />
+              </Field>
+              <Field label="Fee">
+                <input
+                  className={`${input} text-lg font-semibold`}
+                  inputMode="decimal"
+                  defaultValue={project.fee ?? ""}
+                  onBlur={(e) => set("fee", parseMoney(e.target.value))}
+                  placeholder="0"
+                />
+              </Field>
+            </div>
             <div className="grid grid-cols-3 gap-1 rounded-lg bg-bg-elevated p-1">
               {PAYMENT_STATUSES.map((s) => (
                 <button
@@ -563,7 +567,7 @@ function LinkedAds({ project, onChange }: { project: Project; onChange: (ids: st
       )}
       {project.fee != null && project.adIds.length > 0 && (
         <p className="text-xs text-text-dim">
-          {gbp(project.fee)} fee · {compact(ads.filter((a) => project.adIds.includes(a.id)).reduce((s, a) => s + (a.reach ?? 0), 0))} reach so far
+          {money(project.fee, project.feeCurrency)} fee · {compact(ads.filter((a) => project.adIds.includes(a.id)).reduce((s, a) => s + (a.reach ?? 0), 0))} reach so far
         </p>
       )}
     </Section>
@@ -577,13 +581,7 @@ function TechPay({ project, set }: { project: Project; set: <K extends keyof Pro
     <div className="space-y-2">
       <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-2">
         <Field label="Currency">
-          <select className={input} value={project.currency} onChange={(e) => set("currency", e.target.value as Project["currency"])}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c === "GBP" ? "£ GBP" : "$ USD"}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect value={project.currency} onChange={(c) => set("currency", c)} />
         </Field>
         <Field label="Per video">
           <input className={input} inputMode="decimal" defaultValue={project.perVideo ?? ""} onChange={(e) => set("perVideo", parseMoney(e.target.value))} placeholder="20" />

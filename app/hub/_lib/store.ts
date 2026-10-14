@@ -4,6 +4,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Ad } from "./types";
 import { exampleProject } from "./example-project";
+import type { Currency } from "./currencies";
 
 /* Starred ads and projects. Pages read and write through the hooks at the
    bottom; underneath, data lives either in the signed-in user's Supabase rows
@@ -23,9 +24,8 @@ export const SHIPPING = ["Not needed", "Waiting", "On its way", "Received"] as c
 /** Tech UGC jobs (a dedicated account posting for an app) move through these instead. */
 export const TECH_STAGES = ["Negotiating", "Account creation", "Setup", "Warm-up", "Active", "On hold", "Ended"] as const;
 export type TechStage = (typeof TECH_STAGES)[number];
-/** Tech jobs are paid per video, in either currency. */
-export const CURRENCIES = ["USD", "GBP"] as const;
-export type Currency = (typeof CURRENCIES)[number];
+// Fees and per-video rates can be in any of these; totals are converted to the account's currency.
+export { CURRENCIES, type Currency } from "./currencies";
 
 export type Deliverable = { id: string; item: string; qty: number; format: string; length: string; done: boolean };
 export type LinkItem = { id: string; label: string; url: string };
@@ -45,6 +45,7 @@ export type Project = {
   goLive: string;
   // Payment
   fee: number | null;
+  feeCurrency: Currency;
   paymentStatus: PaymentStatus;
   invoiceNumber: string;
   invoicedOn: string;
@@ -89,6 +90,7 @@ export function newProject(partial: Partial<Project> = {}): Project {
     due: "",
     goLive: "",
     fee: null,
+    feeCurrency: "GBP",
     paymentStatus: "Not invoiced",
     invoiceNumber: "",
     invoicedOn: "",

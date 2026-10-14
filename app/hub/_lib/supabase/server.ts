@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { SUPABASE_KEY, SUPABASE_URL, accountsEnabled } from "./config";
+import { isCurrency, type Currency } from "../currencies";
 
 /** Supabase client for route handlers and server components, acting as the signed-in user. */
 export async function serverClient() {
@@ -19,7 +20,8 @@ export async function serverClient() {
   });
 }
 
-export type HubUser = { id: string; email: string; name: string };
+/** currency: what totals are shown in (set on the account page). */
+export type HubUser = { id: string; email: string; name: string; currency: Currency };
 
 /** The signed-in user, or null (also null when accounts aren't set up). */
 export async function currentUser(): Promise<HubUser | null> {
@@ -28,5 +30,6 @@ export async function currentUser(): Promise<HubUser | null> {
   const { data } = await db.auth.getUser();
   if (!data.user) return null;
   const email = data.user.email ?? "";
-  return { id: data.user.id, email, name: (data.user.user_metadata?.name as string | undefined) || email.split("@")[0] };
+  const meta = data.user.user_metadata ?? {};
+  return { id: data.user.id, email, name: (meta.name as string | undefined) || email.split("@")[0], currency: isCurrency(meta.currency) ? meta.currency : "GBP" };
 }

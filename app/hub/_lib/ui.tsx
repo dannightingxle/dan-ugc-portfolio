@@ -15,9 +15,11 @@ export function gbp(n: number | null | undefined) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(n);
 }
 
-export function money(n: number | null | undefined, currency: "GBP" | "USD") {
+export const CURRENCY_LABEL = { GBP: "£ GBP", USD: "$ USD", EUR: "€ EUR", AUD: "A$ AUD", CAD: "CA$ CAD" } as const;
+
+export function money(n: number | null | undefined, currency: keyof typeof CURRENCY_LABEL) {
   if (n == null) return "–";
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency, currencyDisplay: "narrowSymbol", maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency, currencyDisplay: currency === "USD" ? "narrowSymbol" : "symbol", maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
 }
 
 export function shortDate(d: string | null | undefined) {
