@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { OFFER } from "../offer";
+import OnboardingForm from "../onboarding-form";
 import { Shell, Steps } from "../parts";
 
 /* Where Stripe sends people after they pay for the mentorship. Set this page's
@@ -47,11 +48,14 @@ export default function MentorshipWelcomePage() {
                 body: "To the full course in Skool and to the mentorship WhatsApp group, using the phone number you gave at checkout.",
               },
               {
-                title: "Get started",
-                body: "Watch The A to Z of UGC and the pinned welcome post, then introduce yourself in the group.",
+                title: "Tell me about you",
+                body: "Fill in the short form below so I know where you're at, then watch The A to Z of UGC in the group.",
               },
             ]}
           />
+        </div>
+        <div className="mt-12">
+          <OnboardingForm />
         </div>
       </div>
     </Shell>
