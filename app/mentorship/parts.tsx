@@ -22,7 +22,7 @@ export function Shell({ cta, children }: { cta?: { href: string; label: string }
           )}
         </div>
       </header>
-      <main className="relative z-10 mx-auto w-full max-w-[1200px] px-6 lg:px-10 pt-12 sm:pt-20 pb-24">{children}</main>
+      <main className="relative z-10 mx-auto w-full max-w-[1200px] px-6 lg:px-10 pt-10 sm:pt-20 pb-16 sm:pb-24">{children}</main>
       <footer className="relative z-10 border-t border-[color:var(--border)]">
         <div className="mx-auto max-w-[1200px] px-6 lg:px-10 py-8 text-xs text-[color:var(--text-dim)]">
           © {new Date().getFullYear()} Dan Nightingale. Payments are handled securely by Stripe.
@@ -57,11 +57,14 @@ export function Dot() {
 
 export function ModuleGrid() {
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
       {MODULES.map((m, i) => (
-        <div key={m.title} className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-6 flex flex-col">
-          <span className="font-display text-4xl text-[color:var(--accent)]">{String(i + 1).padStart(2, "0")}</span>
-          <h3 className="mt-3 font-semibold text-[color:var(--text)]">{m.title}</h3>
+        <div key={m.title} className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-5 sm:p-6 flex flex-col">
+          {/* Phones: number beside the title, to keep eight cards from running on. */}
+          <div className="flex items-baseline gap-3 sm:block">
+            <span className="font-display text-3xl sm:text-4xl text-[color:var(--accent)]">{String(i + 1).padStart(2, "0")}</span>
+            <h3 className="sm:mt-3 font-semibold text-[color:var(--text)]">{m.title}</h3>
+          </div>
           <p className="mt-2 text-sm leading-relaxed text-[color:var(--text-muted)]">{m.body}</p>
           {m.tag && (
             <span className="mt-4 self-start rounded-full border border-[color:var(--accent)] px-3 py-1 text-xs text-[color:var(--accent)]">
