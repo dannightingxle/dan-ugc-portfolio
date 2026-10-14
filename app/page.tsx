@@ -956,12 +956,22 @@ function WorkCard({ item }: { item: WorkItem }) {
   const [scrubbing, setScrubbing] = useState(false);
   const poster = item.videoSrc.replace(/\/([^/]+)\.mp4$/, "/posters/$1.jpg");
 
+  /* The source is attached only while a clip is on screen, and taken away
+     again when it scrolls off. A paused video keeps its decoded frames, and
+     the carousel holds ~100 cards: on iPhones (above all inside Instagram's
+     in-app browser) that memory piled up until the tab crashed with "A problem
+     repeatedly occurred". Unloading puts the card back to its poster. */
+  const attach = (el: HTMLVideoElement) => {
+    if (!el.getAttribute("src")) el.src = item.videoSrc;
+  };
+
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
+          attach(el);
           el.play().catch(() => {});
         } else {
           el.pause();
@@ -969,6 +979,12 @@ function WorkCard({ item }: { item: WorkItem }) {
           if (!el.muted) {
             el.muted = true;
             setMuted(true);
+          }
+          if (el.getAttribute("src")) {
+            el.removeAttribute("src");
+            el.load();
+            setBuffering(false);
+            setTime(0);
           }
         }
       },
@@ -987,13 +1003,16 @@ function WorkCard({ item }: { item: WorkItem }) {
       io.disconnect();
       window.removeEventListener(AUDIO_EVENT, onOtherAudio);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const togglePlay = () => {
     const el = videoRef.current;
     if (!el) return;
-    if (el.paused) el.play().catch(() => {});
-    else el.pause();
+    if (el.paused) {
+      attach(el);
+      el.play().catch(() => {});
+    } else el.pause();
   };
 
   const seekTo = (seconds: number) => {
@@ -1057,6 +1076,7 @@ function WorkCard({ item }: { item: WorkItem }) {
     setMuted(el.muted);
     if (!el.muted) {
       window.dispatchEvent(new CustomEvent(AUDIO_EVENT, { detail: el }));
+      attach(el);
       el.play().catch(() => {});
     }
   };
@@ -1066,7 +1086,6 @@ function WorkCard({ item }: { item: WorkItem }) {
       <div className="hover-lift group relative aspect-[9/16] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden">
         <video
           ref={videoRef}
-          src={item.videoSrc}
           poster={poster}
           muted
           loop
