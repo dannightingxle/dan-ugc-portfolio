@@ -20,6 +20,7 @@ export function useMoney() {
     },
     [base, data],
   );
-  const format = useCallback((n: number | null | undefined) => money(n, base), [base]);
+  // Converted totals are rounded to whole units - pence after a conversion are just noise.
+  const format = useCallback((n: number | null | undefined) => money(n == null ? n : Math.round(n), base), [base]);
   return { base, convert, format };
 }
