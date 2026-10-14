@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import { OFFER } from "../mentorship/offer";
 
 /* Link-in-bio page (/links) - the one URL for TikTok/Instagram bios.
    Fill in the empty hrefs as each piece goes live; links with no href are hidden. */
 
 export const metadata: Metadata = {
   title: "Dan Nightingale — Links",
-  description: "UGC creator. My portfolio, the UGC course waitlist and socials.",
+  description: "UGC creator. My portfolio, the free A to Z of UGC, the Anyone Can Create mentorship and socials.",
   openGraph: {
     title: "Dan Nightingale — Links",
-    description: "My portfolio, the UGC course waitlist and socials.",
+    description: "My portfolio, the free A to Z of UGC, the Anyone Can Create mentorship and socials.",
     type: "website",
   },
 };
@@ -20,15 +21,22 @@ type LinkItem = {
   tag?: string;
   featured?: boolean;
   thumb?: React.ReactNode;
+  /** A smaller second link under the card, e.g. the same video on YouTube. Hidden when href is empty. */
+  alt?: { label: string; href: string };
 };
+
+/* The A to Z of UGC on YouTube - paste the video link here and an "or watch it on YouTube"
+   link appears under the free card. The card itself goes to the free Skool community. */
+const AZ_YOUTUBE = "";
 
 const LINKS: LinkItem[] = [
   {
-    label: "Free: The A-Z of UGC",
-    note: "30-minute masterclass for complete beginners",
-    href: "", // add the video link when it's live
-    tag: "Watch free",
+    label: "Free: The A to Z of UGC",
+    note: "My 30-minute masterclass for beginners. Free when you join my community, along with brand requests for creators.",
+    href: OFFER.skoolUrl,
+    tag: "Get free access",
     featured: true,
+    alt: { label: "Or watch it on YouTube", href: AZ_YOUTUBE },
     thumb: (
       <Tile>
         <span className="flex flex-col items-center leading-none">
@@ -46,10 +54,10 @@ const LINKS: LinkItem[] = [
     ),
   },
   {
-    label: "Anyone Can Create",
-    note: "My UGC course + mentorship is coming soon. Register your interest",
-    href: "/waitlist",
-    tag: "Learn more",
+    label: "Anyone Can Create Mentorship",
+    note: "Land paid UGC deals around your 9-5, with the full course, feedback from me and referrals to paid work.",
+    href: "/mentorship",
+    tag: "See what's included",
     thumb: (
       <Tile>
         <span className="text-[21px]">
@@ -157,6 +165,11 @@ export default function LinksPage() {
                   </span>
                 )}
               </a>
+              {l.alt?.href && (
+                <a href={l.alt.href} className="mt-2 block text-center text-sm text-[color:var(--text-muted)] underline underline-offset-4 hover:text-[color:var(--text)]">
+                  {l.alt.label}
+                </a>
+              )}
             </li>
           ))}
         </ul>
