@@ -1,0 +1,573 @@
+<title>Anyone Can Create Course Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout: one 1040px column. Hero, this week's checklist, release timeline,
+   Skool's two places (pinned posts, then the classroom as course cards that
+   open into lessons), the evidence, then setup steps. */
+:root {
+  --bg: #0a0a0a;
+  --bg-card: #151514;
+  --bg-raised: #1c1b1a;
+  --border: #282624;
+  --border-strong: #3a3735;
+  --text: #f5f4f2;
+  --muted: #a5a29e;
+  --dim: #75716d;
+  --accent: #ff6b35;
+  --accent-soft: rgba(255, 107, 53, 0.12);
+  --on-accent: #0a0a0a;
+  --good: #5fc48a;
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-body: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #faf9f7; --bg-card: #ffffff; --bg-raised: #f3f1ee; --border: #e7e4e0; --border-strong: #d4d0cb;
+    --text: #121110; --muted: #55524e; --dim: #87837e; --accent: #e8551f; --accent-soft: rgba(232, 85, 31, 0.1);
+    --on-accent: #ffffff; --good: #1f8a50; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #faf9f7; --bg-card: #ffffff; --bg-raised: #f3f1ee; --border: #e7e4e0; --border-strong: #d4d0cb;
+  --text: #121110; --muted: #55524e; --dim: #87837e; --accent: #e8551f; --accent-soft: rgba(232, 85, 31, 0.1);
+  --on-accent: #ffffff; --good: #1f8a50; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 96px; display: flex; flex-direction: column; gap: 72px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.01em; line-height: 0.95; }
+.display em { color: var(--accent); }
+.eyebrow { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+section { display: flex; flex-direction: column; gap: 24px; }
+.section-head { display: flex; flex-direction: column; gap: 10px; max-width: 660px; }
+.section-head h2 { font-size: clamp(34px, 5vw, 46px); }
+.section-head p { color: var(--muted); }
+.sub-head { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.sub-head h3 { font-size: 20px; font-weight: 600; }
+.sub-head p { color: var(--muted); font-size: 14px; max-width: 640px; }
+
+/* hero */
+.hero { display: flex; flex-direction: column; gap: 20px; }
+.hero h1 { font-size: clamp(54px, 10vw, 104px); }
+.hero .lede { font-size: 18px; color: var(--muted); max-width: 620px; }
+.stats { display: flex; flex-wrap: wrap; gap: 10px 28px; color: var(--muted); font-size: 14px; }
+.stats b { color: var(--text); font-weight: 600; }
+
+/* this week */
+.week { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.panel { border: 1px solid var(--border); background: var(--bg-card); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.panel.hot { border-color: var(--accent); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg-card); }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.panel-head h3 { font-size: 17px; font-weight: 600; }
+.panel-head span { font-size: 13px; color: var(--muted); }
+.todo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.todo label { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 10px 8px; margin-inline: -8px; border-radius: 10px; cursor: pointer; }
+.todo label:hover { background: var(--bg-raised); }
+.todo input { appearance: none; width: 20px; height: 20px; margin: 2px 0 0; border: 1.5px solid var(--border-strong); border-radius: 6px; display: grid; place-content: center; cursor: pointer; }
+.todo input::after { content: ""; width: 10px; height: 6px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); opacity: 0; }
+.todo input:checked { background: var(--accent); border-color: var(--accent); }
+.todo input:checked::after { opacity: 1; }
+.todo input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.todo .t { font-weight: 500; }
+.todo .n { color: var(--dim); font-family: var(--font-mono); font-size: 13px; }
+.todo .where { font-size: 12px; color: var(--accent); margin-left: 6px; white-space: nowrap; }
+.todo .why { display: block; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.todo input:checked + span .t { text-decoration: line-through; text-decoration-color: var(--dim); color: var(--muted); }
+.note { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 14px; }
+
+/* timeline */
+.timeline-scroll { overflow-x: auto; margin-inline: -20px; padding-inline: 20px; padding-bottom: 6px; }
+.timeline { display: grid; grid-template-columns: repeat(9, minmax(108px, 1fr)); min-width: 980px; position: relative; }
+.timeline::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 1px; background: var(--border-strong); }
+.stop { display: flex; flex-direction: column; gap: 8px; padding-right: 12px; position: relative; }
+.stop i { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--border-strong); background: var(--bg); position: relative; }
+.stop.launch i { background: var(--accent); border-color: var(--accent); }
+.stop.priority i { border-color: var(--accent); }
+.stop .when { font-size: 12.5px; color: var(--muted); }
+.stop.launch .when { color: var(--accent); font-weight: 600; }
+.stop .what { font-size: 14px; font-weight: 500; line-height: 1.35; }
+
+/* skool places */
+.places { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.place { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); }
+.place b { color: var(--text); font-size: 15px; }
+.pinned { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pin { border: 1px solid var(--border-strong); background: var(--bg-card); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pin .label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent); }
+.pin h4 { margin: 0; font-size: 16px; font-weight: 600; }
+.pin p { font-size: 14px; color: var(--muted); }
+
+/* classroom */
+.classroom { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.course { border: 1px solid var(--border); background: var(--bg-card); border-radius: 18px; overflow: hidden; }
+.course.first { border-color: var(--accent); }
+.course summary { list-style: none; cursor: pointer; padding: 22px 24px; display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; }
+.course summary::-webkit-details-marker { display: none; }
+.course summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 18px; }
+.course .num { grid-row: span 3; font-family: var(--font-display); font-size: 46px; line-height: 0.9; color: var(--accent); min-width: 44px; }
+.course h3 { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.course .desc { font-size: 14px; color: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); white-space: nowrap; }
+.pill.live { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.pill.tag { border-color: var(--accent); color: var(--accent); }
+.chev { margin-left: auto; color: var(--dim); font-size: 13px; }
+.course[open] .chev::after { content: "Hide lessons"; }
+.course:not([open]) .chev::after { content: "Show lessons"; }
+.lessons { list-style: none; margin: 0; padding: 0 12px 12px; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.lesson { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 12px; padding: 14px 12px; border-bottom: 1px solid var(--border); align-items: start; }
+.lesson .ico { font-size: 12px; margin-top: 3px; color: var(--dim); text-align: center; }
+.lesson.now .ico { color: var(--accent); }
+.lesson .lt { font-weight: 500; font-size: 14.5px; }
+.lesson .lc { grid-column: 2 / 4; font-size: 13.5px; color: var(--muted); }
+.lesson .len { font-size: 12.5px; color: var(--dim); white-space: nowrap; margin-top: 2px; }
+.lesson .row { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.set { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--dim); padding: 18px 12px 6px; border-bottom: 1px solid var(--border); }
+.copy { font: inherit; font-size: 12.5px; color: var(--text); background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.copy:hover { border-color: var(--accent); }
+.copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.copy.done { color: var(--good); border-color: var(--good); }
+.opens { font-size: 12.5px; color: var(--muted); }
+.lesson.now .opens { color: var(--accent); font-weight: 500; }
+
+/* evidence */
+.evidence { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; align-items: start; }
+.bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.bar { display: grid; grid-template-columns: 1fr 36px; gap: 4px 12px; font-size: 14px; }
+.bar .track { grid-column: 1 / 3; height: 8px; border-radius: 4px; background: var(--bg-raised); overflow: hidden; }
+.bar .fill { height: 100%; background: var(--border-strong); border-radius: 4px; }
+.bar.top .fill { background: var(--accent); }
+.bar .n { text-align: right; color: var(--muted); }
+.quotes { display: flex; flex-direction: column; gap: 14px; }
+blockquote { margin: 0; padding: 0 0 0 16px; border-left: 2px solid var(--accent); display: flex; flex-direction: column; gap: 6px; }
+blockquote p { font-family: var(--font-display); font-size: 21px; line-height: 1.25; }
+blockquote cite { font-style: normal; font-size: 13px; color: var(--muted); }
+.small-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.small-stats div { display: flex; flex-direction: column; gap: 2px; }
+.small-stats b { font-family: var(--font-display); font-weight: 400; font-size: 38px; line-height: 1; }
+.small-stats span { font-size: 13px; color: var(--muted); }
+
+/* skool setup */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; counter-reset: step; }
+.steps li { counter-increment: step; display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--muted); }
+.steps li::before { content: "Step " counter(step); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent); }
+.steps b { color: var(--text); font-weight: 600; }
+.placeholder { font-family: var(--font-mono); font-size: 13px; white-space: pre-wrap; background: var(--bg-card); border: 1px dashed var(--border-strong); border-radius: 14px; padding: 18px 20px; color: var(--muted); }
+.aside { color: var(--muted); font-size: 14px; max-width: 660px; }
+
+footer { font-size: 13px; color: var(--dim); }
+
+@media (max-width: 820px) {
+  .week, .classroom, .evidence, .pinned { grid-template-columns: 1fr; }
+  .places { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .wrap { padding-inline: 16px; gap: 56px; }
+  .timeline-scroll { margin-inline: -16px; padding-inline: 16px; }
+  .steps { grid-template-columns: 1fr; }
+  .course summary { padding: 18px; gap: 6px 14px; }
+  .course .num { font-size: 38px; min-width: 34px; }
+  .small-stats b { font-size: 32px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .course[open] .lessons { animation: drop 0.22s ease-out; }
+  @keyframes drop { from { opacity: 0.4; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow"><span class="dot"></span>UGC mentorship · Course map</div>
+    <h1 class="display">Anyone <em>Can Create.</em></h1>
+    <p class="lede">Every course and lesson for Skool, the order they open in, and what to film first. Tech UGC and Winning Jobs lead, because getting paid is what the waitlist asked for most.</p>
+    <div class="stats">
+      <span>Launch <b>Wed 14 Oct</b></span>
+      <span><b>9</b> courses</span>
+      <span><b id="lesson-count">0</b> lessons</span>
+      <span><b>5-min trailer</b> on every course</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Film first</div>
+      <h2 class="display">This <em>week.</em></h2>
+      <p>Launch with the A to Z, a pinned welcome post, a short trailer on every course, and the first lessons of Tech UGC and Winning Jobs. Finish Tech UGC over the weekend. Tick things off as you go.</p>
+    </div>
+    <div class="week">
+      <div class="panel hot">
+        <div class="panel-head"><h3>Before launch</h3><span>Mon 12 to Wed 14 Oct</span></div>
+        <ol class="todo" id="todo-launch"></ol>
+        <p class="note">Short on time? The A to Z, the welcome post, the trailers, "Where paid deals actually come from" and "What tech UGC is" are enough to open the doors. Everything else can follow on Friday.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>After launch</h3><span>Thu 15 to Sun 18 Oct</span></div>
+        <ol class="todo" id="todo-after"></ol>
+        <p class="note">That finishes Tech UGC for Monday 19th, so beginners can send you their referral test videos in their first week.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Release order</div>
+      <h2 class="display">One course <em>every Monday.</em></h2>
+      <p>Tech UGC finishes first because it gets beginners paid fastest. Your partner referrals give them a real shot at paid work inside the 30-day guarantee. Winning Jobs follows a week later. Everything else already has its trailer, so nobody is looking at an empty course.</p>
+    </div>
+    <div class="timeline-scroll"><div class="timeline" id="timeline"></div></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Skool</div>
+      <h2 class="display">Where things <em>live.</em></h2>
+      <p>Skool has a few tabs along the top. You'll mainly use two of them: Community for posts and Classroom for courses.</p>
+    </div>
+    <div class="places">
+      <div class="place"><b>Community</b>The feed. Posts, wins and questions. You can pin posts so they stay at the top, and that's the first thing new members see.</div>
+      <div class="place"><b>Classroom</b>The courses. Each one is a card that opens into lessons, which is everything below.</div>
+      <div class="place"><b>Calendar</b>Live calls. Add a weekly Q&amp;A here and members get reminders.</div>
+    </div>
+
+    <div class="sub-head">
+      <h3>Pinned in Community</h3>
+      <p>Two posts, pinned. Put the same videos in Start Here as well, so people can still find them once the feed gets busy.</p>
+    </div>
+    <div class="pinned">
+      <div class="pin"><span class="label">Pinned post 1 · Launch</span><h4>Start here: welcome and your roadmap</h4><p>A 10-minute video. What's inside, the Monday drops, the four stages (starting out, first content, first paid deal, regular and scaling) and what to do at each one. Tell people which course to start with for their stage. End by asking them to introduce themselves in the comments.</p></div>
+      <div class="pin"><span class="label">Pinned post 2 · Launch</span><h4>My toolkit: the apps and AI I use</h4><p>A written list with links: what each app is for, and whether it's free or paid. A short screen recording is a bonus. Callum and Sam both asked to get set up early.</p></div>
+    </div>
+
+    <div class="sub-head">
+      <h3>The Classroom</h3>
+      <p>In Skool order. Every course opens with its 5-minute trailer, and everything else stays locked until it's filmed. On a locked lesson, <b>Copy coming-soon text</b> gives you the text to paste into the lesson page, with the date filled in.</p>
+    </div>
+    <div class="classroom" id="classroom"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Why this order</div>
+      <h2 class="display">What they <em>asked for.</em></h2>
+    </div>
+    <div class="evidence">
+      <div class="panel">
+        <div class="panel-head"><h3>Biggest struggles</h3><span>out of 19 on the waitlist</span></div>
+        <ul class="bars" id="bars"></ul>
+      </div>
+      <div class="panel">
+        <div class="small-stats">
+          <div><b class="mono">11</b><span>haven't started yet</span></div>
+          <div><b class="mono">13</b><span>want pitch emails and brand lists</span></div>
+          <div><b class="mono">15</b><span>want short video lessons</span></div>
+        </div>
+        <div class="quotes">
+          <blockquote><p>"Where to start to get your first paid deal. I've done a few gifted but I want to turn them into paid."</p><cite>Chris</cite></blockquote>
+          <blockquote><p>"A breakdown of what is expected at each stage, what a good portfolio is, then how to land the first UGC deals."</p><cite>Callum</cite></blockquote>
+          <blockquote><p>"Your list of recommended apps and AI workflows... more time with the apps."</p><cite>Callum, a day later</cite></blockquote>
+          <blockquote><p>"How you use AI to make your work efficient... and how you find your paid deals, as I'm not loving some of the apps."</p><cite>Sam</cite></blockquote>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Setting it up</div>
+      <h2 class="display">Building it <em>in Skool.</em></h2>
+    </div>
+    <ol class="steps">
+      <li><b>Pin the two posts</b>Post them in Community, then use the post's menu to pin them.</li>
+      <li><b>Add every course</b>Classroom, then Add course, in the order above. Description, cover, access set to All members, published.</li>
+      <li><b>Trailer first, locks after</b>Add the trailer as the first page. Add a page for every other lesson with 🔒 at the start of the title and the coming-soon text. Keep them published, because draft pages are hidden from members.</li>
+      <li><b>Swap in the video</b>When a lesson is filmed, add the video, remove the 🔒, replace the text and post in Community that it's live.</li>
+    </ol>
+    <div class="placeholder" id="placeholder-sample"></div>
+    <p class="aside">If the group is paid, non-members can't see the classroom. Post the free A to Z somewhere public as well and link to it. The waitlist page still lists the original course names and says Course 1 opens on launch day, so it needs a quick update to match this.</p>
+  </section>
+
+  <footer>Sources: the UGC Mentorship Enquiries sheet (19 answers, 1 to 9 Oct) and replies to "A quick update on the launch". Ticks are saved in this browser only.</footer>
+</div>
+
+<script>
+const DATES = {
+  launch: { label: "Wed 14 Oct", long: "Wednesday 14 October" },
+  fri16: { label: "Fri 16 Oct", long: "Friday 16 October" },
+  oct19: { label: "Mon 19 Oct", long: "Monday 19 October" },
+  oct26: { label: "Mon 26 Oct", long: "Monday 26 October" },
+  nov2: { label: "Mon 2 Nov", long: "Monday 2 November" },
+  nov9: { label: "Mon 9 Nov", long: "Monday 9 November" },
+  nov16: { label: "Mon 16 Nov", long: "Monday 16 November" },
+  nov23: { label: "Mon 23 Nov", long: "Monday 23 November" },
+  nov30: { label: "Mon 30 Nov", long: "Monday 30 November" },
+  dec7: { label: "Mon 7 Dec", long: "Monday 7 December" },
+};
+
+/* Lessons: [title, what it covers, length, opens (only when it differs from the course)].
+   A string on its own starts a new set of lessons inside the course. */
+const COURSES = [
+  { num: "00", title: "The A to Z of UGC", tag: "Free", opens: "launch", noTrailer: true,
+    desc: "What UGC actually is, where the money is, and exactly how I'd start from zero today. Start here, whatever stage you're at.",
+    lessons: [
+      ["The A to Z of UGC", "What UGC is, how creators get paid (briefs, outreach, platforms, retainers, tech UGC accounts), and how I'd start from zero today.", "30 min"],
+    ] },
+  { num: "01", title: "Start Here", opens: "nov2",
+    desc: "Your roadmap, the apps you'll use, picking your niche, kit on a budget, and your first 30 days.",
+    lessons: [
+      ["Welcome and your roadmap", "The same video as the pinned post: what's inside, the four stages, and which course to start with for yours.", "10 min", "launch"],
+      ["How UGC really makes money", "A clip from the A to Z: briefs, outreach, platform jobs, retainers and tech UGC accounts.", "8 min", "launch"],
+      ["Your toolkit: the apps and AI I use", "The same list as the pinned post. Get set up now so you've had practice by the time you need them.", "8 min", "launch"],
+      ["Picking your niche", "Using what you already buy, do and know. Why being a customer is your best pitch.", "8 min"],
+      ["Kit on a budget", "Phone, light, mic, tripod. What I'd buy with £0, £50 and £150.", "8 min"],
+      ["Your first 30 days", "A week-by-week plan to your first paid deal, and how the guarantee works.", "8 min"],
+    ] },
+  { num: "02", title: "Content That Converts", opens: "nov9",
+    desc: "How brands judge a UGC ad, hooks, scripting, confidence on camera, filming, batching and light editing.",
+    lessons: [
+      ["How brands actually judge a UGC ad", "The performance marketer's view: hook, hold, proof, call to action, and why pretty doesn't win.", "10 min"],
+      ["Hooks and the first 3 seconds", "Hook formulas that work, with my best-performing examples.", "12 min"],
+      ["Scripting a 30 and 60 second ad", "Problem, product, proof, call to action. My script template.", "12 min"],
+      ["My AI prompts for hooks and scripts", "The exact prompts I use and how I edit what comes back.", "10 min"],
+      ["Reading a brief properly", "What the brand really wants, the must-haves, and the questions to ask before you film.", "8 min"],
+      ["Confidence on camera", "Talking to a lens without cringing: practice reps, teleprompter, and getting through the first 20 videos.", "10 min"],
+      ["Filming on your phone", "Light, sound, angles and framing at home.", "10 min"],
+      ["Batching a shoot", "A week of content in one afternoon.", "8 min"],
+      ["Light editing", "Cuts, captions and text on screen on your phone. What to send raw and what to send edited.", "10 min"],
+    ] },
+  { num: "03", title: "Your Portfolio", opens: "nov16",
+    desc: "What brands look for, making portfolio pieces with no clients, and building your portfolio site.",
+    lessons: [
+      ["What a good UGC portfolio looks like", "What brands look for, what they skip, and how many videos you need. A walkthrough of mine.", "10 min", "oct26"],
+      ["Portfolio pieces with no clients", "Spec ads for products you already own, and making them look like paid work.", "10 min"],
+      ["Building your portfolio site", "Step by step, start to finish.", "15 min"],
+      ["Keeping it fresh", "Swapping in paid work as it comes, and what to cut.", "6 min"],
+    ] },
+  { num: "04", title: "Tech UGC: Your First Paid Work", tag: "Start here if you're new", opens: "oct19", first: true,
+    desc: "The quickest route to getting paid. Learn the formats tech companies pay for, hit the standard, and I'll refer you to the tech UGC companies I work with.",
+    lessons: [
+      "Getting started",
+      ["What tech UGC is and why it's the easiest first paid work", "Dedicated accounts posting daily for an app: how it works, what it pays, and why it's great experience.", "10 min", "launch"],
+      ["How my partner referrals work", "I work with tech UGC companies and refer creators from this group. What they expect, how referral works, and why being coached here gives you an edge.", "8 min", "launch"],
+      "Making the content",
+      ["Formats that work for app promos", "The repeatable formats tech companies want, with examples.", "10 min"],
+      ["Hooks and scripts for app promos", "Writing hooks for apps, and a script template you can reuse every day.", "10 min"],
+      ["A week of videos in three afternoons", "My batching setup: tripod, teleprompter, and a second phone filming the app screen.", "12 min"],
+      "Getting referred",
+      ["Your referral test", "Make three videos to the brief and post them in the group. What I check before I refer you.", "8 min"],
+      ["Starting a job: setting up the account", "Profile, first posts, and what the company needs from you in week one.", "8 min"],
+      "Keeping the work",
+      ["The 5-minute Friday review", "Reading the numbers, doubling down on winners, testing new formats.", "8 min"],
+      ["Keeping the job and getting more", "Hitting your numbers, finding tech UGC work yourself, and running more than one job.", "10 min"],
+    ] },
+  { num: "05", title: "Winning Jobs", opens: "oct26", first: true,
+    desc: "Where paid deals come from: the platforms worth signing up to, a personal brand that brings brands to you, outreach, pricing and keeping clients.",
+    lessons: [
+      "Where the work is",
+      ["Where paid deals actually come from", "Every platform and channel ranked: which are worth your time, which to skip, and why some apps feel like a waste of time.", "12 min", "launch"],
+      ["The platforms worth signing up to", "Signing up, setting up a profile that gets picked, and how often to check each one.", "15 min", "launch"],
+      ["Applications that actually win", "Writing platform applications brands pick.", "10 min"],
+      ["From gifted to paid", "Turning gifted collabs into paid work: when to stop saying yes to free, and the message that asks for paid.", "10 min", "launch"],
+      "Inbound: brands come to you",
+      ["Positioning yourself so brands find you", "What your profile, bio and pinned posts say to a brand in five seconds.", "10 min"],
+      ["Personal brand content that brings in work", "What to post on your own TikTok and Instagram so brands DM you, and a simple weekly plan.", "12 min"],
+      ["Turning DMs and enquiries into paid work", "Replying to an enquiry, sending your rates, and getting to a yes.", "8 min"],
+      "Outbound: you go to them",
+      ["Finding brands with ad budget", "Meta Ad Library and TikTok Creative Center: every brand running ads is a brand that buys UGC.", "12 min"],
+      ["Cold DMs and emails that get replies", "My templates, walked through. Personalising in two minutes.", "12 min"],
+      ["Following up and tracking outreach", "When to follow up, when to move on, and the tracking sheet.", "8 min"],
+      "Pricing and keeping clients",
+      ["What to charge", "Rate cards, what's normal at each stage, and how not to undercharge.", "12 min"],
+      ["Usage rights explained", "Organic vs paid usage, how to price it, and what never to give away.", "10 min"],
+      ["Keeping clients", "Turning one brief into repeat work and retainers.", "10 min"],
+    ] },
+  { num: "06", title: "Tools, AI and Workflow", opens: "nov23",
+    desc: "Using AI for briefs, scripts and shot lists, the apps I use, and handing off to an editor.",
+    lessons: [
+      ["Using AI for briefs, research and shot lists", "Turning a brief into a shoot plan in minutes.", "12 min"],
+      ["One AI project per job", "How I set up AI for each client so it remembers the brief and what's working.", "12 min"],
+      ["Tracking deals, deadlines and payments", "The system I use so nothing slips.", "8 min"],
+      ["Handing off to an editor", "When it's worth it, what to send, and how to brief them.", "8 min"],
+      ["My week, brief to delivery", "The whole workflow end to end.", "10 min"],
+    ] },
+  { num: "07", title: "The Business Side", opens: "nov30",
+    desc: "Contracts, deposits, invoicing, tax basics and staying compliant.",
+    lessons: [
+      ["Contracts", "What to sign, what to push back on, and the clauses to watch.", "10 min"],
+      ["Deposits and getting paid on time", "Deposits, payment terms and chasing late payers politely.", "8 min"],
+      ["Invoicing", "What to put on an invoice, with my template.", "6 min"],
+      ["Tax basics for UK creators", "Registering with HMRC, side income, and what to put aside.", "10 min"],
+      ["Staying compliant", "Ad disclosure (#ad) and the ASA rules creators need to know.", "8 min"],
+    ] },
+  { num: "08", title: "Mentality, Routine and Health", opens: "dec7",
+    desc: "Handling rejection and slow months, and a weekly routine that fits around a job and a family.",
+    lessons: [
+      ["Handling rejection and ghosting", "Why most pitches get no reply, and keeping going anyway.", "8 min"],
+      ["Slow months", "What to do when work dries up.", "8 min"],
+      ["A weekly routine around a 9-5 and a family", "My actual week, and a template to make yours.", "10 min"],
+      ["Avoiding burnout", "Keeping this sustainable.", "8 min"],
+    ] },
+  { num: "+", title: "Resources", opens: "launch", noTrailer: true, downloads: true,
+    desc: "Templates and downloads. Most of the launch ones are already written in your outreach kit and rate card.",
+    lessons: [
+      ["Pitch Templates pack", "Cold DMs, cold emails, follow-ups and subject lines, with your own numbers swapped for blanks.", "Download"],
+      ["Brand target list by niche", "Brands with ad budget, sorted by niche.", "Download"],
+      ["Tech UGC referral test brief", "The brief for the three test videos.", "Download", "oct19"],
+      ["Outreach tracking sheet", "The sheet and stages for tracking every pitch.", "Download", "oct26"],
+      ["Rate card template", "A rate card members can fill in with their own prices.", "Download", "oct26"],
+      ["Script template", "The 30 and 60 second ad template.", "Download", "nov9"],
+      ["Invoice template", "A ready-to-use UK invoice.", "Download", "nov30"],
+    ] },
+];
+
+const TODO_LAUNCH = [
+  ["The A to Z of UGC", "Classroom", "Promised for launch day and free. It sells everything else."],
+  ["Welcome and your roadmap", "Pinned post", "11 of 19 haven't started. Callum asked for the stages."],
+  ["Eight course trailers", "Classroom", "5 minutes each. Film them in one sitting, about an hour."],
+  ["Where paid deals actually come from", "Winning Jobs", "All three email replies asked. 14 of 19 struggle to find brands."],
+  ["The platforms worth signing up to", "Winning Jobs", "Sam isn't loving some of the apps. Show which ones to use."],
+  ["What tech UGC is", "Tech UGC", "The quickest route to paid work for beginners."],
+  ["How my partner referrals work", "Tech UGC", "Your biggest selling point. Film it with the lesson above."],
+  ["From gifted to paid", "Winning Jobs", "Chris asked for exactly this."],
+  ["Toolkit post and Pitch Templates pack", "Post and Resources", "Both written, no filming. The templates are already in your outreach kit."],
+];
+const TODO_AFTER = [
+  ["Formats that work for app promos", "Tech UGC", "With examples from your own accounts."],
+  ["Hooks and scripts for app promos", "Tech UGC", "Includes the reusable script template."],
+  ["A week of videos in three afternoons", "Tech UGC", "Your batching setup."],
+  ["Your referral test and the brief", "Tech UGC", "Lets beginners send you test videos from Monday."],
+  ["Starting a job, Friday review, keeping the job", "Tech UGC", "Finishes the course for Monday 19th."],
+];
+
+const TIMELINE = [
+  ["launch", "A to Z, pinned posts, all trailers, first lessons of Tech UGC and Winning Jobs", "launch"],
+  ["oct19", "Tech UGC: Your First Paid Work", "priority"],
+  ["oct26", "Winning Jobs", "priority"],
+  ["nov2", "Start Here (the rest)"],
+  ["nov9", "Content That Converts"],
+  ["nov16", "Your Portfolio"],
+  ["nov23", "Tools, AI and Workflow"],
+  ["nov30", "The Business Side"],
+  ["dec7", "Mentality, Routine and Health"],
+];
+
+const STRUGGLES = [
+  ["Finding and pitching brands", 14], ["Confidence on camera", 11], ["Knowing where to start", 10],
+  ["Scripts and hooks", 10], ["Knowing what to charge", 10], ["Getting repeat clients", 8],
+  ["Filming and editing", 5], ["Fitting it around a full-time job", 4], ["Building a portfolio", 2],
+];
+
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const placeholderText = (dateKey, covers) =>
+  `🔒 Coming ${DATES[dateKey].long}\n\nIn this lesson: ${covers}\n\nWant this one sooner? Comment below with what you're stuck on - the most-asked lessons get made first.`;
+
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem("acc-ticks-v2") || "{}"); } catch (e) { saved = {}; }
+function renderTodo(listId, items, prefix) {
+  const ol = document.getElementById(listId);
+  items.forEach(([t, where, why], i) => {
+    const id = `${prefix}-${i}`;
+    const li = el("li"); const label = el("label"); label.htmlFor = id;
+    const box = el("input"); box.type = "checkbox"; box.id = id; box.checked = !!saved[id];
+    box.addEventListener("change", () => {
+      saved[id] = box.checked;
+      try { localStorage.setItem("acc-ticks-v2", JSON.stringify(saved)); } catch (e) {}
+    });
+    const span = el("span");
+    const title = el("span", "t"); title.append(el("span", "n", `${i + 1}. `), t);
+    span.append(title, el("span", "where", where), el("span", "why", why));
+    label.append(box, span); li.append(label); ol.append(li);
+  });
+}
+renderTodo("todo-launch", TODO_LAUNCH, "l");
+renderTodo("todo-after", TODO_AFTER, "a");
+
+const tl = document.getElementById("timeline");
+TIMELINE.forEach(([key, what, kind]) => {
+  const stop = el("div", "stop" + (kind ? " " + kind : ""));
+  stop.append(el("i"), el("span", "when mono", DATES[key].label), el("span", "what", what));
+  tl.append(stop);
+});
+
+function copyButton(text) {
+  const btn = el("button", "copy", "Copy coming-soon text"); btn.type = "button";
+  btn.addEventListener("click", () => {
+    const ok = () => { btn.textContent = "Copied"; btn.classList.add("done"); setTimeout(() => { btn.textContent = "Copy coming-soon text"; btn.classList.remove("done"); }, 1600); };
+    try { navigator.clipboard.writeText(text).then(ok, () => fallback(text, btn)); }
+    catch (e) { fallback(text, btn); }
+  });
+  return btn;
+}
+function fallback(text, btn) {
+  const ta = el("textarea"); ta.value = text; ta.setAttribute("readonly", "");
+  ta.style.cssText = "width:100%;margin-top:8px;font:inherit;font-size:12.5px;background:var(--bg-raised);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;padding:8px;";
+  ta.rows = 5; btn.replaceWith(ta); ta.focus(); ta.select();
+}
+
+const room = document.getElementById("classroom");
+let lessonTotal = 0;
+COURSES.forEach((c) => {
+  const items = c.noTrailer ? c.lessons.slice() : [
+    ["What's in this course", "A 5-minute trailer: what you'll learn, who it's for, and when each lesson opens.", "5 min", "launch"],
+    ...c.lessons,
+  ];
+  const lessons = items.filter(Array.isArray);
+  if (!c.downloads) lessonTotal += lessons.length;
+  const liveCount = lessons.filter(([, , , o]) => (o || c.opens) === "launch").length;
+
+  const det = el("details", "course" + (c.first ? " first" : ""));
+  if (c.num === "04") det.open = true;
+  const sum = el("summary");
+  const metaRow = el("div", "meta");
+  if (c.opens === "launch") metaRow.append(el("span", "pill live", "Opens at launch"));
+  else metaRow.append(el("span", "pill", `Complete ${DATES[c.opens].label}`));
+  if (c.first) metaRow.append(el("span", "pill tag", c.num === "04" ? "Finishes first" : "Finishes second"));
+  if (c.tag && !c.first) metaRow.append(el("span", "pill tag", c.tag));
+  const noun = c.downloads ? "downloads" : lessons.length === 1 ? "lesson" : "lessons";
+  metaRow.append(el("span", null, c.opens === "launch" || c.downloads ? `${lessons.length} ${noun}` : `${lessons.length} ${noun}, ${liveCount} at launch`));
+  metaRow.append(el("span", "chev"));
+  sum.append(el("span", "num", c.num), el("h3", null, c.title), el("p", "desc", c.desc), metaRow);
+  det.append(sum);
+
+  const ul = el("ul", "lessons");
+  items.forEach((item) => {
+    if (typeof item === "string") { ul.append(el("li", "set", item)); return; }
+    const [title, covers, len, override] = item;
+    const key = override || c.opens;
+    const now = key === "launch";
+    const li = el("li", "lesson" + (now ? " now" : ""));
+    li.append(el("span", "ico", now ? "●" : "🔒"), el("span", "lt", title), el("span", "len mono", len), el("span", "lc", covers));
+    const row = el("div", "row");
+    row.append(el("span", "opens", now ? "Ready for launch day" : `Opens ${DATES[key].label}`));
+    if (!now) row.append(copyButton(placeholderText(key, covers)));
+    li.append(row); ul.append(li);
+  });
+  det.append(ul); room.append(det);
+});
+document.getElementById("lesson-count").textContent = lessonTotal;
+
+const bars = document.getElementById("bars");
+STRUGGLES.forEach(([label, n], i) => {
+  const li = el("li", "bar" + (i === 0 ? " top" : ""));
+  const track = el("div", "track"); const fill = el("div", "fill"); fill.style.width = (n / 19 * 100) + "%";
+  track.append(fill);
+  li.append(el("span", null, label), el("span", "n mono", String(n)), track);
+  bars.append(li);
+});
+
+document.getElementById("placeholder-sample").textContent =
+  placeholderText("oct19", "The repeatable formats tech companies want, with examples.");
+</script>
