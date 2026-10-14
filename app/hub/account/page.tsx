@@ -1,12 +1,13 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount } from "../account-provider";
 import { ImportLocal } from "../import-local";
 import { useProjects, useStars } from "../_lib/store";
 import { browserClient } from "../_lib/supabase/browser";
-import { Field, Section, input } from "../projects/fields";
+import { CurrencySelect, Field, Section, input } from "../projects/fields";
+import type { Currency } from "../_lib/currencies";
 import { BillingSection, DataSection, DeleteSection, TrendTrackSection } from "./sections";
 import { FeedbackButton } from "../feedback";
 import Link from "next/link";
@@ -54,6 +55,7 @@ function Account() {
       {resetting && <PasswordSection highlight />}
       <BillingSection />
       <ProfileSection name={user.name} email={user.email} />
+      <CurrencySection value={user.currency} />
       <TrendTrackSection />
       {!resetting && <PasswordSection />}
       <DataSection />
@@ -140,6 +142,30 @@ function PasswordSection({ highlight }: { highlight?: boolean }) {
         />
         <button className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">Update</button>
       </form>
+      {status && <p className="text-sm text-text-muted">{status}</p>}
+    </Section>
+  );
+}
+
+/** The currency totals are shown in. Each job keeps its own currency; totals are converted at today's rates. */
+function CurrencySection({ value }: { value: Currency }) {
+  const router = useRouter();
+  const [current, setCurrent] = useState(value);
+  const [status, setStatus] = useState("");
+  return (
+    <Section title="Currency">
+      <Field label="Show totals in" hint="Each job keeps its own currency. Dashboard totals and monthly estimates are converted to this one at today's rates.">
+        <CurrencySelect
+          value={current}
+          onChange={async (currency) => {
+            setCurrent(currency);
+            setStatus("Saving…");
+            const { error } = await browserClient().auth.updateUser({ data: { currency } });
+            setStatus(error ? error.message : "Saved.");
+            if (!error) router.refresh();
+          }}
+        />
+      </Field>
       {status && <p className="text-sm text-text-muted">{status}</p>}
     </Section>
   );

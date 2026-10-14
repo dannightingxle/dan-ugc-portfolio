@@ -2,6 +2,8 @@
 
 import type { PaymentStatus, Project } from "../_lib/store";
 import { paymentDue } from "../_lib/store";
+import { CURRENCIES, type Currency } from "../_lib/currencies";
+import { CURRENCY_LABEL } from "../_lib/ui";
 
 /* Form bits shared by the project board and project page. */
 
@@ -40,6 +42,18 @@ export function PaymentPill({ project }: { project: Project }) {
     Paid: "bg-good-soft text-good",
   }[status];
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tone}`}>{status}</span>;
+}
+
+export function CurrencySelect({ value, onChange }: { value: Currency; onChange: (c: Currency) => void }) {
+  return (
+    <select className={input} value={value} onChange={(e) => onChange(e.target.value as Currency)}>
+      {CURRENCIES.map((c) => (
+        <option key={c} value={c}>
+          {CURRENCY_LABEL[c]}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 /** Turn a typed amount like "£1,250" into 1250. */

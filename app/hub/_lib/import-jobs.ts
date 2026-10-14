@@ -17,6 +17,8 @@ export type ImportedFiles = {
   accountHandles: string;
   accountNotes: string;
   clientQuestions: string[];
+  /** Let a fuller version of a file replace a shorter one already there (e.g. a second, richer import). */
+  replaceShorter: boolean;
 };
 
 export type PlanItem = { brand: string; isNew: boolean; project: Project; changed: string[]; files: ImportedFiles };
@@ -89,12 +91,14 @@ function fieldsFrom(job: Raw): { fields: Partial<Project>; files: ImportedFiles 
   set("techStage", techStage ?? (tech ? "Setup" : undefined));
   set("paymentStatus", paymentStatus);
 
-  // The board's fee is in pounds; other currencies are kept in the payment notes instead.
+  // Amounts keep their own currency (totals are converted); one the board doesn't know goes in the notes.
   const currency = pick(job.currency, CURRENCIES) ?? (str(job.currency) ? undefined : "GBP");
   const fee = num(job.fee);
   const notes: string[] = [];
-  if (fee != null && currency === "GBP") set("fee", fee);
-  else if (fee != null) notes.push(`Fee: ${fee} ${str(job.currency, 10) || "(currency unknown)"}`);
+  if (fee != null && currency) {
+    set("fee", fee);
+    set("feeCurrency", currency);
+  } else if (fee != null) notes.push(`Fee: ${fee} ${str(job.currency, 10)}`);
   const perVideo = num(job.perVideo);
   if (perVideo != null && currency) {
     set("perVideo", perVideo);
@@ -153,6 +157,7 @@ function fieldsFrom(job: Raw): { fields: Partial<Project>; files: ImportedFiles 
     accountHandles: str(job.accountHandles, 2_000),
     accountNotes: str(job.accountNotes, 10_000),
     clientQuestions: list(job.openQuestions ?? job.clientQuestions),
+    replaceShorter: job.replaceShorter === true,
   };
   return { fields: f, files };
 }
@@ -184,9 +189,10 @@ function fill(existing: Project, incoming: Partial<Project>): { project: Project
       if (p[k].includes(text)) continue;
       p[k] = p[k] && !p[k].startsWith("From Notion:") ? `${p[k]}\n\n${text}` : text;
       changed.push(k);
-    } else if (k === "stage" || k === "paymentStatus" || k === "currency") {
-      // Only move on from the defaults (a new project's stage, not invoiced, a rate not yet set).
-      const isDefault = k === "stage" ? p.stage === "Pitched" : k === "paymentStatus" ? p.paymentStatus === "Not invoiced" : existing.perVideo == null;
+    } else if (k === "stage" || k === "paymentStatus" || k === "currency" || k === "feeCurrency") {
+      // Only move on from the defaults (a new project's stage, not invoiced, an amount not yet set).
+      const isDefault =
+        k === "stage" ? p.stage === "Pitched" : k === "paymentStatus" ? p.paymentStatus === "Not invoiced" : k === "currency" ? existing.perVideo == null : existing.fee == null;
       if (isDefault && p[k] !== v) {
         (p as Record<string, unknown>)[k] = v;
         changed.push(k);
@@ -232,5 +238,5 @@ export function planImport(existing: Project[], jobs: Raw[]): PlanItem[] {
 
 /** Studio fields from an import that would fill gaps in a job's workspace. */
 export function hasFiles(f: ImportedFiles) {
-  return Object.values(f).some((v) => !empty(v));
+  return Object.entries(f).some(([k, v]) => k !== "replaceShorter" && !empty(v));
 }

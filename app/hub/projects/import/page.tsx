@@ -169,7 +169,7 @@ async function fillWorkspace(projectId: string, f: ImportedFiles) {
   const ws = readWorkspace(workspace);
   let changed = false;
   const take = (current: string, next: string) => {
-    if (current || !next) return current;
+    if (!next || (current && !(f.replaceShorter && next.length > current.length))) return current;
     changed = true;
     return next;
   };

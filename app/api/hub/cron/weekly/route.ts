@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       const { data } = await admin.auth.admin.getUserById(user_id);
       const u = data.user;
       if (!u?.email) continue;
-      const user = { id: u.id, email: u.email, name: (u.user_metadata?.name as string) || u.email.split("@")[0] };
+      const user = { id: u.id, email: u.email, name: (u.user_metadata?.name as string) || u.email.split("@")[0], currency: "GBP" as const };
       if (!(await canUse(user, "brand")) || !(await billingFor(user)).hasAccess) continue;
       if (step === "stats") {
         if (apifyEnabled) await refreshStats(user.id);
