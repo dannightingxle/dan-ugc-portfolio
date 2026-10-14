@@ -101,6 +101,12 @@ Optional: `FOUNDER_SLOTS` (default 50), `FOUNDER_TRIAL_DAYS` (90), `TRIAL_DAYS` 
 (comma-separated - makes it invite-only; leave unset for open sign-up). **Delete
 `HUB_PASSWORD`** if it's set. Leave `TRENDTRACK_SHARED` unset (see step 9).
 
+Variables starting with `NEXT_PUBLIC_` are meant to be readable in the browser
+(the Supabase URL and publishable key are safe to expose): add those as type
+**Config**; everything else as **Secret**. Settings only take effect after a
+fresh **Production** deploy - check the new deployment in the list is labelled
+Production and says Ready.
+
 Then **Deployments → ⋯ → Redeploy**, and turn on **Analytics** in the project (page views only, no cookies).
 
 ## 7. Test it yourself (20 min, still in Stripe test mode)
