@@ -21,7 +21,7 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export const SHIPPING = ["Not needed", "Waiting", "On its way", "Received"] as const;
 
 /** Tech UGC jobs (a dedicated account posting for an app) move through these instead. */
-export const TECH_STAGES = ["Negotiating", "Account creation", "Setup", "Warm-up", "Active", "Ended"] as const;
+export const TECH_STAGES = ["Negotiating", "Account creation", "Setup", "Warm-up", "Active", "On hold", "Ended"] as const;
 export type TechStage = (typeof TECH_STAGES)[number];
 
 export type Deliverable = { id: string; item: string; qty: number; format: string; length: string; done: boolean };
