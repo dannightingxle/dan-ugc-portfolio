@@ -143,6 +143,11 @@ function PublicNav({ signedIn }: { signedIn: boolean }) {
             <Link href="/hub" className="rounded-lg bg-accent px-4 py-2 font-medium text-on-accent hover:bg-accent-hover">
               Open your desk
             </Link>
+          ) : BRAND.waitlist ? (
+            // Waitlist mode: no sign-in or trial in the header, just the waitlist (sign in is still at /hub/login).
+            <Link href="/hub/welcome#waitlist" className="rounded-lg bg-accent px-4 py-2 font-medium text-on-accent hover:bg-accent-hover">
+              Join the waitlist
+            </Link>
           ) : (
             <>
               <Link href="/hub/login" className="rounded-lg px-3 py-2 text-text-muted hover:text-text">
