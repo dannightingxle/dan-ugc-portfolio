@@ -22,6 +22,7 @@ function Board() {
   const { projects } = useProjects();
   const ready = useDataReady();
   const params = useSearchParams();
+  const studio = useFeature("studio");
   // ?new=1 opens the add form; ?new=tech opens it set up for a tech UGC job.
   const [adding, setAdding] = useState(params.get("new") === "1" || params.get("new") === "tech");
 
@@ -32,9 +33,16 @@ function Board() {
           <h1 className="font-serif text-4xl italic sm:text-5xl">Projects</h1>
           <p className="mt-2 text-text-muted">Every brand deal from pitch to paid: the brief, the contact and the money.</p>
         </div>
-        <button onClick={() => setAdding(true)} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
-          + New project
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {studio && (
+            <Link href="/hub/projects/import" className="rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent">
+              Import
+            </Link>
+          )}
+          <button onClick={() => setAdding(true)} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
+            + New project
+          </button>
+        </div>
       </div>
 
       {ready && projects.length === 0 && (
