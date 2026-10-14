@@ -35,7 +35,7 @@ const INCLUDED = [
   },
   {
     title: "A 30-day guarantee",
-    body: "Land your first paid deal in 30 days, or I work with you 1:1 until you do.",
+    body: "Land your first paid deal in 30 days, or I work with you 1:1 until you do - as long as you've put the work in.",
   },
 ];
 
@@ -77,6 +77,10 @@ const FAQS = [
   {
     q: "Is it a subscription?",
     a: `No. It's one payment of ${mentorship.price}, and you keep access to the course.`,
+  },
+  {
+    q: "How does the guarantee work?",
+    a: "If you haven't landed a paid deal within 30 days of joining, I'll work with you 1:1 until you do. To qualify, show me that in those 30 days you've completed at least half of the course lessons released so far, posted at least 7 times on your personal brand account, and sent at least 10 pitches or applications on UGC platforms.",
   },
   {
     q: "What happens after I pay?",

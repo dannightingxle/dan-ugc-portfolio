@@ -7,14 +7,14 @@ export const OFFER = {
   mentorship: {
     name: "Anyone Can Create Mentorship",
     price: "£497",
-    // Stripe payment link, e.g. "https://buy.stripe.com/..."
-    checkoutUrl: "",
+    // Stripe payment link
+    checkoutUrl: "https://buy.stripe.com/8x200j53l5GZ4tx5fSfQI06",
   },
   course: {
     name: "Anyone Can Create: the course",
     // Shown on /course only. Leave empty to show no price on the page (Stripe still shows it at checkout).
-    price: "",
-    checkoutUrl: "",
+    price: "£147",
+    checkoutUrl: "https://buy.stripe.com/dRm3cv1R98TbbVZ37KfQI07",
   },
   // The Skool group, e.g. "https://www.skool.com/your-group"
   skoolUrl: "",

@@ -44,6 +44,23 @@ then repeat in **Live mode** (test links don't copy over).
 Copy each link (`https://buy.stripe.com/...`) into `checkoutUrl` in
 `app/mentorship/offer.ts`, add the Skool group link to `skoolUrl`, and redeploy.
 
+## Founding-member link (discount already applied)
+
+1. Stripe → **Product catalogue → Coupons → New**: e.g. £100 off, or a %, *Once*.
+   Don't tick "first-time order only" - payment links check out as guests, so
+   that option would block the code.
+2. On the coupon, **Add promotion code**: letters and numbers only, e.g. `FOUNDER`.
+3. Make sure **Allow promotion codes** is on in the mentorship payment link.
+4. Send people the payment link with the code on the end:
+
+   `https://buy.stripe.com/8x200j53l5GZ4tx5fSfQI06?prefilled_promo_code=FOUNDER`
+
+   Checkout opens with the discount applied. To fill in their email too, add
+   `&prefilled_email=name@example.com`.
+
+To stop the offer, set a limit or end date on the promotion code (or archive it)
+- the link then just shows the full price.
+
 **Get told about every sale:** Stripe → your profile → *Communication
 preferences* → turn on emails for **successful payments**. The Stripe phone
 app sends a notification for each one too.
