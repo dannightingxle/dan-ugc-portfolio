@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import IntroVideo from "../waitlist/intro-video";
 import { OFFER } from "./offer";
 import { CheckoutButton, Dot, ModuleGrid, Shell } from "./parts";
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   },
 };
 
-const { mentorship, skoolUrl } = OFFER;
+const { mentorship, course, skoolUrl } = OFFER;
 
 const INCLUDED = [
   {
@@ -87,10 +88,27 @@ const FAQS = [
     a: "You'll get a receipt by email straight away. Within 24 hours I'll add you to the course in Skool and to the WhatsApp group.",
   },
   {
+    q: "Can I just buy the course?",
+    a: `Yes. If you'd rather work through it on your own, you can get the full course for ${course.price}. That's the course only: no WhatsApp group, feedback, referrals or guarantee.`,
+  },
+  {
     q: "Not ready yet?",
     a: "Join the free Skool group and watch The A to Z of UGC: what UGC is, where the money is, and how I'd start from zero today.",
   },
 ];
+
+/* Scrolls down to the join box, which is the only place the price is shown. */
+function JoinLink() {
+  return (
+    <a
+      href="#join"
+      className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3.5 rounded-full transition-colors bg-[color:var(--accent)] text-[color:var(--bg)] hover:bg-[color:var(--accent-hover)]"
+    >
+      Join the mentorship
+      <span aria-hidden="true">↓</span>
+    </a>
+  );
+}
 
 export default function MentorshipPage() {
   return (
@@ -109,14 +127,14 @@ export default function MentorshipPage() {
           and a small group in your corner while you do it.
         </p>
         <div className="mt-8 flex flex-col items-center gap-3">
-          <CheckoutButton url={mentorship.checkoutUrl} label={`Join the mentorship · ${mentorship.price}`} />
+          <JoinLink />
           <p className="text-sm text-[color:var(--text-dim)]">One-time payment · 30-day guarantee</p>
         </div>
       </div>
 
       {/* ---------------- video + what's included ---------------- */}
-      <div className="mt-16 sm:mt-24 grid lg:grid-cols-[380px_1fr] gap-10 lg:gap-14 items-center">
-        <div className="fade-up" style={{ animationDelay: "120ms" }}>
+      <div className="mt-10 sm:mt-24 grid lg:grid-cols-[380px_1fr] gap-10 lg:gap-14 items-center">
+        <div className="fade-up mx-auto w-full max-w-[260px] sm:max-w-none" style={{ animationDelay: "120ms" }}>
           <IntroVideo />
         </div>
         <div className="fade-up" style={{ animationDelay: "200ms" }}>
@@ -124,7 +142,7 @@ export default function MentorshipPage() {
           <h2 className="mt-4 font-display text-4xl sm:text-5xl">
             What you <em className="text-[color:var(--accent)]">get.</em>
           </h2>
-          <ul className="mt-8 flex flex-col gap-6 max-w-xl">
+          <ul className="mt-6 sm:mt-8 flex flex-col gap-5 sm:gap-6 max-w-xl">
             {INCLUDED.map((p) => (
               <li key={p.title} className="flex gap-3">
                 <Dot />
@@ -135,11 +153,14 @@ export default function MentorshipPage() {
               </li>
             ))}
           </ul>
+          <div className="mt-8">
+            <JoinLink />
+          </div>
         </div>
       </div>
 
       {/* ---------------- credibility ---------------- */}
-      <section className="mt-24 sm:mt-32">
+      <section className="mt-16 sm:mt-32">
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">Who you&apos;re learning from</div>
           <h2 className="mt-4 font-display text-4xl sm:text-5xl">
@@ -150,7 +171,7 @@ export default function MentorshipPage() {
             9 months, and made content for brands like these - from my phone, around a family.
           </p>
         </div>
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="mt-6 sm:mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {BRANDS.map((b) => (
             <div key={b.name} title={b.name} className="flex min-h-[72px] items-center justify-center rounded-xl bg-white px-4 py-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -166,25 +187,28 @@ export default function MentorshipPage() {
       </section>
 
       {/* ---------------- where to start ---------------- */}
-      <section className="mt-24 sm:mt-32">
+      <section className="mt-16 sm:mt-32">
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">Wherever you&apos;re starting</div>
           <h2 className="mt-4 font-display text-4xl sm:text-5xl">
             A clear next <em className="text-[color:var(--accent)]">step.</em>
           </h2>
         </div>
-        <div className="mt-10 grid md:grid-cols-3 gap-4">
+        <div className="mt-8 sm:mt-10 grid md:grid-cols-3 gap-3 sm:gap-4">
           {STAGES.map((s) => (
-            <div key={s.stage} className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-6">
+            <div key={s.stage} className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] p-5 sm:p-6">
               <p className="font-semibold text-[color:var(--text)]">{s.stage}</p>
               <p className="mt-2 text-sm leading-relaxed text-[color:var(--text-muted)]">{s.body}</p>
             </div>
           ))}
         </div>
+        <div className="mt-8 flex justify-center">
+          <JoinLink />
+        </div>
       </section>
 
       {/* ---------------- course outline ---------------- */}
-      <section className="mt-24 sm:mt-32">
+      <section className="mt-16 sm:mt-32">
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">Included in the mentorship</div>
           <h2 className="mt-4 font-display text-4xl sm:text-5xl">
@@ -195,13 +219,13 @@ export default function MentorshipPage() {
             drop every Monday.
           </p>
         </div>
-        <div className="mt-10">
+        <div className="mt-8 sm:mt-10">
           <ModuleGrid />
         </div>
       </section>
 
       {/* ---------------- join ---------------- */}
-      <section id="join" className="mt-24 sm:mt-32 scroll-mt-8">
+      <section id="join" className="mt-16 sm:mt-32 scroll-mt-8">
         <div className="rounded-2xl border border-[color:var(--accent)] bg-[color:var(--accent-soft)] p-6 sm:p-10 grid lg:grid-cols-[1fr_1fr] gap-8 lg:gap-12 items-center">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">Join</div>
@@ -228,7 +252,7 @@ export default function MentorshipPage() {
       </section>
 
       {/* ---------------- questions ---------------- */}
-      <section className="mt-24 sm:mt-32 max-w-3xl">
+      <section className="mt-16 sm:mt-32 max-w-3xl">
         <h2 className="font-display text-4xl sm:text-5xl">
           Questions<em className="text-[color:var(--accent)]">.</em>
         </h2>
@@ -238,6 +262,14 @@ export default function MentorshipPage() {
               <p className="font-medium text-[color:var(--text)]">{f.q}</p>
               <p className="mt-1 text-sm leading-relaxed text-[color:var(--text-muted)]">
                 {f.a}
+                {f.q === "Can I just buy the course?" && (
+                  <>
+                    {" "}
+                    <Link href="/course" className="text-[color:var(--accent)] underline underline-offset-4">
+                      Get the course on its own
+                    </Link>
+                  </>
+                )}
                 {f.q === "Not ready yet?" && skoolUrl && (
                   <>
                     {" "}
