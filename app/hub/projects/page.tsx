@@ -176,7 +176,7 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
           </Field>
         )}
         {p.techStage ? (
-          <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-3">
+          <div className="grid grid-cols-[7rem_1fr_1fr] gap-3">
             <Field label="Currency">
               <CurrencySelect value={p.currency} onChange={(currency) => setP({ ...p, currency })} />
             </Field>
@@ -188,7 +188,7 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
             </Field>
           </div>
         ) : (
-          <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-3">
+          <div className="grid grid-cols-[7rem_1fr_1fr] gap-3">
             <Field label="Currency">
               <CurrencySelect value={p.feeCurrency} onChange={(feeCurrency) => setP({ ...p, feeCurrency })} />
             </Field>

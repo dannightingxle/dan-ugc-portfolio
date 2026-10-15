@@ -230,7 +230,10 @@ export function customSheetPage(sheetId: string, title: string, html: string) {
   } catch (e) {}
   var shim = "<scr" + "ipt>(" + ${scriptJson(STORAGE_SHIM)} + ")(" + JSON.stringify(store).replace(/</g, "\\\\u003c") + ");</scr" + "ipt>";
   var html = JSON.parse(document.getElementById("sheet-html").textContent);
-  html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + shim; }) : shim + html;
+  var HEAD = /<head(\\s[^>]*)?>/i, DOCTYPE = /^\\s*<!doctype[^>]*>/i;
+  // Templates written without a page wrapper (as Claude artifacts are) still get a standard, phone-sized layout.
+  if (!DOCTYPE.test(html)) html = '<!doctype html>\\n<meta charset="utf-8">\\n<meta name="viewport" content="width=device-width, initial-scale=1">\\n' + html;
+  html = HEAD.test(html) ? html.replace(HEAD, function (m) { return m + shim; }) : html.replace(DOCTYPE, function (m) { return m + shim; });
   var frame = document.getElementById("sheet");
   window.addEventListener("message", function (e) {
     var d = e.data;

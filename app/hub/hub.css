@@ -57,3 +57,29 @@ body:has(.hub)::before {
   --radius-xl: 0.875rem;
   --radius-2xl: 1.125rem;
 }
+
+/* Phones: 16px text in fields, or iPhone Safari zooms the page in on every tap. */
+@media (max-width: 640px) {
+  .hub input,
+  .hub select,
+  .hub textarea {
+    font-size: 16px;
+  }
+}
+
+/* iPhone Safari draws date boxes its own way: taller than the other fields when
+   empty and too wide for a half-width column. Keep them like every other field. */
+@supports (-webkit-touch-callout: none) {
+  .hub input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.375rem;
+    text-align: left;
+  }
+  .hub input[type="date"]::-webkit-date-and-time-value {
+    margin: 0;
+    text-align: left;
+  }
+}
