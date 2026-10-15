@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useProjects } from "../_lib/store";
 import { TechJobs } from "./tech-jobs";
+import { useFeature } from "../account-provider";
 
 /* Where Studio starts: personal brand first, then each tech UGC job. */
 export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
   const { projects } = useProjects();
+  const edits = useFeature("edits");
   const otherJobs = projects.filter((p) => !p.techStage && p.stage !== "Paid");
 
   return (
@@ -14,6 +16,11 @@ export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
       <div>
         <h1 className="font-serif text-4xl italic sm:text-5xl">Studio</h1>
         <p className="mt-2 text-text-muted">Plans, scripts and shoot sheets - for your own brand and every job.</p>
+        {edits && (
+          <Link href="/hub/studio/helper" className="mt-2 inline-block text-sm text-accent hover:underline">
+            Mac helper - edit in CapCut from your edit cards →
+          </Link>
+        )}
       </div>
 
       {brand && (

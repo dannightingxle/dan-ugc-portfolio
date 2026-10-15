@@ -6,15 +6,18 @@ import { useProjects } from "../../../_lib/store";
 import { shortDate } from "../../../_lib/ui";
 import { ACCOUNT_CHECKS, FILES, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
 import { Field, Section, input } from "../../fields";
+import { useFeature } from "../../../account-provider";
+import { Edits } from "./edits";
 
 /* Studio: everything a Claude Project held for this job, plus the weekly
    shoot sheet, the Friday review and the account checklist. Edits save by
    themselves; the Claude actions take a minute or two. */
 
 export type Upload = { name: string; type: string; data: string };
-type Tab = "week" | "setup" | "files" | "review" | "account";
+type Tab = "week" | "edits" | "setup" | "files" | "review" | "account";
 const TABS: [Tab, string][] = [
   ["week", "This week"],
+  ["edits", "Edits"],
   ["setup", "Set up"],
   ["files", "Files"],
   ["review", "Friday review"],
@@ -53,6 +56,7 @@ export function Studio({ projectId }: { projectId: string }) {
   const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState<Tab>("week");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const editsOn = useFeature("edits");
 
   useEffect(() => {
     call<{ workspace: Workspace; sheets: SheetSummary[]; claude: boolean }>(api, "GET")
@@ -123,7 +127,7 @@ export function Studio({ projectId }: { projectId: string }) {
       )}
 
       <div className="flex flex-wrap gap-1" role="tablist">
-        {TABS.map(([key, label]) => (
+        {TABS.filter(([key]) => key !== "edits" || editsOn).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -142,6 +146,7 @@ export function Studio({ projectId }: { projectId: string }) {
       {tab === "files" && <FilesTab ws={ws} edit={edit} />}
       {tab === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
       {tab === "account" && <AccountTab ws={ws} edit={edit} />}
+      {tab === "edits" && editsOn && <Edits projectId={projectId} sheets={sheets} />}
     </div>
   );
 }

@@ -19,6 +19,7 @@ const PUBLIC = [
   "/api/hub/waitlist", // the landing page's waitlist form (signed-out visitors)
   "/api/hub/stripe", // Stripe webhooks, verified by signature
   "/api/hub/cron", // Vercel's scheduled jobs, checked against CRON_SECRET
+  "/api/hub/helper", // the Creator Desk Helper on a Mac, checked against its device token
 ];
 
 export async function proxy(request: NextRequest) {
