@@ -141,7 +141,9 @@ export function Studio({ projectId }: { projectId: string }) {
         ))}
       </div>
 
-      {tab === "week" && <WeekTab api={api} ws={ws} sheets={sheets} setSheets={setSheets} onWorkspace={setWs} goSetup={() => setTab("setup")} />}
+      {tab === "week" && (
+        <WeekTab api={api} ws={ws} sheets={sheets} setSheets={setSheets} onWorkspace={setWs} goSetup={() => setTab("setup")} goEdits={editsOn ? () => setTab("edits") : undefined} />
+      )}
       {tab === "setup" && <SetupTab api={api} ws={ws} edit={edit} onWorkspace={setWs} />}
       {tab === "files" && <FilesTab ws={ws} edit={edit} />}
       {tab === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
@@ -230,6 +232,7 @@ function WeekTab({
   setSheets,
   onWorkspace,
   goSetup,
+  goEdits,
 }: {
   api: string;
   ws: Workspace;
@@ -237,6 +240,7 @@ function WeekTab({
   setSheets: (s: SheetSummary[]) => void;
   onWorkspace: (w: Workspace) => void;
   goSetup: () => void;
+  goEdits?: () => void;
 }) {
   const [videos, setVideos] = useState(7);
   const [filmingOn, setFilmingOn] = useState("Monday, Wednesday and Thursday afternoons");
@@ -300,9 +304,16 @@ function WeekTab({
         {made && (
           <div className="space-y-2 rounded-xl bg-good-soft px-4 py-3 text-sm text-good">
             <p>{made.oneLine} Its hooks are now in the script bank.</p>
-            <a href={`/hub/studio/sheets/${made.id}`} target="_blank" rel="noopener" className="inline-block font-semibold underline">
-              Open the shoot sheet →
-            </a>
+            <div className="flex flex-wrap gap-4">
+              <a href={`/hub/studio/sheets/${made.id}`} target="_blank" rel="noopener" className="inline-block font-semibold underline">
+                Open the shoot sheet →
+              </a>
+              {goEdits && (
+                <button type="button" onClick={goEdits} className="font-semibold underline">
+                  Edit cards are ready - once you&apos;ve filmed, edit them →
+                </button>
+              )}
+            </div>
           </div>
         )}
       </Section>

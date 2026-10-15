@@ -5,7 +5,10 @@ import type { HubUser } from "../supabase/server";
 import { ask } from "./claude";
 import { getWorkspace, saveSheet, saveWorkspace } from "./data";
 import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET } from "./prompts";
-import { FILES, IntakeResult, ReviewResult, SheetResult, type Workspace } from "./types";
+import { FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
+import { canUse } from "../features";
+import { createEdit } from "../edits/data";
+import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types";
 
 /* The three things Studio asks Claude to do for a job: set it up from the
    material, make the week's shoot sheet, and run the Friday review. Each one
@@ -119,6 +122,7 @@ export async function makeShootSheet(
   // Newest first, so the next sheet sees what's already been made.
   const entry = `## ${title}\n${result.scriptBankEntry.trim()}`;
   ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, ws.files.scriptBank.trim()].filter(Boolean).join("\n\n") } });
+  await makeEditCards(user, projectId, id, title, result.sheet);
   return { id, oneLine: result.oneLine, workspace: ws };
 }
 
@@ -142,4 +146,16 @@ export async function fridayReview(user: HubUser, projectId: string, input: { nu
     files: { ...ws.files, winners: result.winners },
     lastReview: { at: new Date().toISOString(), moreOf: result.moreOf, lessOf: result.lessOf, nextWeek: result.nextWeek },
   });
+}
+
+/** With Edits on, a new shoot sheet comes with its edit cards ready: one for the whole week, then one per video. */
+async function makeEditCards(user: HubUser, projectId: string, sheetId: string, title: string, sheet: SheetData) {
+  if (!(await canUse(user, "edits"))) return;
+  try {
+    await createEdit(user.id, { projectId, sheetId, videoCode: WHOLE_SHEET, title: `${title} - all ${sheet.videos.length} videos`, brief: briefForWholeSheet(sheet) });
+    for (const v of sheet.videos) await createEdit(user.id, { projectId, sheetId, videoCode: v.code, title: v.title, brief: briefFromSheet(sheet, v.code) });
+  } catch (e) {
+    // The sheet itself is fine; cards can still be made from the Edits tab.
+    console.error("Creator Desk: couldn't make edit cards", e);
+  }
 }
