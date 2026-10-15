@@ -916,11 +916,15 @@ const AUDIO_EVENT = "ugc:audio";
 /* In in-app browsers only one clip has a player at all. */
 const PLAY_EVENT = "ugc:play";
 
-/* Instagram, Facebook and TikTok open links in their own cut-down browser,
-   which has crashed on reaching the portfolio every time clips autoplayed
-   there. In those, clips wait for a tap. */
+/* Instagram, Facebook, TikTok and other apps open links in their own
+   cut-down browser; Instagram's crashed on reaching the portfolio every time
+   clips autoplayed there. In those, clips wait for a tap. (Barcelona is
+   Threads.) */
+const IN_APP_BROWSER =
+  /Instagram|FBAN|FBAV|FB_IAB|musical_ly|BytedanceWebview|TikTok|Snapchat|LinkedInApp|Pinterest|Barcelona|\bLine\//i;
+
 function isInAppBrowser() {
-  return typeof navigator !== "undefined" && /Instagram|FBAN|FBAV|FB_IAB|musical_ly|BytedanceWebview|TikTok/i.test(navigator.userAgent);
+  return typeof navigator !== "undefined" && IN_APP_BROWSER.test(navigator.userAgent);
 }
 
 function SkipIcon({ back = false }: { back?: boolean }) {
