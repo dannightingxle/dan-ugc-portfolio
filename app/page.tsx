@@ -337,9 +337,9 @@ export default function Home() {
               </p>
             </Reveal>
           </div>
-          <Reveal delay={120}>
-            <WorkCarousel items={WORK} />
-          </Reveal>
+          {/* Not wrapped in <Reveal>: fading in the whole carousel as one
+              animated layer was part of what crashed phones on reaching it. */}
+          <WorkCarousel items={WORK} />
         </div>
       </section>
 
@@ -859,15 +859,6 @@ function LogoTile({ name, logo, whiteAsset }: { name: string; logo: string; whit
 
 function WorkCarousel({ items }: { items: WorkItem[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const displayItems = [...items, ...items, ...items];
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    requestAnimationFrame(() => {
-      el.scrollLeft = el.scrollWidth / 3 - 64;
-    });
-  }, []);
 
   const scrollBy = (dir: 1 | -1) => {
     const el = scrollRef.current;
@@ -884,9 +875,9 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
         style={{ scrollPaddingLeft: 64, scrollPaddingRight: 64 }}
         className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-6 lg:px-16 pb-3 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {displayItems.map((w, i) => (
+        {items.map((w) => (
           <div
-            key={i}
+            key={w.videoSrc}
             data-card
             className="snap-start shrink-0 w-[78vw] max-w-[320px] sm:w-[46%] sm:max-w-[360px] lg:w-[31%] lg:max-w-none"
           >
@@ -922,6 +913,15 @@ function WorkCarousel({ items }: { items: WorkItem[] }) {
 
 /* Only one clip is allowed sound at a time. */
 const AUDIO_EVENT = "ugc:audio";
+/* In in-app browsers only one clip has a player at all. */
+const PLAY_EVENT = "ugc:play";
+
+/* Instagram, Facebook and TikTok open links in their own cut-down browser,
+   which has crashed on reaching the portfolio every time clips autoplayed
+   there. In those, clips wait for a tap. */
+function isInAppBrowser() {
+  return typeof navigator !== "undefined" && /Instagram|FBAN|FBAV|FB_IAB|musical_ly|BytedanceWebview|TikTok/i.test(navigator.userAgent);
+}
 
 function SkipIcon({ back = false }: { back?: boolean }) {
   return (
@@ -950,6 +950,7 @@ function WorkCard({ item }: { item: WorkItem }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [onScreen, setOnScreen] = useState(false);
+  const [tapped, setTapped] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -958,12 +959,13 @@ function WorkCard({ item }: { item: WorkItem }) {
   const [scrubbing, setScrubbing] = useState(false);
   const poster = item.videoSrc.replace(/\/([^/]+)\.mp4$/, "/posters/$1.jpg");
 
-  /* A card only gets a <video> element while it's on screen; the rest show a
-     lazy-loaded poster image. The carousel holds ~100 cards, and on iPhones
-     (above all inside Instagram's in-app browser) that many video elements -
-     even paused, even without a source - used enough memory to crash the tab,
-     at first while scrolling and then on load. Scrolling a card away removes
-     its video, which frees it and puts the card back to its poster. */
+  /* A card only gets a <video> element while it's on screen (and, in in-app
+     browsers, only once tapped); the rest show a lazy-loaded poster image.
+     On iPhones, above all inside Instagram's browser, video elements across
+     the carousel used enough memory to crash the tab. Scrolling a card away
+     removes its video, which frees it and puts the card back to its poster. */
+  const showVideo = onScreen && (tapped || !isInAppBrowser());
+
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -972,6 +974,7 @@ function WorkCard({ item }: { item: WorkItem }) {
         setOnScreen(entry.isIntersecting);
         if (!entry.isIntersecting) {
           // scrolling a clip away drops its sound, so the next one starts quiet
+          setTapped(false);
           setPlaying(false);
           setBuffering(false);
           setMuted(true);
@@ -990,20 +993,33 @@ function WorkCard({ item }: { item: WorkItem }) {
     };
     window.addEventListener(AUDIO_EVENT, onOtherAudio);
 
+    const onOtherPlay = (e: Event) => {
+      if ((e as CustomEvent<HTMLDivElement>).detail === el) return;
+      setTapped(false);
+      setPlaying(false);
+      setBuffering(false);
+      setMuted(true);
+      setTime(0);
+    };
+    window.addEventListener(PLAY_EVENT, onOtherPlay);
+
     return () => {
       io.disconnect();
       window.removeEventListener(AUDIO_EVENT, onOtherAudio);
+      window.removeEventListener(PLAY_EVENT, onOtherPlay);
     };
   }, []);
 
-  // Clips play muted as soon as they're on screen.
+  // A clip plays (muted) as soon as its player exists.
   useEffect(() => {
-    if (onScreen) videoRef.current?.play().catch(() => {});
-  }, [onScreen]);
+    if (showVideo) videoRef.current?.play().catch(() => {});
+  }, [showVideo]);
 
   const togglePlay = () => {
     const el = videoRef.current;
     if (!el) {
+      if (isInAppBrowser()) window.dispatchEvent(new CustomEvent(PLAY_EVENT, { detail: cardRef.current }));
+      setTapped(true);
       setOnScreen(true);
       return;
     }
@@ -1090,7 +1106,7 @@ function WorkCard({ item }: { item: WorkItem }) {
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
         />
-        {onScreen && (
+        {showVideo && (
           <video
             ref={videoRef}
             src={item.videoSrc}
