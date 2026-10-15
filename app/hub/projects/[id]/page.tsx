@@ -170,16 +170,16 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </Field>
                 {project.source === "Platform" && (
                   <Field label="Platform">
-                    <input className={input} value={project.platform} onChange={(e) => set("platform", e.target.value)} placeholder="Twirl, Insense…" />
+                    <input className={input} value={project.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. Twirl, Insense…" />
                   </Field>
                 )}
               </div>
               {project.techStage && <TechPay project={project} set={set} />}
               <Field label="Pay notes">
-                <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="Paid weekly via SideShift + view bonuses" />
+                <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="e.g. Paid weekly via SideShift + view bonuses" />
               </Field>
               <Field label="Waiting on" hint="Done only when they've replied or paid.">
-                <input className={input} value={project.waitingOn} onChange={(e) => set("waitingOn", e.target.value)} placeholder="Thomas to approve V3, invoice paid…" />
+                <input className={input} value={project.waitingOn} onChange={(e) => set("waitingOn", e.target.value)} placeholder="e.g. Thomas to approve V3, invoice paid…" />
               </Field>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Last message">
@@ -226,7 +226,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Invoice no.">
-                <input className={input} value={project.invoiceNumber} onChange={(e) => set("invoiceNumber", e.target.value)} placeholder="INV-014" />
+                <input className={input} value={project.invoiceNumber} onChange={(e) => set("invoiceNumber", e.target.value)} placeholder="e.g. INV-014" />
               </Field>
               <Field label="Terms (days)">
                 <input
@@ -250,7 +250,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 className={input}
                 value={project.paymentNotes}
                 onChange={(e) => set("paymentNotes", e.target.value)}
-                placeholder="50% upfront, usage fee extra, pay via bank transfer…"
+                placeholder="e.g. 50% upfront, usage fee extra, pay via bank transfer…"
               />
             </Field>
           </Section>
@@ -275,10 +275,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <Section title="Contact">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Name">
-                <input className={input} value={project.contact.name} onChange={(e) => setContact("name", e.target.value)} placeholder="Sarah" />
+                <input className={input} value={project.contact.name} onChange={(e) => setContact("name", e.target.value)} placeholder="e.g. Sarah" />
               </Field>
               <Field label="Role">
-                <input className={input} value={project.contact.role} onChange={(e) => setContact("role", e.target.value)} placeholder="Creator manager" />
+                <input className={input} value={project.contact.role} onChange={(e) => setContact("role", e.target.value)} placeholder="e.g. Creator manager" />
               </Field>
             </div>
             <Field label="Company / agency">
@@ -322,21 +322,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Do's">
-                <textarea rows={4} className={input} value={project.dos} onChange={(e) => set("dos", e.target.value)} placeholder="Show the product in the first 3s…" />
+                <textarea rows={4} className={input} value={project.dos} onChange={(e) => set("dos", e.target.value)} placeholder="e.g. Show the product in the first 3s…" />
               </Field>
               <Field label="Don'ts">
-                <textarea rows={4} className={input} value={project.donts} onChange={(e) => set("donts", e.target.value)} placeholder="No competitor mentions…" />
+                <textarea rows={4} className={input} value={project.donts} onChange={(e) => set("donts", e.target.value)} placeholder="e.g. No competitor mentions…" />
               </Field>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Usage rights">
-                <input className={input} value={project.usageRights} onChange={(e) => set("usageRights", e.target.value)} placeholder="Paid ads, 3 months, UK" />
+                <input className={input} value={project.usageRights} onChange={(e) => set("usageRights", e.target.value)} placeholder="e.g. Paid ads, 3 months, UK" />
               </Field>
               <Field label="Exclusivity">
-                <input className={input} value={project.exclusivity} onChange={(e) => set("exclusivity", e.target.value)} placeholder="None / 30 days, category" />
+                <input className={input} value={project.exclusivity} onChange={(e) => set("exclusivity", e.target.value)} placeholder="e.g. None / 30 days, category" />
               </Field>
               <Field label="Revisions">
-                <input className={input} value={project.revisions} onChange={(e) => set("revisions", e.target.value)} placeholder="2 rounds included" />
+                <input className={input} value={project.revisions} onChange={(e) => set("revisions", e.target.value)} placeholder="e.g. 2 rounds included" />
               </Field>
             </div>
           </Section>
@@ -604,7 +604,7 @@ function TechPay({ project, set }: { project: Project; set: <K extends keyof Pro
   const monthly = techMonthly(project);
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-[5.5rem_1fr_1fr] gap-2">
+      <div className="grid grid-cols-[7rem_1fr_1fr] gap-2">
         <Field label="Currency">
           <CurrencySelect value={project.currency} onChange={(c) => set("currency", c)} />
         </Field>

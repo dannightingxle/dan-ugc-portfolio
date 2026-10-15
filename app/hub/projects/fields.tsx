@@ -12,7 +12,7 @@ export const input =
 
 export function Field({ label, hint, children, className = "" }: { label: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
-    <label className={`block space-y-1 ${className}`}>
+    <label className={`block min-w-0 space-y-1 ${className}`}>
       <span className="text-xs font-medium text-text-muted">{label}</span>
       {children}
       {hint && <span className="block text-xs text-text-dim">{hint}</span>}
