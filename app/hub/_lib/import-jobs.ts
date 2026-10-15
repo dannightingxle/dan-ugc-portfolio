@@ -5,8 +5,9 @@ import { CURRENCIES, PAYMENT_STATUSES, SOURCES, STAGES, TECH_STAGES, newProject,
    what's empty - nothing typed into Creator Desk is ever overwritten. Notes
    are the exception: new notes are added underneath the old ones.
    A corrections file can say otherwise per job: "remove": true takes the job
-   off the board, "overwrite": true replaces the fields it gives (and "clear"
-   empties the ones it lists). */
+   off the board (every job with that id or brand, or any of its "aliases"),
+   "overwrite": true replaces the fields it gives (and "clear" empties the
+   ones it lists). A correction never creates a job. */
 
 type Raw = Record<string, unknown>;
 
@@ -24,7 +25,8 @@ export type ImportedFiles = {
   replaceShorter: boolean;
 };
 
-export type PlanItem = { brand: string; isNew: boolean; remove: boolean; project: Project; changed: string[]; files: ImportedFiles };
+/** missing: a removal or correction whose job isn't on the board (shown, never saved). */
+export type PlanItem = { brand: string; isNew: boolean; remove: boolean; missing: boolean; project: Project; changed: string[]; files: ImportedFiles };
 
 // Which project field each key in an import sets (for "overwrite" and "clear").
 const FIELD_FOR: Record<string, keyof Project> = {
@@ -271,39 +273,44 @@ function overwrite(existing: Project, job: Raw, incoming: Partial<Project>): { p
 /** Work out what an import will do, without saving anything. */
 export function planImport(existing: Project[], jobs: Raw[]): PlanItem[] {
   const used = new Set<string>();
-  const byBrand = (key: string) => existing.filter((p) => brandKey(p.brand) === key && !used.has(p.id));
   const incomingCount = new Map<string, number>();
   for (const j of jobs) {
     const key = brandKey(str(j.brand) || str(j.job));
     incomingCount.set(key, (incomingCount.get(key) ?? 0) + 1);
   }
 
-  const items = jobs.map((job): PlanItem | null => {
+  return jobs.flatMap((job): PlanItem[] => {
     const { fields, files } = fieldsFrom(job);
     const key = brandKey(fields.brand ?? "");
+    const keys = new Set([key, ...list(job.aliases).map(brandKey)].filter(Boolean));
     const id = str(job.id, 80);
-    // Same id, else the only job for that brand on both sides, else the same brand and title.
+    const missing = (): PlanItem[] => [{ brand: fields.brand ?? id, isNew: false, remove: job.remove === true, missing: true, project: newProject(fields), changed: [], files }];
+
+    // Removals take every job with that id or brand - duplicates included.
+    if (job.remove === true) {
+      const hits = existing.filter((p) => !used.has(p.id) && (p.id === id || keys.has(brandKey(p.brand))));
+      if (!hits.length) return missing();
+      hits.forEach((h) => used.add(h.id));
+      return hits.map((h) => ({ brand: h.brand, isNew: false, remove: true, missing: false, project: h, changed: [], files }));
+    }
+
+    // Same id, else the only job for that brand (or an alias) on both sides, else the same brand and title.
     let match = (id && existing.find((p) => p.id === id && !used.has(p.id))) || undefined;
     if (!match) {
-      const same = byBrand(key);
-      if (same.length === 1 && incomingCount.get(key) === 1) match = same[0];
+      const same = existing.filter((p) => keys.has(brandKey(p.brand)) && !used.has(p.id));
+      if (same.length === 1 && (incomingCount.get(key) === 1 || job.overwrite === true)) match = same[0];
       else match = same.find((p) => brandKey(p.title) === brandKey(fields.title ?? "") && Boolean(p.title));
-    }
-    if (job.remove === true) {
-      if (!match) return null; // already gone
-      used.add(match.id);
-      return { brand: match.brand, isNew: false, remove: true, project: match, changed: [], files };
     }
     if (match) {
       used.add(match.id);
       const result = job.overwrite === true ? overwrite(match, job, fields) : fill(match, fields);
-      return { brand: result.project.brand, isNew: false, remove: false, ...result, files };
+      return [{ brand: result.project.brand, isNew: false, remove: false, missing: false, ...result, files }];
     }
+    if (job.overwrite === true) return missing();
     const project = newProject({ ...fields, ...(id && /^[\w-]{1,80}$/.test(id) ? { id } : {}) });
     used.add(project.id);
-    return { brand: project.brand, isNew: true, remove: false, project, changed: [], files };
+    return [{ brand: project.brand, isNew: true, remove: false, missing: false, project, changed: [], files }];
   });
-  return items.filter((i): i is PlanItem => i !== null);
 }
 
 /** Studio fields from an import that would fill gaps in a job's workspace. */

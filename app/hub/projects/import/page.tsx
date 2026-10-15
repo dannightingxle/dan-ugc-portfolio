@@ -42,7 +42,7 @@ export default function ImportPage() {
 
   async function run() {
     if (!plan) return;
-    const work = plan.filter((i) => i.remove || i.isNew || i.changed.length || (studio && hasFiles(i.files)));
+    const work = plan.filter((i) => !i.missing && (i.remove || i.isNew || i.changed.length || (studio && hasFiles(i.files))));
     setProgress({ done: 0, total: work.length, failed: [] });
     const failed: string[] = [];
     for (const [n, item] of work.entries()) {
@@ -63,7 +63,8 @@ export default function ImportPage() {
   const counts = plan && {
     added: plan.filter((i) => i.isNew).length,
     updated: plan.filter((i) => !i.isNew && i.changed.length).length,
-    removed: plan.filter((i) => i.remove).length,
+    removed: plan.filter((i) => i.remove && !i.missing).length,
+    missing: plan.filter((i) => i.missing).length,
     files: studio ? plan.filter((i) => hasFiles(i.files)).length : 0,
   };
 
@@ -113,6 +114,11 @@ export default function ImportPage() {
                   , <span className="font-semibold text-text">{counts.removed}</span> removed
                 </>
               )}
+              {counts.missing > 0 && (
+                <>
+                  , <span className="font-semibold text-text">{counts.missing}</span> not found on your board
+                </>
+              )}
               {counts.files > 0 && (
                 <>
                   , Studio files for <span className="font-semibold text-text">{counts.files}</span>
@@ -120,7 +126,7 @@ export default function ImportPage() {
               )}
             </p>
             <button onClick={run} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
-              {counts.removed === plan.length ? `Remove ${plan.length}` : `Import ${plan.length} ${plan.length === 1 ? "job" : "jobs"}`}
+              {counts.removed === plan.length ? `Remove ${plan.length}` : `Import ${plan.length - counts.missing} ${plan.length - counts.missing === 1 ? "job" : "jobs"}`}
             </button>
           </div>
           <ul className="divide-y divide-border rounded-2xl border border-border bg-bg-card">
@@ -128,10 +134,10 @@ export default function ImportPage() {
               <li key={i.project.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    i.remove ? "bg-warn-soft text-warn" : i.isNew ? "bg-good-soft text-good" : i.changed.length ? "bg-accent-soft text-accent" : "bg-text/5 text-text-dim"
+                    i.missing ? "bg-text/5 text-text-dim" : i.remove ? "bg-warn-soft text-warn" : i.isNew ? "bg-good-soft text-good" : i.changed.length ? "bg-accent-soft text-accent" : "bg-text/5 text-text-dim"
                   }`}
                 >
-                  {i.remove ? "Remove" : i.isNew ? "New" : i.changed.length ? "Update" : "No change"}
+                  {i.missing ? "Not found" : i.remove ? "Remove" : i.isNew ? "New" : i.changed.length ? "Update" : "No change"}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{i.brand}</p>
