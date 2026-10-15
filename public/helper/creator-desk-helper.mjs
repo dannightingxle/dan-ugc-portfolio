@@ -192,28 +192,54 @@ async function report(force = false) {
 
 // ------------------------------------------------------------ picking clips with the Mac file picker
 
-function pickFiles(label) {
+// The videos in a folder (and the folders inside it), by name - the order you filmed them in.
+function videosIn(dir) {
+  const out = [];
+  const walk = (d, depth) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const p = path.join(d, e.name);
+      if (e.isDirectory() && depth < 1) walk(p, depth + 1);
+      else if (VIDEO.test(e.name)) out.push(p);
+    }
+  };
+  walk(dir, 0);
+  return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function pickFiles(label, mode) {
+  const folder = mode === "folder";
   if (process.env.CDH_PICK_CMD) {
-    return run("/bin/sh", ["-c", process.env.CDH_PICK_CMD], { timeout: 600_000 }).split("\n").filter(Boolean);
+    const lines = run("/bin/sh", ["-c", process.env.CDH_PICK_CMD], { timeout: 600_000, env: { ...process.env, CDH_PICK_MODE: folder ? "folder" : "files" } }).split("\n").filter(Boolean);
+    return folder ? lines.flatMap(videosIn) : lines;
   }
-  const prompt = `Pick the clips for ${label || "this video"}`.replace(/"/g, "'");
-  const script = [
-    'tell application "Finder"',
-    "activate",
-    `set picked to choose file with prompt "${prompt}" of type {"public.movie"} with multiple selections allowed`,
-    "end tell",
-    'set out to ""',
-    "repeat with f in picked",
-    "set out to out & POSIX path of f & linefeed",
-    "end repeat",
-    "return out",
-  ];
-  return run("osascript", script.flatMap((l) => ["-e", l]), { timeout: 600_000 }).split("\n").filter(Boolean);
+  const prompt = `${folder ? "Pick the folder with the clips" : "Pick the clips"} for ${label || "this video"}`.replace(/"/g, "'");
+  const script = folder
+    ? ['tell application "Finder"', "activate", `set picked to choose folder with prompt "${prompt}"`, "end tell", "return POSIX path of picked"]
+    : [
+        'tell application "Finder"',
+        "activate",
+        `set picked to choose file with prompt "${prompt}" of type {"public.movie"} with multiple selections allowed`,
+        "end tell",
+        'set out to ""',
+        "repeat with f in picked",
+        "set out to out & POSIX path of f & linefeed",
+        "end repeat",
+        "return out",
+      ];
+  const lines = run("osascript", script.flatMap((l) => ["-e", l]), { timeout: 600_000 }).split("\n").filter(Boolean);
+  return folder ? lines.flatMap(videosIn) : lines;
 }
 
 async function handlePick(p) {
-  log(`Opening the file picker for ${p.label || "a video"}…`);
-  const paths = pickFiles(p.label);
+  log(`Opening the ${p.mode === "folder" ? "folder" : "file"} picker for ${p.label || "a video"}…`);
+  const paths = pickFiles(p.label, p.mode);
   const picked = paths.map((f) => ({ path: f, name: path.basename(f), duration: duration(f) }));
   await update(p.id, { pickDone: true, picked });
   log(picked.length ? `Picked ${picked.length} clip(s).` : "Nothing picked.");
@@ -223,6 +249,7 @@ async function handlePick(p) {
 
 function promptFor(edit) {
   const clips = edit.files.map((f) => `- ${f.path}${f.duration ? ` (${mmss(f.duration)})` : ""}`).join("\n");
+  if (edit.videoCode === "ALL") return wholeSheetPrompt(edit, clips);
   const name = [edit.brand, edit.videoCode].filter(Boolean).join(" ") || "Creator Desk edit";
   return [
     `Edit this video in CapCut for me, the same way as when I paste a video card and the clip names into this chat.${edit.brand ? ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.` : ""}`,
@@ -238,6 +265,27 @@ function promptFor(edit) {
     "- If CapCut being open stops the draft saving, say so and stop. I'll close it and reply.",
     "- If you need something from me, ask one clear question and stop.",
     "- Finish with a short summary of what you did and, on its own line, DRAFT: <the draft name>.",
+  ].join("\n");
+}
+
+// A whole week in one go: Claude matches the clips to the videos, then makes a draft for each.
+function wholeSheetPrompt(edit, clips) {
+  const prefix = edit.brand ? `${edit.brand} ` : "";
+  return [
+    `Edit every video on this shoot sheet in CapCut for me, the same way as when I paste a shoot sheet and a screenshot of my clips into this chat.${edit.brand ? ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.` : ""}`,
+    "",
+    `All the clips I filmed for it, on this Mac (${edit.files.length}):`,
+    clips,
+    "",
+    "Shoot sheet:",
+    edit.brief,
+    "",
+    "For this run:",
+    "- First work out which clips belong to which video and shot code. Use the filming order on the sheet, the file names and times, and look at a frame or two when you need to. Skip any video with no clips (say which).",
+    "- Before editing, list the match as one line per video (e.g. V1: IMG_2001.MOV, IMG_2002.MOV). If you're unsure about a match, ask me and stop.",
+    `- Make a new CapCut draft for each video (never overwrite one), named "${prefix}V1", "${prefix}V2" and so on, adding v2, v3 if a name is taken.`,
+    "- If CapCut being open stops a draft saving, say so and stop. I'll close it and reply.",
+    "- Finish with a short summary, then one line per draft you made: DRAFT: <the draft name>.",
   ].join("\n");
 }
 
@@ -317,7 +365,9 @@ function startClaude(editId, prompt, sessionId) {
   child.on("close", async (code, signal) => {
     clearInterval(timer);
     running.delete(editId);
-    const draft = /DRAFT:\s*(.+)\s*$/m.exec(finalText)?.[1]?.trim();
+    // One draft, or one per video for a whole shoot sheet.
+    const drafts = [...finalText.matchAll(/^\s*DRAFT:\s*(.+?)\s*$/gm)].map((m) => m[1]);
+    const draft = drafts.join(", ");
     let status;
     if (cancelled.has(editId)) {
       cancelled.delete(editId);
@@ -327,7 +377,7 @@ function startClaude(editId, prompt, sessionId) {
       pending.push({ kind: "error", text: (finalText || stderr.trim().split("\n").slice(-3).join("\n") || `Claude Code stopped (${signal || code}).`).slice(0, 2000) });
       status = "failed";
     } else if (draft) {
-      pending.push({ kind: "done", text: `Draft ready in CapCut: ${draft}` });
+      pending.push({ kind: "done", text: drafts.length > 1 ? `${drafts.length} drafts ready in CapCut: ${draft}` : `Draft ready in CapCut: ${draft}` });
       status = "ready";
     } else {
       // No draft: Claude stopped to ask something (or CapCut was open).

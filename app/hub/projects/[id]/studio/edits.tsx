@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { STATUS_LABEL, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
+import { STATUS_LABEL, WHOLE_SHEET, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
 import type { SheetSummary } from "../../../_lib/studio/types";
 import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
@@ -102,6 +102,7 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
   const [sheetId, setSheetId] = useState(sheets[0]?.id ?? "");
   const [pasting, setPasting] = useState(false);
   const [brief, setBrief] = useState("");
+  const [whole, setWhole] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function add(body: Record<string, unknown>) {
@@ -133,10 +134,13 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
             <button type="button" disabled={busy || !sheetId} onClick={() => add({ sheetId })} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
               Make edit cards
             </button>
+            <button type="button" disabled={busy || !sheetId} onClick={() => add({ sheetId, whole: true })} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60">
+              Edit the whole sheet in one go
+            </button>
           </>
         )}
         <button type="button" onClick={() => setPasting(!pasting)} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
-          {pasting ? "Cancel" : "Paste a video card"}
+          {pasting ? "Cancel" : "Paste a card or shoot sheet"}
         </button>
       </div>
       {pasting && (
@@ -145,11 +149,35 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
             rows={8}
             className={input}
             value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-            placeholder={'From a shoot sheet in a Claude Project: open the video, press "Copy everything", paste it here.'}
+            onChange={(e) => {
+              setBrief(e.target.value);
+              setWhole(looksLikeWholeSheet(e.target.value));
+            }}
+            placeholder={'One video: press "Copy everything" on its card and paste it here. A whole week: "Expand all", export the shoot sheet as Markdown, and paste or upload it.'}
             aria-label="Video card"
           />
-          <button type="button" disabled={busy || !brief.trim()} onClick={() => add({ brief })} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="cursor-pointer rounded-lg border border-border px-3 py-1.5 text-xs hover:border-accent hover:text-accent">
+              Upload a .md or .txt file
+              <input
+                type="file"
+                accept=".md,.markdown,.txt,text/markdown,text/plain"
+                className="sr-only"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const t = await f.text();
+                  setBrief(t);
+                  setWhole(looksLikeWholeSheet(t));
+                }}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={whole} onChange={(e) => setWhole(e.target.checked)} className="h-4 w-4 accent-[var(--accent)]" />
+              It&apos;s a whole shoot sheet - edit every video in one go
+            </label>
+          </div>
+          <button type="button" disabled={busy || !brief.trim()} onClick={() => add({ brief, whole })} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
             Add card
           </button>
         </div>
@@ -157,6 +185,11 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
       {error && <p className="text-sm text-accent">{error}</p>}
     </div>
   );
+}
+
+/** Several video codes (V1, V2, V3…) usually means a whole shoot sheet rather than one card. */
+function looksLikeWholeSheet(text: string) {
+  return new Set(text.match(/\bV\d{1,2}\b/g) ?? []).size >= 3;
 }
 
 function Card({
@@ -200,7 +233,11 @@ function Card({
   return (
     <article className="rounded-2xl border border-border bg-bg-card">
       <button type="button" onClick={onToggle} className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left" aria-expanded={open}>
-        {card.videoCode && <span className="rounded-md bg-bg-elevated px-1.5 py-0.5 font-mono text-xs">{card.videoCode}</span>}
+        {card.videoCode === WHOLE_SHEET ? (
+          <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">Whole sheet</span>
+        ) : (
+          card.videoCode && <span className="rounded-md bg-bg-elevated px-1.5 py-0.5 font-mono text-xs">{card.videoCode}</span>
+        )}
         <span className="min-w-0 flex-1 truncate font-medium">{card.title || "Untitled video"}</span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{STATUS_LABEL[card.status]}</span>
         {card.files.length > 0 && <span className="text-xs text-text-dim">{card.files.length} clip{card.files.length === 1 ? "" : "s"}</span>}
@@ -209,11 +246,18 @@ function Card({
         <div className="space-y-4 border-t border-border px-4 py-4">
           {card.draftName && (
             <p className="rounded-xl bg-good-soft px-3 py-2 text-sm text-good">
-              Draft in CapCut: <strong>{card.draftName}</strong>
+              {card.draftName.includes(", ") ? "Drafts" : "Draft"} in CapCut: <strong>{card.draftName}</strong>
             </p>
           )}
 
-          <ClipPicker card={card} files={files} mac={mac} setFiles={setFiles} onPick={() => act(() => call(`${api}/pick`, "POST"))} onCancelPick={() => act(() => call(`${api}/pick`, "DELETE"))} />
+          <ClipPicker
+            card={card}
+            files={files}
+            mac={mac}
+            setFiles={setFiles}
+            onPick={(mode) => act(() => call(`${api}/pick`, "POST", { mode }))}
+            onCancelPick={() => act(() => call(`${api}/pick`, "DELETE"))}
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             {BUSY.has(card.status) ? (
@@ -228,7 +272,7 @@ function Card({
                 className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
                 title={!mac ? "Connect your Mac first" : !card.files.length ? "Pick the clips first" : undefined}
               >
-                {card.status === "todo" ? "Edit in CapCut" : "Edit again from scratch"}
+                {card.status !== "todo" ? "Edit again from scratch" : card.videoCode === WHOLE_SHEET ? "Edit all the videos in CapCut" : "Edit in CapCut"}
               </button>
             )}
             {card.status === "ready" && (
@@ -251,7 +295,7 @@ function Card({
           {error && <p className="text-sm text-accent">{error}</p>}
 
           <details className="rounded-xl border border-border">
-            <summary className="cursor-pointer px-3 py-2 text-sm font-medium">Video card</summary>
+            <summary className="cursor-pointer px-3 py-2 text-sm font-medium">{card.videoCode === WHOLE_SHEET ? "Shoot sheet" : "Video card"}</summary>
             <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words border-t border-border px-3 py-2 font-sans text-sm text-text-muted">{card.brief}</pre>
           </details>
 
@@ -274,7 +318,7 @@ function ClipPicker({
   files: DeviceFile[];
   mac: Device | undefined;
   setFiles: (f: EditFile[]) => void;
-  onPick: () => void;
+  onPick: (mode: "files" | "folder") => void;
   onCancelPick: () => void;
 }) {
   const [browsing, setBrowsing] = useState(false);
@@ -290,15 +334,20 @@ function ClipPicker({
         </button>
         {card.pickRequested ? (
           <span className="flex items-center gap-2 text-xs text-accent">
-            Look at your Mac - the file picker is open.
+            Look at your Mac - the {card.pickMode === "folder" ? "folder" : "file"} picker is open.
             <button type="button" onClick={onCancelPick} className="text-text-dim underline">
               Cancel
             </button>
           </span>
         ) : (
-          <button type="button" disabled={!mac?.online} onClick={onPick} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50" title={mac?.online ? undefined : "Start the helper on your Mac first"}>
-            Choose on my Mac…
-          </button>
+          <>
+            <button type="button" disabled={!mac?.online} onClick={() => onPick("files")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50" title={mac?.online ? undefined : "Start the helper on your Mac first"}>
+              Choose on my Mac…
+            </button>
+            <button type="button" disabled={!mac?.online} onClick={() => onPick("folder")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50" title={mac?.online ? undefined : "Start the helper on your Mac first"}>
+              Choose a folder…
+            </button>
+          </>
         )}
       </div>
       {card.files.length > 0 ? (
@@ -355,8 +404,12 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
   const load = useCallback(async () => {
     const r = await call<{ edit: EditCard; events: EditEvent[] }>(`/api/hub/edits/${card.id}?after=${last.current}`, "GET");
     if (r.events.length) {
-      last.current = r.events[r.events.length - 1].id;
-      setEvents((e) => [...e, ...r.events]);
+      last.current = Math.max(last.current, r.events[r.events.length - 1].id);
+      // Two checks can overlap; keep each event once.
+      setEvents((e) => {
+        const seen = new Set(e.map((x) => x.id));
+        return [...e, ...r.events.filter((x) => !seen.has(x.id))];
+      });
     }
     return r.edit;
   }, [card.id]);

@@ -18,6 +18,9 @@ export const STATUS_LABEL: Record<EditStatus, string> = {
 
 export type EditFile = { path: string; name: string; duration?: number | null };
 
+/** A card for a whole shoot sheet (every video, edited in one go) has this video code. */
+export const WHOLE_SHEET = "ALL";
+
 export type EditCard = {
   id: string;
   projectId: string;
@@ -28,6 +31,7 @@ export type EditCard = {
   status: EditStatus;
   files: EditFile[];
   pickRequested: boolean;
+  pickMode: "files" | "folder";
   draftName: string | null;
   updatedAt: string;
 };
@@ -44,6 +48,16 @@ export type Device = {
 };
 
 const TYPE: Record<string, string> = { th: "Talking head", ls: "Lip-sync", ac: "Acting", gs: "Green screen" };
+
+/** The whole shoot sheet as text: the week, where to film (with every clip in filming order), then each video. */
+export function briefForWholeSheet(sheet: SheetData): string {
+  const head = [sheet.kicker, sheet.h1, sheet.summary].filter(Boolean).join("\n");
+  const where = sheet.sessions
+    .map((s) => [`${s.key} · ${s.name} (${s.light}) - videos ${s.videos.join(", ")}`, s.setup, "Film in this order:", ...s.clips.map((c) => `- ${c.code} · ${c.video}: ${c.text}`), s.note].filter(Boolean).join("\n"))
+    .join("\n\n");
+  const videos = sheet.videos.map((v) => briefFromSheet(sheet, v.code)).join("\n\n-----\n\n");
+  return [head, "WHERE TO FILM", where, "VIDEOS", videos].join("\n\n");
+}
 
 /** Everything about one video, as text - the same thing as "Copy everything" on a shoot sheet card. */
 export function briefFromSheet(sheet: SheetData, code: string): string {

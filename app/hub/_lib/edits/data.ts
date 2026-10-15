@@ -19,13 +19,14 @@ type EditRow = {
   status: EditStatus;
   files: EditFile[];
   pick_requested_at: string | null;
+  pick_mode: "files" | "folder";
   draft_name: string | null;
   updated_at: string;
   session_id: string | null;
   device_id: string | null;
   cancel_requested: boolean;
 };
-const EDIT_COLS = "id, project_id, sheet_id, video_code, title, brief, status, files, pick_requested_at, draft_name, updated_at, session_id, device_id, cancel_requested";
+const EDIT_COLS = "id, project_id, sheet_id, video_code, title, brief, status, files, pick_requested_at, pick_mode, draft_name, updated_at, session_id, device_id, cancel_requested";
 
 export function toCard(r: EditRow): EditCard {
   return {
@@ -38,6 +39,7 @@ export function toCard(r: EditRow): EditCard {
     status: r.status,
     files: r.files ?? [],
     pickRequested: Boolean(r.pick_requested_at),
+    pickMode: r.pick_mode ?? "files",
     draftName: r.draft_name,
     updatedAt: r.updated_at,
   };
@@ -202,7 +204,7 @@ export async function workFor(auth: DeviceAuth) {
   const db = adminClient();
   const [queued, picks, running] = await Promise.all([
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
-    db.from("hub_edits").select("id, video_code, title").eq("user_id", auth.userId).not("pick_requested_at", "is", null).limit(5),
+    db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).limit(5),
     db.from("hub_edits").select("id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
   ]);
   const runIds = (running.data ?? []).map((r) => r.id);
@@ -218,7 +220,7 @@ export async function workFor(auth: DeviceAuth) {
     : [];
   return {
     edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", files: r.files ?? [], sessionId: r.session_id })),
-    picks: (picks.data ?? []).map((p) => ({ id: p.id, label: [p.video_code, p.title].filter(Boolean).join(" · ") })),
+    picks: (picks.data ?? []).map((p) => ({ id: p.id, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
     replies: replies.map((r) => ({ eventId: r.id, editId: r.edit_id, text: r.text, sessionId: running.data?.find((x) => x.id === r.edit_id)?.session_id ?? null })),
     cancels: (running.data ?? []).filter((r) => r.cancel_requested).map((r) => r.id),
   };

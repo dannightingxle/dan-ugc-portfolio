@@ -32,7 +32,8 @@ create table public.hub_device_files (
 );
 alter table public.hub_device_files enable row level security;
 
--- One card per video: its brief, the clips picked for it, and where the edit is up to.
+-- One card per video (video_code 'ALL' = a whole shoot sheet edited in one go): its brief,
+-- the clips picked for it, and where the edit is up to.
 create table public.hub_edits (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -45,6 +46,7 @@ create table public.hub_edits (
   files jsonb not null default '[]'::jsonb,
   device_id uuid references public.hub_devices (id) on delete set null,
   pick_requested_at timestamptz,
+  pick_mode text not null default 'files' check (pick_mode in ('files', 'folder')),
   cancel_requested boolean not null default false,
   session_id text,
   draft_name text,
