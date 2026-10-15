@@ -133,6 +133,28 @@ html {
   opacity: 0.2;
 }
 
+/* Touch screens: the glow never follows a cursor there, and a 100px blur on a
+   full-screen fixed layer (plus the SVG noise above) is costly enough to help
+   tip iPhones - Instagram's in-app browser above all - over their memory limit.
+   Paint the same soft glows as plain gradients, and skip the grain. */
+@media (pointer: coarse) {
+  .grain::before {
+    display: none;
+  }
+  .aurora::before,
+  .aurora::after {
+    filter: none;
+    width: 160vw;
+    height: 160vw;
+  }
+  .aurora::before {
+    background: radial-gradient(circle, var(--accent), rgba(255, 107, 53, 0) 50%);
+  }
+  .aurora::after {
+    background: radial-gradient(circle, #6b35ff, rgba(107, 53, 255, 0) 50%);
+  }
+}
+
 /* Light sections have solid backgrounds, so the fixed layer above never shows
    through them. They paint their own copy of the glow instead: `background-
    attachment: fixed` anchors the gradients to the viewport (reading the same
@@ -191,6 +213,9 @@ html {
 .reveal.in {
   opacity: 1;
   transform: none;
+  /* Drop the GPU layer once shown: dozens of permanent layers cost phones
+     memory they don't have (Instagram's in-app browser crashed on load). */
+  will-change: auto;
 }
 
 /* ---------- Kinetic per-letter headline ---------- */
@@ -207,6 +232,7 @@ html {
 .kin.in .kin-letter {
   opacity: 1;
   transform: none;
+  will-change: auto;
 }
 
 /* ---------- Infinite marquee ---------- */

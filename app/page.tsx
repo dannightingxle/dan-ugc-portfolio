@@ -22,16 +22,16 @@ const STATS = [
 /* `whiteAsset` marks logo files that are white/knocked-out versions - they get
    rendered black on the white brand tiles until a full-colour file replaces them. */
 const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = [
-  { name: "Puma", logo: "/logos/puma.svg", whiteAsset: true },
+  { name: "Puma", logo: "/logos/puma.png", whiteAsset: true },
   { name: "Shark", logo: "/logos/shark.png" },
   { name: "Manchester City", logo: "/logos/mancity.webp" },
   { name: "Coors", logo: "/logos/coors.webp" },
   { name: "Sure", logo: "/logos/sure.jpg" },
-  { name: "MyProtein", logo: "/logos/myprotein.svg", whiteAsset: true },
+  { name: "MyProtein", logo: "/logos/myprotein.png", whiteAsset: true },
   { name: "Huel", logo: "/logos/huel.png" },
   { name: "Fussy", logo: "/logos/fussy.png" },
   { name: "HelpBnk", logo: "/logos/helpbnk.webp" },
-  { name: "Neutonic", logo: "/logos/neutonic.svg", whiteAsset: true },
+  { name: "Neutonic", logo: "/logos/neutonic.png", whiteAsset: true },
   { name: "Canva", logo: "/logos/canva.webp" },
   { name: "P&O Ferries", logo: "/logos/po-ferries.jpg" },
   { name: "B&M", logo: "/logos/bm-color.png" },
@@ -40,7 +40,7 @@ const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = 
   { name: "Avios", logo: "/logos/avios.png" },
   { name: "Harry's", logo: "/logos/harrys-color.svg" },
   { name: "Tide", logo: "/logos/tide.jpg" },
-  { name: "Anker", logo: "/logos/anker.svg", whiteAsset: true },
+  { name: "Anker", logo: "/logos/anker.png", whiteAsset: true },
   { name: "Whatnot", logo: "/logos/whatnot-color.png" },
   { name: "Tembo", logo: "/logos/tembo-color.png" },
   { name: "Zable", logo: "/logos/zable-color.png" },
@@ -483,7 +483,7 @@ export default function Home() {
           <Reveal delay={140}>
             <div className="relative">
               <div className="grid grid-cols-2 gap-4">
-                <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.png" />
+                <DuoCard label="Dan" tag="Marketing-trained" tagline="Dad / business / fitness / SaaS" photo="/duo/dan.jpg" />
                 <DuoCard label="Lydia" tag="Mum creator" tagline="Mum / beauty / wellness / home" photo="/duo/wife.jpg" />
               </div>
               <div className="absolute -inset-px rounded-2xl border border-[color:var(--accent)] opacity-20 pointer-events-none" />
@@ -946,8 +946,10 @@ function formatTime(s: number) {
 }
 
 function WorkCard({ item }: { item: WorkItem }) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  const [onScreen, setOnScreen] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -956,36 +958,24 @@ function WorkCard({ item }: { item: WorkItem }) {
   const [scrubbing, setScrubbing] = useState(false);
   const poster = item.videoSrc.replace(/\/([^/]+)\.mp4$/, "/posters/$1.jpg");
 
-  /* The source is attached only while a clip is on screen, and taken away
-     again when it scrolls off. A paused video keeps its decoded frames, and
-     the carousel holds ~100 cards: on iPhones (above all inside Instagram's
-     in-app browser) that memory piled up until the tab crashed with "A problem
-     repeatedly occurred". Unloading puts the card back to its poster. */
-  const attach = (el: HTMLVideoElement) => {
-    if (!el.getAttribute("src")) el.src = item.videoSrc;
-  };
-
+  /* A card only gets a <video> element while it's on screen; the rest show a
+     lazy-loaded poster image. The carousel holds ~100 cards, and on iPhones
+     (above all inside Instagram's in-app browser) that many video elements -
+     even paused, even without a source - used enough memory to crash the tab,
+     at first while scrolling and then on load. Scrolling a card away removes
+     its video, which frees it and puts the card back to its poster. */
   useEffect(() => {
-    const el = videoRef.current;
+    const el = cardRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          attach(el);
-          el.play().catch(() => {});
-        } else {
-          el.pause();
+        setOnScreen(entry.isIntersecting);
+        if (!entry.isIntersecting) {
           // scrolling a clip away drops its sound, so the next one starts quiet
-          if (!el.muted) {
-            el.muted = true;
-            setMuted(true);
-          }
-          if (el.getAttribute("src")) {
-            el.removeAttribute("src");
-            el.load();
-            setBuffering(false);
-            setTime(0);
-          }
+          setPlaying(false);
+          setBuffering(false);
+          setMuted(true);
+          setTime(0);
         }
       },
       { threshold: 0.25, rootMargin: "200px 0px" }
@@ -993,8 +983,9 @@ function WorkCard({ item }: { item: WorkItem }) {
     io.observe(el);
 
     const onOtherAudio = (e: Event) => {
-      if ((e as CustomEvent<HTMLVideoElement>).detail === el) return;
-      el.muted = true;
+      const video = videoRef.current;
+      if (!video || (e as CustomEvent<HTMLVideoElement>).detail === video) return;
+      video.muted = true;
       setMuted(true);
     };
     window.addEventListener(AUDIO_EVENT, onOtherAudio);
@@ -1003,16 +994,21 @@ function WorkCard({ item }: { item: WorkItem }) {
       io.disconnect();
       window.removeEventListener(AUDIO_EVENT, onOtherAudio);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Clips play muted as soon as they're on screen.
+  useEffect(() => {
+    if (onScreen) videoRef.current?.play().catch(() => {});
+  }, [onScreen]);
 
   const togglePlay = () => {
     const el = videoRef.current;
-    if (!el) return;
-    if (el.paused) {
-      attach(el);
-      el.play().catch(() => {});
-    } else el.pause();
+    if (!el) {
+      setOnScreen(true);
+      return;
+    }
+    if (el.paused) el.play().catch(() => {});
+    else el.pause();
   };
 
   const seekTo = (seconds: number) => {
@@ -1076,44 +1072,57 @@ function WorkCard({ item }: { item: WorkItem }) {
     setMuted(el.muted);
     if (!el.muted) {
       window.dispatchEvent(new CustomEvent(AUDIO_EVENT, { detail: el }));
-      attach(el);
       el.play().catch(() => {});
     }
   };
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="hover-lift group relative aspect-[9/16] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden">
-        <video
-          ref={videoRef}
-          poster={poster}
-          muted
-          loop
-          playsInline
-          /* iOS in-app browsers (TikTok, Instagram) only honour the legacy
-             attributes - without them a tap kicks the clip into fullscreen. */
-          webkit-playsinline="true"
-          x5-playsinline="true"
-          disablePictureInPicture
-          preload="none"
-          /* preload="none" means a first play starts with zero data - surface
-             that as a buffering state so the card reads "loading", not broken. */
-          onPlay={(e) => {
-            setPlaying(true);
-            if (e.currentTarget.readyState < 3) setBuffering(true);
-          }}
-          onPause={() => setPlaying(false)}
-          onWaiting={() => setBuffering(true)}
-          onStalled={() => setBuffering(true)}
-          onPlaying={() => setBuffering(false)}
-          onCanPlay={() => setBuffering(false)}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
-          onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
-          onTimeUpdate={(e) => {
-            if (!scrubbing) setTime(e.currentTarget.currentTime);
-          }}
+      <div
+        ref={cardRef}
+        className="hover-lift group relative aspect-[9/16] rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-card)] overflow-hidden"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={poster}
+          alt=""
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
         />
+        {onScreen && (
+          <video
+            ref={videoRef}
+            src={item.videoSrc}
+            poster={poster}
+            muted
+            loop
+            playsInline
+            /* iOS in-app browsers (TikTok, Instagram) only honour the legacy
+               attributes - without them a tap kicks the clip into fullscreen. */
+            webkit-playsinline="true"
+            x5-playsinline="true"
+            disablePictureInPicture
+            preload="metadata"
+            /* A first play starts with little or no data - surface that as a
+               buffering state so the card reads "loading", not broken. */
+            onPlay={(e) => {
+              setPlaying(true);
+              if (e.currentTarget.readyState < 3) setBuffering(true);
+            }}
+            onPause={() => setPlaying(false)}
+            onWaiting={() => setBuffering(true)}
+            onStalled={() => setBuffering(true)}
+            onPlaying={() => setBuffering(false)}
+            onCanPlay={() => setBuffering(false)}
+            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+            onDurationChange={(e) => setDuration(e.currentTarget.duration || 0)}
+            onTimeUpdate={(e) => {
+              if (!scrubbing) setTime(e.currentTarget.currentTime);
+            }}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
         <button
           type="button"
           onClick={togglePlay}
@@ -1125,7 +1134,7 @@ function WorkCard({ item }: { item: WorkItem }) {
               playing && !buffering ? "opacity-0 group-hover:opacity-70" : "opacity-100"
             }`}
           >
-            <span className="grid place-items-center size-14 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white">
+            <span className="grid place-items-center size-14 rounded-full bg-black/55 border border-white/20 text-white">
               {playing && buffering ? (
                 <span
                   className="size-5 rounded-full border-2 border-white/30 border-t-white animate-spin"
@@ -1142,7 +1151,7 @@ function WorkCard({ item }: { item: WorkItem }) {
               )}
             </span>
             {playing && buffering && (
-              <span className="text-[10px] uppercase tracking-[0.2em] text-white/90 bg-black/45 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-white/90 bg-black/55 px-2.5 py-1 rounded-full border border-white/10">
                 Loading
               </span>
             )}
