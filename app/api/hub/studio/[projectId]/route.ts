@@ -17,5 +17,11 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/hub/studio/[
   const blocked = crossSite(request);
   if (blocked) return blocked;
   const { projectId } = await ctx.params;
-  return studioAction(request, projectId, WorkspaceBody, ({ user, body }) => saveWorkspace(user.id, projectId, body), { needsClaude: false });
+  return studioAction(
+    request,
+    projectId,
+    WorkspaceBody,
+    async ({ user, body }) => saveWorkspace(user.id, projectId, { ...body, template: body.template ?? (await getWorkspace(user.id, projectId)).template }),
+    { needsClaude: false },
+  );
 }

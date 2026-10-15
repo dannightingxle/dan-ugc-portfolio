@@ -2,10 +2,11 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { adminClient } from "../supabase/admin";
 import type { HubUser } from "../supabase/server";
-import { ask } from "./claude";
+import { StudioError, ask } from "./claude";
 import { getWorkspace, saveSheet, saveWorkspace } from "./data";
-import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET } from "./prompts";
-import { FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
+import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
+import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
+import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
 import { canUse } from "../features";
 import { createEdit } from "../edits/data";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types";
@@ -96,34 +97,61 @@ export async function makeShootSheet(
   const ask_ = input.newBrief.trim()
     ? `New brief is in the brief file. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
     : `I need this week's content: ${input.videos} videos.`;
-  const result = await ask({
-    system: SYSTEM_SHEET,
-    context: workspaceContext(job.brand, ws),
-    content: [
-      ...uploadsToBlocks(input.uploads),
-      {
-        type: "text",
-        text: [
-          ask_,
-          `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
-          input.lastWeek && `How last week went: ${input.lastWeek}`,
-          input.trending && `Doing well in the niche right now - adapt these for the app:\n${input.trending}`,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      },
-    ],
-    schema: SheetResult,
-    effort: "medium",
-  });
+  const content: Anthropic.Beta.BetaContentBlockParam[] = [
+    ...uploadsToBlocks(input.uploads),
+    {
+      type: "text",
+      text: [
+        ask_,
+        `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
+        input.lastWeek && `How last week went: ${input.lastWeek}`,
+        input.trending && `Doing well in the niche right now - adapt these for the app:\n${input.trending}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    },
+  ];
+  const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-  const title = `${result.sheet.h1} · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
-  const id = await saveSheet(user.id, projectId, title, result.sheet);
+  // The job's own template (from its Claude Project) when it has one, else the Creator Desk sheet.
+  const block = ws.template ? weekDataBlock(ws.template) : null;
+  let sheet: SheetData | CustomSheet;
+  let title: string, scriptBankEntry: string, oneLine: string;
+  if (block) {
+    const result = await ask({
+      system: SYSTEM_SHEET_TEMPLATE,
+      context: workspaceContext(job.brand, ws),
+      content: [
+        ...content,
+        { type: "text", text: `The template's WEEK DATA block (constants: ${block.names.join(", ")}):\n\n${block.source}\n\nAnd its header, with the text to fill in brackets:\n${headerOf(ws.template)}` },
+      ],
+      schema: CustomSheetResult,
+      effort: "medium",
+    });
+    const read = readTemplateData(result.dataJson, block.names);
+    if ("error" in read) throw new StudioError(read.error);
+    const header = { title: result.title, kicker: result.kicker, h1: result.h1, summary: result.summary };
+    sheet = { ...read.data, videos: read.data.videos as CustomSheet["videos"], custom: { html: fillTemplate(ws.template, header, read.data), header } };
+    ({ scriptBankEntry, oneLine } = result);
+    title = `${result.h1} · ${date}`;
+  } else {
+    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, effort: "medium" });
+    sheet = result.sheet;
+    ({ scriptBankEntry, oneLine } = result);
+    title = `${result.sheet.h1} · ${date}`;
+  }
+
+  const id = await saveSheet(user.id, projectId, title, sheet);
   // Newest first, so the next sheet sees what's already been made.
-  const entry = `## ${title}\n${result.scriptBankEntry.trim()}`;
+  const entry = `## ${title}\n${scriptBankEntry.trim()}`;
   ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, ws.files.scriptBank.trim()].filter(Boolean).join("\n\n") } });
-  await makeEditCards(user, projectId, id, title, result.sheet);
-  return { id, oneLine: result.oneLine, workspace: ws };
+  await makeEditCards(user, projectId, id, title, sheet);
+  return { id, oneLine, workspace: ws };
+}
+
+/** The template's header markup, so Claude can see the bracketed text to fill. */
+function headerOf(html: string) {
+  return /<header class="page">[\s\S]*?<\/header>/i.exec(html)?.[0] ?? "(no header)";
 }
 
 /* ---- Friday review ---- */
@@ -149,11 +177,11 @@ export async function fridayReview(user: HubUser, projectId: string, input: { nu
 }
 
 /** With Edits on, a new shoot sheet comes with its edit cards ready: one for the whole week, then one per video. */
-async function makeEditCards(user: HubUser, projectId: string, sheetId: string, title: string, sheet: SheetData) {
+async function makeEditCards(user: HubUser, projectId: string, sheetId: string, title: string, sheet: SheetData | CustomSheet) {
   if (!(await canUse(user, "edits"))) return;
   try {
     await createEdit(user.id, { projectId, sheetId, videoCode: WHOLE_SHEET, title: `${title} - all ${sheet.videos.length} videos`, brief: briefForWholeSheet(sheet) });
-    for (const v of sheet.videos) await createEdit(user.id, { projectId, sheetId, videoCode: v.code, title: v.title, brief: briefFromSheet(sheet, v.code) });
+    for (const v of sheet.videos) await createEdit(user.id, { projectId, sheetId, videoCode: String(v.code), title: String(v.title ?? ""), brief: briefFromSheet(sheet, String(v.code)) });
   } catch (e) {
     // The sheet itself is fine; cards can still be made from the Edits tab.
     console.error("Creator Desk: couldn't make edit cards", e);

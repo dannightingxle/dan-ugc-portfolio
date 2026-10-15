@@ -28,6 +28,8 @@ export const ACCOUNT_CHECKS = [
 export type Workspace = {
   instructions: string;
   files: Record<FileKey, string>;
+  /** The job's own shoot sheet template (HTML from its Claude Project), or "" for the Creator Desk one. */
+  template: string;
   clientQuestions: string[];
   needsDan: string[];
   couldntOpen: string[];
@@ -40,6 +42,7 @@ export function emptyWorkspace(): Workspace {
   return {
     instructions: "",
     files: { brief: "", appNotes: "", references: "", winners: "", scriptBank: "" },
+    template: "",
     clientQuestions: [],
     needsDan: [],
     couldntOpen: [],
@@ -140,5 +143,17 @@ export const ReviewResult = z.object({
   winners: z.string().describe("The full rewritten winners file with this week's results added: top 5-10, hook, transcript, format, numbers, one line on why"),
 });
 export type ReviewResult = z.infer<typeof ReviewResult>;
+
+/** A shoot sheet in the job's own template: its WEEK DATA as JSON (checked and filled in by custom-template.ts). */
+export const CustomSheetResult = z.object({
+  title: z.string().describe("The page title for the browser tab"),
+  kicker: z.string(),
+  h1: z.string(),
+  summary: z.string(),
+  dataJson: z.string().describe("A JSON object: one key per WEEK DATA constant, same names and shapes as the template's example"),
+  scriptBankEntry: z.string().describe("This batch's hooks and angles, one line per video, for the script-bank file"),
+  oneLine: z.string().describe("One line on what's in this sheet"),
+});
+export type CustomSheetResult = z.infer<typeof CustomSheetResult>;
 
 export type SheetSummary = { id: string; title: string; createdAt: string; videos: number };

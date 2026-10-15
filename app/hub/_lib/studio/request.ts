@@ -53,6 +53,8 @@ const File = text(400_000);
 export const WorkspaceBody = z.object({
   instructions: text(50_000),
   files: z.object({ brief: File, appNotes: File, references: File, winners: File, scriptBank: File }),
+  // Left out by pages opened before templates existed: the saved one is kept.
+  template: z.string().max(300_000).optional(),
   clientQuestions: z.array(z.string().max(2_000)).max(50).default([]),
   needsDan: z.array(z.string().max(2_000)).max(50).default([]),
   couldntOpen: z.array(z.string().max(2_000)).max(50).default([]),

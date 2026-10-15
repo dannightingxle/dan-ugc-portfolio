@@ -18,6 +18,8 @@ export type ImportedFiles = {
   references: string;
   winners: string;
   scriptBank: string;
+  /** The job's own shoot sheet template (HTML). */
+  template: string;
   accountHandles: string;
   accountNotes: string;
   clientQuestions: string[];
@@ -173,6 +175,7 @@ function fieldsFrom(job: Raw): { fields: Partial<Project>; files: ImportedFiles 
     references: str(job.references),
     winners: str(job.winners),
     scriptBank: str(job.scriptBank),
+    template: str(job.template, 300_000),
     accountHandles: str(job.accountHandles, 2_000),
     accountNotes: str(job.accountNotes, 10_000),
     clientQuestions: list(job.openQuestions ?? job.clientQuestions),
@@ -292,6 +295,12 @@ export function planImport(existing: Project[], jobs: Raw[]): PlanItem[] {
       if (!hits.length) return missing();
       hits.forEach((h) => used.add(h.id));
       return hits.map((h) => ({ brand: h.brand, isNew: false, remove: true, missing: false, project: h, changed: [], files }));
+    }
+
+    // A job asked for as new is always added, even if one with that brand is already there.
+    if (job.new === true) {
+      const project = newProject(fields);
+      return [{ brand: project.brand, isNew: true, remove: false, missing: false, project, changed: [], files }];
     }
 
     // Same id, else the only job for that brand (or an alias) on both sides, else the same brand and title.
