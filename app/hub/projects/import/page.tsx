@@ -13,7 +13,7 @@ import { input } from "../fields";
    filled in, then import. Only empty fields are filled; notes are added to. */
 
 export default function ImportPage() {
-  const { projects, save } = useProjects();
+  const { projects, save, remove } = useProjects();
   const studio = useFeature("studio");
   const sync = useSyncStatus();
   const [text, setText] = useState("");
@@ -42,12 +42,13 @@ export default function ImportPage() {
 
   async function run() {
     if (!plan) return;
-    const work = plan.filter((i) => i.isNew || i.changed.length || (studio && hasFiles(i.files)));
+    const work = plan.filter((i) => i.remove || i.isNew || i.changed.length || (studio && hasFiles(i.files)));
     setProgress({ done: 0, total: work.length, failed: [] });
     const failed: string[] = [];
     for (const [n, item] of work.entries()) {
-      if (item.isNew || item.changed.length) save(item.project);
-      if (studio && hasFiles(item.files)) {
+      if (item.remove) remove(item.project.id);
+      else if (item.isNew || item.changed.length) save(item.project);
+      if (!item.remove && studio && hasFiles(item.files)) {
         try {
           await fillWorkspace(item.project.id, item.files);
         } catch (e) {
@@ -62,6 +63,7 @@ export default function ImportPage() {
   const counts = plan && {
     added: plan.filter((i) => i.isNew).length,
     updated: plan.filter((i) => !i.isNew && i.changed.length).length,
+    removed: plan.filter((i) => i.remove).length,
     files: studio ? plan.filter((i) => hasFiles(i.files)).length : 0,
   };
 
@@ -106,6 +108,11 @@ export default function ImportPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-text-muted">
               <span className="font-semibold text-text">{counts.added}</span> new, <span className="font-semibold text-text">{counts.updated}</span> filled in
+              {counts.removed > 0 && (
+                <>
+                  , <span className="font-semibold text-text">{counts.removed}</span> removed
+                </>
+              )}
               {counts.files > 0 && (
                 <>
                   , Studio files for <span className="font-semibold text-text">{counts.files}</span>
@@ -113,14 +120,18 @@ export default function ImportPage() {
               )}
             </p>
             <button onClick={run} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
-              Import {plan.length} {plan.length === 1 ? "job" : "jobs"}
+              {counts.removed === plan.length ? `Remove ${plan.length}` : `Import ${plan.length} ${plan.length === 1 ? "job" : "jobs"}`}
             </button>
           </div>
           <ul className="divide-y divide-border rounded-2xl border border-border bg-bg-card">
             {plan.map((i) => (
               <li key={i.project.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${i.isNew ? "bg-good-soft text-good" : i.changed.length ? "bg-accent-soft text-accent" : "bg-text/5 text-text-dim"}`}>
-                  {i.isNew ? "New" : i.changed.length ? "Fill in" : "No change"}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    i.remove ? "bg-warn-soft text-warn" : i.isNew ? "bg-good-soft text-good" : i.changed.length ? "bg-accent-soft text-accent" : "bg-text/5 text-text-dim"
+                  }`}
+                >
+                  {i.remove ? "Remove" : i.isNew ? "New" : i.changed.length ? "Update" : "No change"}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{i.brand}</p>
@@ -129,8 +140,8 @@ export default function ImportPage() {
                   </p>
                 </div>
                 <span className="w-full text-xs text-text-dim sm:w-auto">
-                  {!i.isNew && i.changed.length > 0 && `Adds ${i.changed.join(", ")}`}
-                  {studio && hasFiles(i.files) && `${!i.isNew && i.changed.length ? " · " : ""}+ Studio files`}
+                  {!i.isNew && i.changed.length > 0 && `Updates ${i.changed.join(", ")}`}
+                  {!i.remove && studio && hasFiles(i.files) && `${!i.isNew && i.changed.length ? " · " : ""}+ Studio files`}
                 </span>
               </li>
             ))}

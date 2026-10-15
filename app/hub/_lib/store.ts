@@ -24,6 +24,9 @@ export const SHIPPING = ["Not needed", "Waiting", "On its way", "Received"] as c
 /** Tech UGC jobs (a dedicated account posting for an app) move through these instead. */
 export const TECH_STAGES = ["Negotiating", "Account creation", "Setup", "Warm-up", "Active", "On hold", "Ended"] as const;
 export type TechStage = (typeof TECH_STAGES)[number];
+/** Where a job came from: a brand's inbound message, a UGC platform (Twirl, Insense…) or your own outreach. */
+export const SOURCES = ["Inbound", "Platform", "Outreach"] as const;
+
 // Fees and per-video rates can be in any of these; totals are converted to the account's currency.
 export { CURRENCIES, type Currency } from "./currencies";
 
@@ -76,6 +79,12 @@ export type Project = {
   perVideo: number | null;
   currency: Currency;
   videosPerDay: number | null;
+  // Where it came from and the latest contact
+  source: (typeof SOURCES)[number] | "";
+  platform: string;
+  lastContact: string;
+  /** One to pass on to the mentorship group rather than do yourself. */
+  forGroup: boolean;
 };
 
 export function newProject(partial: Partial<Project> = {}): Project {
@@ -117,6 +126,10 @@ export function newProject(partial: Partial<Project> = {}): Project {
     perVideo: null,
     currency: "USD",
     videosPerDay: null,
+    source: "",
+    platform: "",
+    lastContact: "",
+    forGroup: false,
     ...partial,
   };
 }
