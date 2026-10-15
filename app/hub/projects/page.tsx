@@ -107,9 +107,11 @@ function ProjectCard({ p }: { p: Project }) {
         <span>{p.due ? `Due ${shortDate(p.due)}` : ""}</span>
       </div>
       {p.contact.name && <p className="truncate text-xs text-text-dim">👤 {p.contact.name}</p>}
-      {followups && (p.techStage || p.waitingOn) && (
+      {followups && (p.techStage || p.waitingOn || p.platform || p.forGroup) && (
         <div className="flex flex-wrap gap-1.5 text-[11px]">
           {p.techStage && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent">Tech · {p.techStage}</span>}
+          {p.source === "Platform" && p.platform && <span className="rounded-full bg-text/5 px-2 py-0.5 text-text-muted">{p.platform}</span>}
+          {p.forGroup && <span className="rounded-full bg-good-soft px-2 py-0.5 font-medium text-good">For the group</span>}
           {p.waitingOn && (
             <span className={`rounded-full px-2 py-0.5 ${chaseLate ? "bg-warn-soft font-medium text-warn" : "bg-text/5 text-text-dim"}`}>
               Waiting: {p.waitingOn}

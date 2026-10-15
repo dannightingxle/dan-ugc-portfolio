@@ -1,9 +1,12 @@
-import { CURRENCIES, PAYMENT_STATUSES, STAGES, TECH_STAGES, newProject, type Deliverable, type Project } from "./store";
+import { CURRENCIES, PAYMENT_STATUSES, SOURCES, STAGES, TECH_STAGES, newProject, type Deliverable, type Project } from "./store";
 
 /* Bringing jobs in from elsewhere (a Claude chat, an email trawl) as JSON.
    Matches each job to one already on the board by id or brand, and only fills
    what's empty - nothing typed into Creator Desk is ever overwritten. Notes
-   are the exception: new notes are added underneath the old ones. */
+   are the exception: new notes are added underneath the old ones.
+   A corrections file can say otherwise per job: "remove": true takes the job
+   off the board, "overwrite": true replaces the fields it gives (and "clear"
+   empties the ones it lists). */
 
 type Raw = Record<string, unknown>;
 
@@ -21,7 +24,17 @@ export type ImportedFiles = {
   replaceShorter: boolean;
 };
 
-export type PlanItem = { brand: string; isNew: boolean; project: Project; changed: string[]; files: ImportedFiles };
+export type PlanItem = { brand: string; isNew: boolean; remove: boolean; project: Project; changed: string[]; files: ImportedFiles };
+
+// Which project field each key in an import sets (for "overwrite" and "clear").
+const FIELD_FOR: Record<string, keyof Project> = {
+  brand: "brand", job: "brand", title: "title", stage: "stage", techStage: "techStage", paymentStatus: "paymentStatus", fee: "fee", feeCurrency: "feeCurrency",
+  perVideo: "perVideo", currency: "currency", videosPerDay: "videosPerDay", payNotes: "payModel", payModel: "payModel", invoiceNumber: "invoiceNumber",
+  invoicedOn: "invoicedOn", paidOn: "paidOn", paymentTermsDays: "paymentTermsDays", paymentNotes: "paymentNotes", filmBy: "filmBy", due: "due", goLive: "goLive",
+  chaseOn: "chaseOn", product: "product", usageRights: "usageRights", exclusivity: "exclusivity", revisions: "revisions", keyMessages: "keyMessages", dos: "dos",
+  donts: "donts", contact: "contact", links: "links", deliverables: "deliverables", waitingOn: "waitingOn", notes: "notes", status: "notes", source: "source",
+  platform: "platform", lastContact: "lastContact", forGroup: "forGroup",
+};
 
 const FORMATS = ["9:16", "4:5", "1:1", "16:9", "Photo", "Raw"];
 
@@ -90,6 +103,10 @@ function fieldsFrom(job: Raw): { fields: Partial<Project>; files: ImportedFiles 
   set("stage", stageFor(job, techStage ?? "", paymentStatus));
   set("techStage", techStage ?? (tech ? "Setup" : undefined));
   set("paymentStatus", paymentStatus);
+  set("source", pick(job.source, SOURCES));
+  set("platform", str(job.platform, 100));
+  set("lastContact", day(job.lastContact));
+  if (typeof job.forGroup === "boolean") f.forGroup = job.forGroup;
 
   // Amounts keep their own currency (totals are converted); one the board doesn't know goes in the notes.
   const currency = pick(job.currency, CURRENCIES) ?? (str(job.currency) ? undefined : "GBP");
@@ -205,6 +222,52 @@ function fill(existing: Project, incoming: Partial<Project>): { project: Project
   return { project: p, changed };
 }
 
+/** A correction: the fields the job names replace what's there; "clear" empties the ones it lists. */
+function overwrite(existing: Project, job: Raw, incoming: Partial<Project>): { project: Project; changed: string[] } {
+  const p: Project = { ...existing, contact: { ...existing.contact } };
+  const blank = newProject();
+  const changed = new Set<keyof Project>();
+  for (const key of Object.keys(job)) {
+    const k = FIELD_FOR[key];
+    if (!k || incoming[k] === undefined) continue;
+    if (k === "contact") {
+      const c = incoming.contact as Project["contact"];
+      for (const ck of Object.keys(c) as (keyof Project["contact"])[]) {
+        if (c[ck] && c[ck] !== p.contact[ck]) {
+          p.contact[ck] = c[ck];
+          changed.add(k);
+        }
+      }
+    } else if (k === "links") {
+      const add = (incoming.links ?? []).filter((l) => !p.links.some((x) => x.url === l.url));
+      if (add.length) {
+        p.links = [...p.links, ...add];
+        changed.add(k);
+      }
+    } else if (JSON.stringify(p[k]) !== JSON.stringify(incoming[k])) {
+      (p as Record<string, unknown>)[k] = incoming[k];
+      changed.add(k);
+    }
+    // A fee or rate brings its currency with it.
+    if (k === "fee" && incoming.feeCurrency && p.feeCurrency !== incoming.feeCurrency) {
+      p.feeCurrency = incoming.feeCurrency;
+      changed.add("feeCurrency");
+    }
+    if (k === "perVideo" && incoming.currency && p.currency !== incoming.currency) {
+      p.currency = incoming.currency;
+      changed.add("currency");
+    }
+  }
+  for (const key of list(job.clear)) {
+    const k = FIELD_FOR[key];
+    if (k && k !== "brand" && JSON.stringify(p[k]) !== JSON.stringify(blank[k])) {
+      (p as Record<string, unknown>)[k] = blank[k];
+      changed.add(k);
+    }
+  }
+  return { project: p, changed: [...changed] };
+}
+
 /** Work out what an import will do, without saving anything. */
 export function planImport(existing: Project[], jobs: Raw[]): PlanItem[] {
   const used = new Set<string>();
@@ -215,7 +278,7 @@ export function planImport(existing: Project[], jobs: Raw[]): PlanItem[] {
     incomingCount.set(key, (incomingCount.get(key) ?? 0) + 1);
   }
 
-  return jobs.map((job) => {
+  const items = jobs.map((job): PlanItem | null => {
     const { fields, files } = fieldsFrom(job);
     const key = brandKey(fields.brand ?? "");
     const id = str(job.id, 80);
@@ -226,14 +289,21 @@ export function planImport(existing: Project[], jobs: Raw[]): PlanItem[] {
       if (same.length === 1 && incomingCount.get(key) === 1) match = same[0];
       else match = same.find((p) => brandKey(p.title) === brandKey(fields.title ?? "") && Boolean(p.title));
     }
+    if (job.remove === true) {
+      if (!match) return null; // already gone
+      used.add(match.id);
+      return { brand: match.brand, isNew: false, remove: true, project: match, changed: [], files };
+    }
     if (match) {
       used.add(match.id);
-      return { brand: match.brand, isNew: false, ...fill(match, fields), files };
+      const result = job.overwrite === true ? overwrite(match, job, fields) : fill(match, fields);
+      return { brand: result.project.brand, isNew: false, remove: false, ...result, files };
     }
     const project = newProject({ ...fields, ...(id && /^[\w-]{1,80}$/.test(id) ? { id } : {}) });
     used.add(project.id);
-    return { brand: project.brand, isNew: true, project, changed: [], files };
+    return { brand: project.brand, isNew: true, remove: false, project, changed: [], files };
   });
+  return items.filter((i): i is PlanItem => i !== null);
 }
 
 /** Studio fields from an import that would fill gaps in a job's workspace. */

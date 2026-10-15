@@ -9,7 +9,7 @@ import { ExampleTag } from "./projects/fields";
 import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { useFeature } from "./account-provider";
 import { TechJobs } from "./studio/tech-jobs";
-import { Sparkline, StarButton, StatusPill, Thumb, compact, shortDate, useApi } from "./_lib/ui";
+import { Sparkline, StarButton, StatusPill, Thumb, compact, daysAgo, money, shortDate, useApi } from "./_lib/ui";
 import { useMoney } from "./_lib/money";
 
 /* Dashboard: projects and money first, then every starred ad with live numbers. */
@@ -32,6 +32,8 @@ export default function HubHome() {
   const invoiced = projects.filter((p) => p.paymentStatus === "Invoiced");
   const awaiting = total(invoiced);
   const overdue = invoiced.filter((p) => paymentDue(p)?.overdue).length;
+  // Soonest due first; ones without an invoice date go last so they get one.
+  const invoicesOut = [...invoiced].sort((a, b) => (paymentDue(a)?.date ?? "9999").localeCompare(paymentDue(b)?.date ?? "9999"));
   const pipeline = total(projects.filter((p) => p.paymentStatus === "Not invoiced"));
   const converted = projects.some((p) => p.fee != null && p.feeCurrency !== base);
   // Tech jobs have their own list above when Studio is on.
@@ -82,11 +84,49 @@ export default function HubHome() {
                   <li key={p.id}>
                     <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
                       <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
-                        <p className="text-xs text-text-dim">{p.brand}</p>
+                        <p className="text-xs text-text-dim">
+                          {p.brand}
+                          {p.lastContact && ` · last message ${daysAgo(p.lastContact)}`}
+                        </p>
                         <p className="text-sm font-medium">{p.waitingOn}</p>
                       </div>
                       <span className={`ml-auto rounded-full px-2 py-0.5 text-xs sm:ml-0 ${due ? "bg-warn-soft font-medium text-warn" : "bg-text/5 text-text-dim"}`}>
                         {!p.chaseOn ? "No chase date" : due ? "Chase today" : `Chase ${shortDate(p.chaseOn)}`}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {invoiced.length > 0 && (
+          <div className="rounded-2xl border border-border bg-bg-card">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="font-medium">Invoices out</h2>
+              <span className="text-xs text-text-dim">Due = invoice date + payment terms</span>
+            </div>
+            <ul className="divide-y divide-border">
+              {invoicesOut.map((p) => {
+                const due = paymentDue(p);
+                return (
+                  <li key={p.id}>
+                    <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
+                      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+                        <p className="text-xs text-text-dim">
+                          {p.brand}
+                          {p.invoicedOn && ` · invoiced ${shortDate(p.invoicedOn)}`}
+                        </p>
+                        <p className="truncate text-sm font-medium">{p.title || "Untitled"}</p>
+                      </div>
+                      <span className="text-sm font-semibold">{money(p.fee, p.feeCurrency)}</span>
+                      <span
+                        className={`ml-auto rounded-full px-2 py-0.5 text-xs sm:ml-0 ${
+                          !due ? "bg-text/5 text-text-dim" : due.overdue ? "bg-accent-soft font-medium text-accent" : "bg-warn-soft text-warn"
+                        }`}
+                      >
+                        {!due ? "Add the invoice date" : due.overdue ? `Overdue since ${shortDate(due.date)}` : `Due ${shortDate(due.date)}`}
                       </span>
                     </Link>
                   </li>

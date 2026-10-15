@@ -22,6 +22,13 @@ export function money(n: number | null | undefined, currency: keyof typeof CURRE
   return new Intl.NumberFormat("en-GB", { style: "currency", currency, currencyDisplay: currency === "USD" ? "narrowSymbol" : "symbol", maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
 }
 
+/** "today", "yesterday", "5 days ago" for a YYYY-MM-DD date. */
+export function daysAgo(d: string) {
+  if (!d) return "";
+  const days = Math.round((Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(d)) / 86_400_000);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+}
+
 export function shortDate(d: string | null | undefined) {
   if (!d) return "–";
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });

@@ -8,6 +8,7 @@ import {
   PAYMENT_STATUSES,
   SHIPPING,
   STAGES,
+  SOURCES,
   TECH_STAGES,
   paymentDue,
   techMonthly,
@@ -149,7 +150,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {/* Sidebar first on phones: money, dates and contact are what you look up most. */}
         <aside className="space-y-5 lg:order-2">
           {followups && (
-            <Section title="Tech job & follow-up">
+            <Section title="Job type & follow-up">
               <Field label="Tech UGC stage" hint="For a dedicated account posting for an app. Leave as 'Not a tech job' for brand deals.">
                 <select className={input} value={project.techStage} onChange={(e) => set("techStage", e.target.value as Project["techStage"])}>
                   <option value="">Not a tech job</option>
@@ -158,6 +159,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   ))}
                 </select>
               </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Came from">
+                  <select className={input} value={project.source} onChange={(e) => set("source", e.target.value as Project["source"])}>
+                    <option value="">-</option>
+                    {SOURCES.map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                </Field>
+                {project.source === "Platform" && (
+                  <Field label="Platform">
+                    <input className={input} value={project.platform} onChange={(e) => set("platform", e.target.value)} placeholder="Twirl, Insense…" />
+                  </Field>
+                )}
+              </div>
               {project.techStage && <TechPay project={project} set={set} />}
               <Field label="Pay notes">
                 <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="Paid weekly via SideShift + view bonuses" />
@@ -165,9 +181,18 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               <Field label="Waiting on" hint="Done only when they've replied or paid.">
                 <input className={input} value={project.waitingOn} onChange={(e) => set("waitingOn", e.target.value)} placeholder="Thomas to approve V3, invoice paid…" />
               </Field>
-              <Field label="Chase on">
-                <input type="date" className={input} value={project.chaseOn} onChange={(e) => set("chaseOn", e.target.value)} />
-              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Last message">
+                  <input type="date" className={input} value={project.lastContact} onChange={(e) => set("lastContact", e.target.value)} />
+                </Field>
+                <Field label="Chase on">
+                  <input type="date" className={input} value={project.chaseOn} onChange={(e) => set("chaseOn", e.target.value)} />
+                </Field>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={project.forGroup} onChange={(e) => set("forGroup", e.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--accent)]" />
+                For the mentorship group (pass it on rather than do it)
+              </label>
             </Section>
           )}
           <Section title="Payment" action={<PaymentPill project={project} />}>
