@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { deleteEdit, getEdit, listEvents, toCard, updateEdit } from "../../../../hub/_lib/edits/data";
 import { EDIT_STATUSES } from "../../../../hub/_lib/edits/types";
-import { FileList, NotFound, editsApi, text } from "../../../../hub/_lib/edits/request";
+import { FileList, NotFound, editsApi } from "../../../../hub/_lib/edits/request";
 
 /* One edit card: read it with its conversation (new events after ?after=), change it, delete it. */
 
@@ -15,11 +15,12 @@ export async function GET(request: Request, ctx: RouteContext<"/api/hub/edits/[i
   });
 }
 
+// Only what's sent changes (no defaults here, or a clip change would blank the title and card).
 const Patch = z.object({
   status: z.enum(EDIT_STATUSES).optional(),
   files: FileList.optional(),
-  title: text(300).optional(),
-  brief: text(100_000).optional(),
+  title: z.string().max(300).optional(),
+  brief: z.string().max(200_000).optional(),
 });
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/hub/edits/[id]">) {
