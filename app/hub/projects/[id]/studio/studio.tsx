@@ -8,6 +8,7 @@ import { ACCOUNT_CHECKS, FILES, type SheetSummary, type Workspace } from "../../
 import { Field, Section, input } from "../../fields";
 import { useFeature } from "../../../account-provider";
 import { Edits } from "./edits";
+import { weekDataBlock } from "../../../_lib/studio/custom-template";
 
 /* Studio: everything a Claude Project held for this job, plus the weekly
    shoot sheet, the Friday review and the account checklist. Edits save by
@@ -431,7 +432,51 @@ function FilesTab({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => void })
           />
         </Section>
       ))}
+      <TemplateSection ws={ws} edit={edit} />
     </div>
+  );
+}
+
+/** The job's own shoot sheet template (an HTML page from its Claude Project): new sheets are made in it. */
+function TemplateSection({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => void }) {
+  const [error, setError] = useState("");
+  const block = ws.template ? weekDataBlock(ws.template) : null;
+  return (
+    <Section title="Shoot sheet template" action={ws.template ? <span className="text-xs text-text-dim">{ws.template.length.toLocaleString()} characters</span> : null}>
+      {block ? (
+        <p className="text-sm text-text-muted">New shoot sheets are made in this job&apos;s own template, so they look and work exactly like the ones from your Claude Project.</p>
+      ) : ws.template ? (
+        <p className="text-sm text-warn">This template has no WEEK DATA block with a list of videos, so new sheets use the Creator Desk one instead.</p>
+      ) : (
+        <p className="text-sm text-text-muted">New sheets use the Creator Desk shoot sheet. To use this job&apos;s own one instead, add its template: the HTML page your Claude Project fills in each week.</p>
+      )}
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <label className="cursor-pointer rounded-lg border border-border px-3 py-1.5 font-medium hover:border-text-dim">
+          {ws.template ? "Replace template" : "Add template"}
+          <input
+            type="file"
+            accept=".html,.htm,.txt,text/html,text/plain"
+            className="sr-only"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              if (file.size > 300_000) return setError("That file is too big for a shoot sheet template.");
+              const text = await file.text();
+              if (!weekDataBlock(text)) return setError("That file has no WEEK DATA block with a list of videos, so it can't be filled in.");
+              setError("");
+              edit({ ...ws, template: text });
+            }}
+          />
+        </label>
+        {ws.template && (
+          <button type="button" className="text-text-dim hover:text-text" onClick={() => edit({ ...ws, template: "" })}>
+            Use the Creator Desk sheet instead
+          </button>
+        )}
+      </div>
+      {error && <p className="text-sm text-accent">{error}</p>}
+    </Section>
   );
 }
 

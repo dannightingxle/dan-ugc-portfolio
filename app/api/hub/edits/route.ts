@@ -37,7 +37,8 @@ export async function POST(request: Request) {
         const edit = await createEdit(user.id, { projectId: body.projectId, sheetId: sheet.id, videoCode: WHOLE_SHEET, title: `${sheet.title} - all ${n} videos`, brief: briefForWholeSheet(sheet.data) });
         return { edits: [edit] };
       }
-      const videos = body.videoCode ? sheet.data.videos.filter((v) => v.code === body.videoCode) : sheet.data.videos;
+      const all = (sheet.data.videos as { code?: unknown; title?: unknown }[]).map((v) => ({ code: String(v.code ?? ""), title: String(v.title ?? "") }));
+      const videos = body.videoCode ? all.filter((v) => v.code === body.videoCode) : all;
       if (!videos.length) throw new NotFound("That video isn't on the shoot sheet.");
       const edits = [];
       for (const v of videos) edits.push(await createEdit(user.id, { projectId: body.projectId, sheetId: sheet.id, videoCode: v.code, title: v.title, brief: briefFromSheet(sheet.data, v.code) }));

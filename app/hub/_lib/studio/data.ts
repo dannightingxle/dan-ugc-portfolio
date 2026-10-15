@@ -6,6 +6,7 @@ import { canUse } from "../features";
 import type { FeatureKey } from "../features-list";
 import { billingFor } from "../billing/stripe";
 import { readWorkspace, type SheetData, type SheetSummary, type Workspace } from "./types";
+import type { CustomSheet } from "./custom-template";
 
 /* Studio storage. Who can use Studio is a staged feature (owners, then the
    beta group, then everyone), so the tables are server-only and every read
@@ -71,12 +72,12 @@ export async function getSheet(userId: string, id: string) {
     .select("id, project_id, title, data, created_at")
     .eq("user_id", userId)
     .eq("id", id)
-    .maybeSingle<{ id: string; project_id: string; title: string; data: SheetData; created_at: string }>();
+    .maybeSingle<{ id: string; project_id: string; title: string; data: SheetData | CustomSheet; created_at: string }>();
   if (error) throw error;
   return data;
 }
 
-export async function saveSheet(userId: string, projectId: string, title: string, sheet: SheetData): Promise<string> {
+export async function saveSheet(userId: string, projectId: string, title: string, sheet: SheetData | CustomSheet): Promise<string> {
   const { data, error } = await adminClient()
     .from("hub_shoot_sheets")
     .insert({ user_id: userId, project_id: projectId, title, data: sheet })

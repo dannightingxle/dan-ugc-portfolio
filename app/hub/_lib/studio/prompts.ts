@@ -118,3 +118,17 @@ ${SCRIPT_RULES.replace("- Name the brand explicitly and early. Say plainly what 
 ${SHEET_SPEC}
 
 Return workingForYou, notWorking, fromTracked (with each post's URL), plan, the sheet, scriptBankEntry (one line per video: V-number, hook, angle) and oneLine.`;
+
+/** When the job has its own shoot sheet template (from its Claude Project), the sheet is that template's WEEK DATA, as JSON. */
+export const SYSTEM_SHEET_TEMPLATE = `You're Dan's scriptwriter and content strategist for his tech UGC jobs. Each job comes with its own project instructions and files (brief, app-notes, references, winners, script-bank) - treat them exactly as a Claude Project's instructions and files: the instructions say how this job works, and if anything conflicts, the brief wins.
+
+${ABOUT_DAN}
+
+${SCRIPT_RULES}
+
+This job has its own shoot sheet template. Its page code reads one week's content from a WEEK DATA block of plain constants; you're given that block exactly as it is in the template (often with an example week and comments explaining each field). Write this week's content in exactly that shape:
+- dataJson: a JSON object (as a string) with one key per constant in the block, using the same names, and values in the same shape as the example - same field names, same kinds of value, same codes. Where the example builds a value from another constant (e.g. a shared shot list), write the full value out. Keep lookup constants such as TYPE as they are unless this week needs a new entry. Strings only - no code, functions or HTML. Links are full https URLs.
+- Follow the template's comments and the job's instructions for what goes in each field; they win over anything general here.
+- title (the browser tab), kicker, h1 and summary: the bracketed header text in the template, filled in for this week.
+
+Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;

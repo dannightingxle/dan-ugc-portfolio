@@ -1,4 +1,5 @@
 import type { SheetData } from "../studio/types";
+import { type CustomSheet, isCustomSheet, sheetText, videoText } from "../studio/custom-template";
 
 /* Edit cards: one per video, edited on the creator's Mac by the Creator Desk
    Helper. Safe to import anywhere. */
@@ -50,7 +51,8 @@ export type Device = {
 const TYPE: Record<string, string> = { th: "Talking head", ls: "Lip-sync", ac: "Acting", gs: "Green screen" };
 
 /** The whole shoot sheet as text: the week, where to film (with every clip in filming order), then each video. */
-export function briefForWholeSheet(sheet: SheetData): string {
+export function briefForWholeSheet(sheet: SheetData | CustomSheet): string {
+  if (isCustomSheet(sheet)) return sheetText(sheet.custom.header, sheet);
   const head = [sheet.kicker, sheet.h1, sheet.summary].filter(Boolean).join("\n");
   const where = sheet.sessions
     .map((s) => [`${s.key} · ${s.name} (${s.light}) - videos ${s.videos.join(", ")}`, s.setup, "Film in this order:", ...s.clips.map((c) => `- ${c.code} · ${c.video}: ${c.text}`), s.note].filter(Boolean).join("\n"))
@@ -60,7 +62,11 @@ export function briefForWholeSheet(sheet: SheetData): string {
 }
 
 /** Everything about one video, as text - the same thing as "Copy everything" on a shoot sheet card. */
-export function briefFromSheet(sheet: SheetData, code: string): string {
+export function briefFromSheet(sheet: SheetData | CustomSheet, code: string): string {
+  if (isCustomSheet(sheet)) {
+    const cv = sheet.videos.find((x) => x.code === code);
+    return cv ? videoText(cv, sheet) : "";
+  }
   const v = sheet.videos.find((x) => x.code === code);
   if (!v) return "";
   const where = sheet.sessions.find((s) => s.key === v.session);

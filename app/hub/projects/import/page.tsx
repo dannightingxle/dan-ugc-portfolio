@@ -4,18 +4,23 @@ import Link from "next/link";
 import { useState } from "react";
 import { useFeature } from "../../account-provider";
 import { hasFiles, parseJobs, planImport, type ImportedFiles, type PlanItem } from "../../_lib/import-jobs";
-import { useProjects, useSyncStatus } from "../../_lib/store";
+import { useDataReady, useProjects, useSyncStatus } from "../../_lib/store";
 import { readWorkspace, type Workspace } from "../../_lib/studio/types";
 import { call } from "../[id]/studio/studio";
 import { input } from "../fields";
+import { type ClaudeProject, isTechProject, mapDocs, matchJob, projectToJob, readClaudeExport } from "../../_lib/claude-projects";
+import type { Project } from "../../_lib/store";
 
-/* Bring jobs in from a Claude chat or a file: preview what will be added or
-   filled in, then import. Only empty fields are filled; notes are added to. */
+/* Bring jobs in from a Claude chat or a file, or whole Claude Projects from a
+   Claude export: preview what will be added or filled in, then import. Only
+   empty fields are filled; notes are added to. */
 
 export default function ImportPage() {
   const { projects, save, remove } = useProjects();
   const studio = useFeature("studio");
   const sync = useSyncStatus();
+  // Matching needs the whole board: until it's loaded, every job would look new.
+  const loaded = useDataReady() && sync !== "error";
   const [text, setText] = useState("");
   const [plan, setPlan] = useState<PlanItem[] | null>(null);
   const [error, setError] = useState("");
@@ -24,6 +29,7 @@ export default function ImportPage() {
   function preview(source = text) {
     setError("");
     setPlan(null);
+    if (!loaded) return setError(sync === "error" ? "Your board didn't load, so jobs can't be matched. Refresh the page and try again." : "Your board is still loading. Try again in a moment.");
     try {
       const jobs = parseJobs(source);
       if (!jobs.length) throw new Error("No jobs found in that - each one needs at least a brand.");
@@ -92,17 +98,19 @@ export default function ImportPage() {
             aria-label="Jobs JSON"
           />
           <div className="flex flex-wrap items-center gap-3">
-            <button onClick={() => preview()} disabled={!text.trim()} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50">
+            <button onClick={() => preview()} disabled={!text.trim() || !loaded} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50">
               Preview
             </button>
             <label className="cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent">
-              Choose a file
-              <input type="file" accept=".json,.txt,.md,application/json,text/plain" className="sr-only" onChange={(e) => readFile(e.target.files?.[0])} />
+              {loaded ? "Choose a file" : "Loading your board…"}
+              <input type="file" accept=".json,.txt,.md,application/json,text/plain" disabled={!loaded} className="sr-only" onChange={(e) => readFile(e.target.files?.[0])} />
             </label>
           </div>
           {error && <p className="text-sm text-accent">{error}</p>}
         </div>
       )}
+
+      {!progress && !plan && studio && loaded && <ClaudeProjects projects={projects} onPlan={setPlan} />}
 
       {plan && counts && !progress && (
         <div className="space-y-3">
@@ -198,10 +206,101 @@ async function fillWorkspace(projectId: string, f: ImportedFiles) {
     winners: take(ws.files.winners, f.winners),
     scriptBank: take(ws.files.scriptBank, f.scriptBank),
   };
+  ws.template = take(ws.template, f.template);
   ws.account = { ...ws.account, handles: take(ws.account.handles, f.accountHandles), notes: take(ws.account.notes, f.accountNotes) };
   if (!ws.clientQuestions.length && f.clientQuestions.length) {
     ws.clientQuestions = f.clientQuestions;
     changed = true;
   }
   if (changed) await call(url, "PUT", ws);
+}
+
+const FILE_LABELS: Record<string, string> = { brief: "Brief", appNotes: "App notes", references: "References", winners: "Winners", scriptBank: "Script bank", template: "Shoot sheet template" };
+
+/** Claude Projects from a Claude export: pick which job each one is, then preview. */
+function ClaudeProjects({ projects, onPlan }: { projects: Project[]; onPlan: (plan: PlanItem[]) => void }) {
+  const [found, setFound] = useState<ClaudeProject[] | null>(null);
+  // Per project: "" = leave it, "new" = a new job, else the id of a job on the board.
+  const [picks, setPicks] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [reading, setReading] = useState(false);
+
+  async function choose(file: File | undefined) {
+    if (!file) return;
+    setError("");
+    setReading(true);
+    try {
+      const list = await readClaudeExport(file);
+      if (!list.length) throw new Error("No projects found in that file. Choose the zip Claude emailed you.");
+      setFound(list);
+      setPicks(Object.fromEntries(list.map((p) => [p.uuid, matchJob(p, projects)?.id ?? (isTechProject(p.name) ? "new" : "")])));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReading(false);
+    }
+  }
+
+  function preview() {
+    if (!found) return;
+    const jobs = found.filter((p) => picks[p.uuid]).map((p) => projectToJob(p, picks[p.uuid] === "new" ? { new: true } : { id: picks[p.uuid] }));
+    if (jobs.length) onPlan(planImport(projects, jobs));
+  }
+
+  const chosen = found ? found.filter((p) => picks[p.uuid]).length : 0;
+  const board = [...projects].sort((a, b) => a.brand.localeCompare(b.brand));
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-border bg-bg-card p-4 sm:p-5">
+      <div>
+        <h2 className="font-semibold">Bring in your Claude Projects</h2>
+        <p className="mt-1 text-sm text-text-muted">
+          Already run a job from a Claude Project? Bring its instructions and files (brief, app notes, references, script bank and your shoot sheet template) straight into the
+          job&apos;s Studio. In Claude, go to Settings, then Privacy, then Export data. Claude emails you a zip: choose it here. Only your projects are read - your chats are
+          skipped and never leave this computer.
+        </p>
+      </div>
+      <label className="inline-block cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent">
+        {reading ? "Reading…" : found ? "Choose a different export" : "Choose your Claude export"}
+        <input type="file" accept=".zip,.json,application/zip,application/json" className="sr-only" onChange={(e) => choose(e.target.files?.[0])} />
+      </label>
+      {error && <p className="text-sm text-accent">{error}</p>}
+
+      {found && (
+        <>
+          <ul className="divide-y divide-border rounded-xl border border-border">
+            {found.map((p) => {
+              const { files, other } = mapDocs(p);
+              const what = [p.instructions && "Instructions", ...Object.keys(files).map((k) => FILE_LABELS[k]), other.length && `${other.length} other ${other.length === 1 ? "file" : "files"}`].filter(Boolean);
+              return (
+                <li key={p.uuid} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{p.name}</p>
+                    <p className="text-xs text-text-dim">{what.join(" · ") || "No files"}</p>
+                  </div>
+                  <select
+                    aria-label={`Job for ${p.name}`}
+                    className={`${input} w-full sm:w-56`}
+                    value={picks[p.uuid] ?? ""}
+                    onChange={(e) => setPicks({ ...picks, [p.uuid]: e.target.value })}
+                  >
+                    <option value="">Leave it</option>
+                    <option value="new">Add as a new job</option>
+                    {board.map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {[j.brand, j.title].filter(Boolean).join(" · ")}
+                      </option>
+                    ))}
+                  </select>
+                </li>
+              );
+            })}
+          </ul>
+          <button onClick={preview} disabled={!chosen} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50">
+            Preview {chosen} {chosen === 1 ? "project" : "projects"}
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
