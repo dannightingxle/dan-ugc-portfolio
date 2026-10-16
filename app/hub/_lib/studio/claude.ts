@@ -11,7 +11,9 @@ const MODEL = "claude-opus-5-5";
 
 let client: Anthropic | null = null;
 function anthropic() {
-  return (client ??= new Anthropic()); // reads ANTHROPIC_API_KEY
+  // Reads ANTHROPIC_API_KEY. A key made outside a workspace also needs the workspace to bill (ANTHROPIC_WORKSPACE_ID).
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  return (client ??= new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {}));
 }
 
 /** A problem worth showing as-is. */
@@ -104,6 +106,9 @@ export function studioErrorMessage(e: unknown) {
   if (e instanceof Anthropic.AuthenticationError) return "The Claude API key isn't working. Check ANTHROPIC_API_KEY in Vercel.";
   if (e instanceof Anthropic.RateLimitError) return "Claude is busy right now. Try again in a minute.";
   // Claude's own reason, so a request it turns down can be fixed rather than retried blindly.
+  if (e instanceof Anthropic.BadRequestError && /anthropic-workspace-id/i.test(apiReason(e))) {
+    return "Your Claude API key isn't linked to a workspace. Add ANTHROPIC_WORKSPACE_ID in Vercel (the workspace's ID from console.anthropic.com, starting wrkspc_), or use a key made inside a workspace.";
+  }
   if (e instanceof Anthropic.BadRequestError) return `Claude turned the request down: ${apiReason(e)}`;
   if (e instanceof Anthropic.APIError) return `Claude had a problem (${e.status ?? "network"}). Try again in a minute.`;
   return "Something went wrong. Please try again.";
