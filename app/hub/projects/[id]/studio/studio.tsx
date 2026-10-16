@@ -292,7 +292,7 @@ function WeekTab({
           </div>
           <Field
             label="This week's brief"
-            hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
+            hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full, and reference videos (uploaded to the page, or TikTok and Instagram links) are watched frame by frame. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
           >
             <textarea rows={5} className={input} value={weekBrief} onChange={(e) => setWeekBrief(e.target.value)} placeholder="Paste what the brand sent, or the link to it…" />
           </Field>
@@ -366,8 +366,8 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
     <div className="space-y-5">
       <Section title={setUp ? "Set up again from new material" : "Set up this job"}>
         <p className="text-sm text-text-muted">
-          Paste everything you have: the brief, emails, rates, kickoff messages. Notion pages and Google Docs shared by link are read in full, reference
-          videos included; for a private one, paste its text or attach a PDF. You get the filled-in instructions, the brief, app notes and references, plus
+          Paste everything you have: the brief, emails, rates, kickoff messages. Notion pages and Google Docs shared by link are read in full, and reference
+          videos in them (or TikTok and Instagram links) are watched frame by frame; for a private page, paste its text or attach a PDF. You get the filled-in instructions, the brief, app notes and references, plus
           questions for the client - no brackets to fill in.
         </p>
         <form onSubmit={run} className="space-y-4">

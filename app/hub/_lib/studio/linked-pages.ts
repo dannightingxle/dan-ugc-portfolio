@@ -150,7 +150,7 @@ export function renderNotion(recordMap: RecordMap, pageId: string) {
           const kind = b.type === "image" ? "image" : b.type === "video" ? "video" : "file";
           const url = notionFileUrl(kind === "image" ? "image" : "file", source, id, spaceOf(id, b));
           files.push({ kind, name, url });
-          lines.push(kind === "image" ? `[image: ${name}](${url}) (attached for you to look at)` : `[${kind}: ${name}](${url}) (uploaded to the page; Claude can't watch videos, but this link opens it)`);
+          lines.push(kind === "image" ? `[image: ${name}](${url}) (attached for you to look at)` : kind === "video" ? `[video: ${name}](${url}) (uploaded to the page)` : `[file: ${name}](${url}) (uploaded to the page)`);
         } else lines.push(`(${b.type} in the Notion page: ${name})`);
         break;
       }

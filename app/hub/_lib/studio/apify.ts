@@ -17,13 +17,13 @@ type Item = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
-async function run(actor: string, input: object): Promise<Item[]> {
-  const url = `${BASE}/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?timeout=240&clean=true`;
+async function run(actor: string, input: object, seconds = 240): Promise<Item[]> {
+  const url = `${BASE}/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?timeout=${seconds}&clean=true`;
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
     body: JSON.stringify(input),
-    signal: AbortSignal.timeout(270_000),
+    signal: AbortSignal.timeout((seconds + 30) * 1000),
     cache: "no-store",
   });
   if (res.status === 401 || res.status === 403) throw new Error("Apify didn't accept the token - check APIFY_TOKEN.");
@@ -147,4 +147,43 @@ export async function pullAccounts(accounts: { platform: Handle["platform"]; han
     }
   }
   return { posts, followers, problems };
+}
+
+/** A TikTok or Instagram video, ready to download: where the file is, its caption and what's said in it. */
+export type SocialVideo = { label: string; download: string; caption: string; transcript: string; subtitles: string };
+
+const pick = (items: Item[], url: string, keys: string[]) => items.find((i) => keys.some((k) => str(i[k]) === url));
+
+/** Download links for reference videos, keyed by the link given. A video Apify couldn't get is left out. */
+export async function fetchSocialVideos(links: { url: string; kind: "tiktok" | "instagram" }[]): Promise<{ videos: Record<string, SocialVideo>; problem: string }> {
+  const tt = links.filter((l) => l.kind === "tiktok").map((l) => l.url);
+  const ig = links.filter((l) => l.kind === "instagram").map((l) => l.url);
+  const videos: Record<string, SocialVideo> = {};
+  let problem = "";
+  const fail = (e: Error) => ((problem = e.message.replace(/\.$/, "")), [] as Item[]);
+  // Short enough to leave the shoot sheet most of its time.
+  const [ttItems, igItems] = await Promise.all([
+    tt.length ? run("clockworks/tiktok-scraper", { postURLs: tt, shouldDownloadVideos: true, downloadSubtitlesOptions: "DOWNLOAD_AND_TRANSCRIBE_VIDEOS_WITHOUT_SUBTITLES" }, 90).catch(fail) : [],
+    ig.length ? run("apify/instagram-reel-scraper", { username: ig, resultsLimit: 1, includeTranscript: true }, 90).catch(fail) : [],
+  ]);
+  for (const url of tt) {
+    const id = /\/video\/(\d+)/.exec(url)?.[1];
+    const i = pick(ttItems, url, ["submittedVideoUrl", "input", "webVideoUrl"]) ?? (id ? ttItems.find((x) => str(x.id) === id) : undefined) ?? (tt.length === 1 ? ttItems[0] : undefined);
+    if (!i || i.error) continue;
+    const meta = (i.videoMeta ?? {}) as Item;
+    const download = str(meta.downloadAddr) || (Array.isArray(i.mediaUrls) ? str(i.mediaUrls[0]) : "");
+    if (!download) continue;
+    const subs = (Array.isArray(meta.subtitleLinks) ? meta.subtitleLinks : []) as Item[];
+    const sub = subs.find((x) => /^en/i.test(str(x.language))) ?? subs[0];
+    const author = str(((i.authorMeta ?? {}) as Item).name);
+    videos[url] = { label: `TikTok${author ? ` by @${author}` : ""}`, download, caption: str(i.text).slice(0, 600), transcript: "", subtitles: str(sub?.downloadLink) || str(meta.transcriptionLink) };
+  }
+  for (const url of ig) {
+    const code = /\/(?:reels?|p|tv)\/([\w-]+)/.exec(url)?.[1];
+    const i = pick(igItems, url, ["inputUrl", "url"]) ?? (code ? igItems.find((x) => str(x.shortCode) === code) : undefined) ?? (ig.length === 1 ? igItems[0] : undefined);
+    if (!i || i.error || !str(i.videoUrl)) continue;
+    const owner = str(i.ownerUsername);
+    videos[url] = { label: `Instagram reel${owner ? ` by @${owner}` : ""}`, download: str(i.videoUrl), caption: str(i.caption).slice(0, 600), transcript: str(i.transcript).slice(0, 8000), subtitles: "" };
+  }
+  return { videos, problem };
 }
