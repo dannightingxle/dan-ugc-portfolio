@@ -5,11 +5,19 @@
    turns them into plain text with every link kept. Only these two fixed
    hosts are ever called; the link just supplies the page or document id. */
 
-export type LinkedPage = { url: string; title: string; text: string };
-export type LinkedPages = { pages: LinkedPage[]; failed: string[] };
+/** A file uploaded into a linked page, at a lasting public link. */
+export type PageFile = { kind: "image" | "video" | "file"; name: string; url: string };
+export type LinkedPage = { url: string; title: string; text: string; files: PageFile[] };
+/** An image from a linked page, downloaded so Claude can look at it. */
+export type PageImage = { name: string; mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; data: string };
+export type LinkedPages = { pages: LinkedPage[]; images: PageImage[]; failed: string[] };
 
 const MAX_LINKS = 5;
 const MAX_CHARS = 60_000;
+// Images Claude looks at: enough for a brief's photos, well inside a request's size limit.
+const MAX_IMAGES = 12;
+const MAX_IMAGE_BYTES = 3_500_000;
+const MAX_IMAGES_BYTES = 15_000_000;
 const TIMEOUT = 20_000;
 // Both sites turn away requests that don't say who they are.
 const HEADERS = { "user-agent": "Mozilla/5.0 (compatible; CreatorDesk/1.0; +https://www.dannightingxle.com)" };
@@ -51,7 +59,13 @@ export function readableLinks(text: string) {
 
 type Rich = [string, ([string, unknown?] | string[])[]?][];
 type Block = { id: string; type: string; properties?: Record<string, Rich>; content?: string[]; format?: Record<string, unknown> };
-type RecordMap = { block?: Record<string, { value: { value?: Block } & Partial<Block> }> };
+type RecordMap = { block?: Record<string, { spaceId?: string; value: { value?: Block } & Partial<Block> }> };
+
+/** A lasting public link to a file uploaded into a public Notion page (Notion swaps it for a fresh download link each time). */
+export function notionFileUrl(kind: "image" | "file", source: string, blockId: string, spaceId: string) {
+  const base = `${NOTION_API}/${kind === "image" ? "image" : "signed"}/${encodeURIComponent(source)}?table=block&id=${blockId}`;
+  return `${base}${spaceId ? `&spaceId=${spaceId}` : ""}${kind === "image" ? "&cache=v2" : ""}`;
+}
 
 /** Rich text with its links kept as [text](url). */
 function richText(rich: Rich | undefined): string {
@@ -74,7 +88,9 @@ export function renderNotion(recordMap: RecordMap, pageId: string) {
   const page = get(pageId);
   if (!page) return null;
   const lines: string[] = [];
+  const files: PageFile[] = [];
   const seen = new Set<string>();
+  const spaceOf = (id: string, b: Block) => blocks[id]?.spaceId ?? (b as { space_id?: string }).space_id ?? "";
 
   const walk = (id: string, depth: number) => {
     const b = get(id);
@@ -130,7 +146,12 @@ export function renderNotion(recordMap: RecordMap, pageId: string) {
       case "bookmark": {
         const name = text || b.type;
         if (/^https?:\/\//.test(source)) lines.push(`[${b.type}: ${name}](${source})`);
-        else lines.push(`(${b.type} file in the Notion page: ${name}. Dan can see it there; describe what to do with it from the text around it.)`);
+        else if (/^attachment:/.test(source)) {
+          const kind = b.type === "image" ? "image" : b.type === "video" ? "video" : "file";
+          const url = notionFileUrl(kind === "image" ? "image" : "file", source, id, spaceOf(id, b));
+          files.push({ kind, name, url });
+          lines.push(kind === "image" ? `[image: ${name}](${url}) (attached for you to look at)` : `[${kind}: ${name}](${url}) (uploaded to the page; Claude can't watch videos, but this link opens it)`);
+        } else lines.push(`(${b.type} in the Notion page: ${name})`);
         break;
       }
       case "page":
@@ -157,10 +178,11 @@ export function renderNotion(recordMap: RecordMap, pageId: string) {
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim(),
+    files,
   };
 }
 
-async function readNotion(id: string): Promise<{ title: string; text: string }> {
+async function readNotion(id: string): Promise<{ title: string; text: string; files: PageFile[] }> {
   const recordMap: RecordMap = { block: {} };
   let cursor: unknown = { stack: [] };
   for (let chunk = 0; chunk < 10; chunk++) {
@@ -226,7 +248,7 @@ export function gdocHtmlToText(html: string) {
     .trim();
 }
 
-async function readGoogleDoc(id: string): Promise<{ title: string; text: string }> {
+async function readGoogleDoc(id: string): Promise<{ title: string; text: string; files: PageFile[] }> {
   const res = await fetch(`${GDOCS}/document/d/${id}/export?format=html`, { headers: HEADERS, redirect: "follow", signal: AbortSignal.timeout(TIMEOUT), cache: "no-store" });
   const type = res.headers.get("content-type") ?? "";
   if (!res.ok || !type.includes("text/html")) throw new Error(`Google Docs said ${res.status}`);
@@ -238,7 +260,7 @@ async function readGoogleDoc(id: string): Promise<{ title: string; text: string 
   const title = decode(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? "Google Doc").trim();
   const text = gdocHtmlToText(html);
   if (!text) throw new Error("the doc is empty");
-  return { title, text };
+  return { title, text, files: [] };
 }
 
 /** Open every Notion page and Google Doc linked in the text. Others are left for Claude's web fetch. */
@@ -248,14 +270,49 @@ export async function readLinkedPages(text: string): Promise<LinkedPages> {
     links.map(async (l) => {
       try {
         const page = l.kind === "notion" ? await readNotion(l.id) : await readGoogleDoc(l.id);
-        return { ok: true as const, page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS) } };
+        return { ok: true as const, page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files } };
       } catch (e) {
         const why = e instanceof Error && !/fetch failed|aborted|timeout/i.test(e.message) ? e.message : "it didn't load";
         return { ok: false as const, failed: `${l.url} - ${why}. Paste the page's text instead.` };
       }
     }),
   );
-  return { pages: results.flatMap((r) => (r.ok ? [r.page] : [])), failed: results.flatMap((r) => (r.ok ? [] : [r.failed])) };
+  const pages = results.flatMap((r) => (r.ok ? [r.page] : []));
+  return { pages, images: await downloadImages(pages.flatMap((p) => p.files.filter((f) => f.kind === "image"))), failed: results.flatMap((r) => (r.ok ? [] : [r.failed])) };
+}
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+
+/** The pages' images, so Claude can look at them (screenshots, market cards, photos). One that won't load is just left as a link. */
+async function downloadImages(files: PageFile[]): Promise<PageImage[]> {
+  const got = await Promise.all(
+    files.slice(0, MAX_IMAGES).map(async (f): Promise<PageImage | null> => {
+      try {
+        const res = await fetch(f.url, { headers: HEADERS, redirect: "follow", signal: AbortSignal.timeout(TIMEOUT), cache: "no-store" });
+        const type = (res.headers.get("content-type") ?? "").split(";")[0].trim().replace("image/jpg", "image/jpeg");
+        const mediaType = IMAGE_TYPES.find((t) => t === type);
+        if (!res.ok || !mediaType) return null;
+        const bytes = Buffer.from(await res.arrayBuffer());
+        return bytes.length && bytes.length <= MAX_IMAGE_BYTES ? { name: f.name, mediaType, data: bytes.toString("base64") } : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  let total = 0;
+  return got.filter((i): i is PageImage => {
+    if (!i || total + i.data.length > MAX_IMAGES_BYTES) return false;
+    total += i.data.length;
+    return true;
+  });
+}
+
+/** The images as content for Claude, each named so it can be matched to the page text. */
+export function imageBlocks(images: PageImage[]) {
+  return images.flatMap((i) => [
+    { type: "text" as const, text: `Image from the linked page: ${i.name}` },
+    { type: "image" as const, source: { type: "base64" as const, media_type: i.mediaType, data: i.data } },
+  ]);
 }
 
 /** Links in the text that weren't opened here (left for Claude's web fetch). */

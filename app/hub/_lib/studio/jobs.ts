@@ -7,7 +7,7 @@ import { getWorkspace, saveSheet, saveWorkspace } from "./data";
 import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
 import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
 import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
-import { linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
+import { imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
 import { canUse } from "../features";
 import { createEdit } from "../edits/data";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types";
@@ -58,6 +58,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     system: SYSTEM_INTAKE,
     content: [
       ...uploadsToBlocks(input.uploads),
+      ...imageBlocks(linked.images),
       {
         type: "text",
         text: [
@@ -106,6 +107,8 @@ export async function makeShootSheet(
     : `I need this week's content: ${input.videos} videos.`;
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...uploadsToBlocks(input.uploads),
+    // Images from the linked pages (market cards, photos) so Claude can see them, not just their names.
+    ...imageBlocks(linked.images),
     {
       type: "text",
       text: [

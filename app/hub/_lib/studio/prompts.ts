@@ -78,7 +78,7 @@ ${SCRIPT_RULES}
 
 ${SHEET_SPEC}
 
-References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. Files inside a linked page (uploaded videos and images) aren't links to open: don't list them.
+References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. Images from linked pages are attached for you to look at. Videos uploaded to a linked page have a link you can put on the sheet (e.g. as the reference to copy) but you can't watch them, so go by the text around them. Neither belongs in couldntOpen.
 
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;
 
@@ -133,6 +133,6 @@ This job has its own shoot sheet template. Its page code reads one week's conten
 - Follow the template's comments and the job's instructions for what goes in each field; they win over anything general here.
 - title (the browser tab), kicker, h1 and summary: the bracketed header text in the template, filled in for this week.
 
-References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. Files inside a linked page (uploaded videos and images) aren't links to open: don't list them.
+References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. Images from linked pages are attached for you to look at. Videos uploaded to a linked page have a link you can put on the sheet (e.g. as the reference to copy) but you can't watch them, so go by the text around them. Neither belongs in couldntOpen.
 
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;
