@@ -28,13 +28,29 @@ type Ask<S extends z.ZodType> = {
   effort?: "low" | "medium" | "high";
 };
 
-export async function ask<S extends z.ZodType>({ system, context, content, schema, webFetch, effort = "medium" }: Ask<S>): Promise<z.infer<S>> {
+export async function ask<S extends z.ZodType>(req: Ask<S>): Promise<z.infer<S>> {
+  try {
+    return await askOnce(req, true);
+  } catch (e) {
+    // The API can turn down a response format it can't compile (a big or complex
+    // schema): ask again with the shape spelled out in the prompt instead, and
+    // check the answer against it here.
+    if (!(e instanceof Anthropic.BadRequestError)) throw e;
+    console.warn("Creator Desk studio: structured output refused, retrying with the shape in the prompt:", e.message);
+    return askOnce(req, false);
+  }
+}
+
+async function askOnce<S extends z.ZodType>({ system, context, content, schema, webFetch, effort = "medium" }: Ask<S>, structured: boolean): Promise<z.infer<S>> {
   const systemBlocks: Anthropic.Beta.BetaTextBlockParam[] = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
   if (context) systemBlocks.push({ type: "text", text: context, cache_control: { type: "ephemeral" } });
-  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content }];
   // Just the JSON schema: the answer is parsed below, once Claude has actually finished
   // (the SDK's auto-parse would also try to parse a paused turn).
   const { type, schema: jsonSchema } = zodOutputFormat(schema);
+  const shape: Anthropic.Beta.BetaContentBlockParam[] = structured
+    ? []
+    : [{ type: "text", text: `Reply with only a JSON object (no other text, no code fences) that matches this JSON schema:\n${JSON.stringify(jsonSchema)}` }];
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: [...content, ...shape] }];
 
   // A turn that uses web fetch can pause; send it back to carry on (a few times at most).
   for (let turn = 0; turn < 4; turn++) {
@@ -45,7 +61,7 @@ export async function ask<S extends z.ZodType>({ system, context, content, schem
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       thinking: { type: "adaptive" },
-      output_config: { effort, format: { type, schema: jsonSchema } },
+      output_config: structured ? { effort, format: { type, schema: jsonSchema } } : { effort },
       system: systemBlocks,
       messages,
       ...(webFetch && { tools: [{ type: "web_fetch_20260209", name: "web_fetch", max_uses: 12 }] }),
@@ -61,7 +77,7 @@ export async function ask<S extends z.ZodType>({ system, context, content, schem
     if (msg.stop_reason === "max_tokens") throw new StudioError("That was too much to write in one go. Try fewer videos.");
     const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
     try {
-      return schema.parse(JSON.parse(text));
+      return schema.parse(JSON.parse(structured ? text : jsonPart(text)));
     } catch {
       throw new StudioError("Claude's answer came back incomplete. Please try again.");
     }
@@ -69,11 +85,26 @@ export async function ask<S extends z.ZodType>({ system, context, content, schem
   throw new StudioError("Opening the links took too long. Paste the brief text in instead.");
 }
 
+/** The JSON object in a reply, even if it came wrapped in a code fence or a sentence. */
+function jsonPart(text: string) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  return start >= 0 && end > start ? text.slice(start, end + 1) : text;
+}
+
+/** The API's own explanation of an error, without the status code and request id around it. */
+function apiReason(e: InstanceType<typeof Anthropic.APIError>) {
+  const err = (e.error as { error?: { message?: unknown } } | undefined)?.error;
+  return (typeof err?.message === "string" ? err.message : e.message).slice(0, 300);
+}
+
 /** Turn any failure into a message for the page. */
 export function studioErrorMessage(e: unknown) {
   if (e instanceof StudioError) return e.message;
   if (e instanceof Anthropic.AuthenticationError) return "The Claude API key isn't working. Check ANTHROPIC_API_KEY in Vercel.";
   if (e instanceof Anthropic.RateLimitError) return "Claude is busy right now. Try again in a minute.";
+  // Claude's own reason, so a request it turns down can be fixed rather than retried blindly.
+  if (e instanceof Anthropic.BadRequestError) return `Claude turned the request down: ${apiReason(e)}`;
   if (e instanceof Anthropic.APIError) return `Claude had a problem (${e.status ?? "network"}). Try again in a minute.`;
   return "Something went wrong. Please try again.";
 }

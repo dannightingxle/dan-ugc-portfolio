@@ -95,7 +95,7 @@ export async function makeShootSheet(
   if (input.newBrief.trim()) ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, brief: input.newBrief.trim() } });
 
   const ask_ = input.newBrief.trim()
-    ? `New brief is in the brief file. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
+    ? `New brief is in the brief file${hasLinks(input.newBrief) ? " - open its links for the full brief" : ""}. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
     : `I need this week's content: ${input.videos} videos.`;
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...uploadsToBlocks(input.uploads),
@@ -103,6 +103,8 @@ export async function makeShootSheet(
       type: "text",
       text: [
         ask_,
+        // Web fetch opens links that are in the request itself.
+        hasLinks(input.newBrief) && `Links in the new brief: ${(input.newBrief.match(/https?:\/\/\S+/gi) ?? []).join(" ")}`,
         `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
         input.lastWeek && `How last week went: ${input.lastWeek}`,
         input.trending && `Doing well in the niche right now - adapt these for the app:\n${input.trending}`,
@@ -126,6 +128,7 @@ export async function makeShootSheet(
         { type: "text", text: `The template's WEEK DATA block (constants: ${block.names.join(", ")}):\n\n${block.source}\n\nAnd its header, with the text to fill in brackets:\n${headerOf(ws.template)}` },
       ],
       schema: CustomSheetResult,
+      webFetch: hasLinks(input.newBrief),
       effort: "medium",
     });
     const read = readTemplateData(result.dataJson, block.names);
@@ -135,7 +138,7 @@ export async function makeShootSheet(
     ({ scriptBankEntry, oneLine } = result);
     title = `${result.h1} · ${date}`;
   } else {
-    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, effort: "medium" });
+    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, webFetch: hasLinks(input.newBrief), effort: "medium" });
     sheet = result.sheet;
     ({ scriptBankEntry, oneLine } = result);
     title = `${result.sheet.h1} · ${date}`;
