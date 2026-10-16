@@ -150,6 +150,7 @@ function Group({ title, edit, children }: { title: string; edit: { href: string;
 }
 
 type Sort = "new" | "views" | "comments";
+const SHOW = 5;
 
 function AccountCard({ account: a }: { account: AccountView }) {
   const [sort, setSort] = useState<Sort>("new");
@@ -157,7 +158,7 @@ function AccountCard({ account: a }: { account: AccountView }) {
   const week = followerChange(a.snapshots, 7);
   const sum = postSummary(a.posts);
   const sorted = [...a.posts].sort((x, y) => (sort === "views" ? y.views - x.views : sort === "comments" ? y.comments - x.comments : y.postedAt.localeCompare(x.postedAt)));
-  const shown = all ? sorted : sorted.slice(0, 8);
+  const shown = all ? sorted : sorted.slice(0, SHOW);
 
   return (
     <article className="space-y-4 rounded-2xl border border-border bg-bg-card p-4 sm:p-5">
@@ -170,9 +171,9 @@ function AccountCard({ account: a }: { account: AccountView }) {
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Tile label="Followers" value={week.now == null ? "–" : compact(week.now)} delta={week.change} deltaLabel="this week" />
+        <Tile label="Followers" value={week.now == null ? "–" : compact(week.now)} delta={week.change} deltaLabel="in 7 days" />
         <Tile label="Usual views" value={a.posts.length ? compact(sum.usual) : "–"} note={a.posts.length ? `over ${a.posts.length} posts` : undefined} />
-        <Tile label="Views this week" value={a.posts.length ? compact(sum.weekViews) : "–"} note={a.posts.length ? `${sum.weekPosts} post${sum.weekPosts === 1 ? "" : "s"}` : undefined} />
+        <Tile label="This week" value={a.posts.length ? compact(sum.weekViews) : "–"} note={a.posts.length ? `views, ${sum.weekPosts} post${sum.weekPosts === 1 ? "" : "s"}` : undefined} />
       </div>
 
       <Sparkline snapshots={a.snapshots} />
@@ -194,7 +195,7 @@ function AccountCard({ account: a }: { account: AccountView }) {
               <PostRow key={p.url} post={p} usual={sum.usual} />
             ))}
           </ul>
-          {a.posts.length > 8 && (
+          {a.posts.length > SHOW && (
             <button type="button" onClick={() => setAll(!all)} className="text-sm text-text-muted hover:text-accent">
               {all ? "Show fewer" : `Show all ${a.posts.length}`}
             </button>
@@ -211,12 +212,12 @@ function Tile({ label, value, delta, deltaLabel, note }: { label: string; value:
       <p className="truncate text-xs text-text-muted">{label}</p>
       <p className="text-xl font-semibold sm:text-2xl">{value}</p>
       {delta != null ? (
-        <p className={`truncate text-xs ${delta > 0 ? "text-good" : delta < 0 ? "text-warn" : "text-text-dim"}`}>
+        <p className={`text-xs ${delta > 0 ? "text-good" : delta < 0 ? "text-warn" : "text-text-dim"}`}>
           {delta > 0 ? "▲ +" : delta < 0 ? "▼ −" : ""}
           {delta === 0 ? "No change" : compact(Math.abs(delta))} {deltaLabel}
         </p>
       ) : (
-        note && <p className="truncate text-xs text-text-dim">{note}</p>
+        note && <p className="text-xs text-text-dim">{note}</p>
       )}
     </div>
   );
