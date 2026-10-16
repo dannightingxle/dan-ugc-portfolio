@@ -132,8 +132,11 @@ export const SheetData = z.object({
 });
 export type SheetData = z.infer<typeof SheetData>;
 
+const CouldntOpen = z.array(z.string()).describe("Links in the material you couldn't open or read (only a login or loading page counts as couldn't), each with why. Empty if none.");
+
 export const SheetResult = z.object({
   sheet: SheetData,
+  couldntOpen: CouldntOpen,
   scriptBankEntry: z.string().describe("This batch's hooks and angles, one line per video, for the script-bank file"),
   oneLine: z.string().describe("One line on what's in this sheet"),
 });
@@ -154,6 +157,7 @@ export const CustomSheetResult = z.object({
   h1: z.string(),
   summary: z.string(),
   dataJson: z.string().describe("A JSON object: one key per WEEK DATA constant, same names and shapes as the template's example"),
+  couldntOpen: CouldntOpen,
   scriptBankEntry: z.string().describe("This batch's hooks and angles, one line per video, for the script-bank file"),
   oneLine: z.string().describe("One line on what's in this sheet"),
 });
