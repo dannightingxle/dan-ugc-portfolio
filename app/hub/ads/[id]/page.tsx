@@ -6,6 +6,7 @@ import { use, useEffect } from "react";
 import type { AdDetail, Source } from "../../_lib/types";
 import { newProject, useProjects, useStars } from "../../_lib/store";
 import { ReachChart, SourceBadge, StatusPill, Thumb, compact, shortDate, useApi } from "../../_lib/ui";
+import { Tooltip } from "../../_lib/popups";
 
 /* One ad: creative, numbers, reach over time, and its script. */
 
@@ -150,10 +151,12 @@ export default function AdPage({ params }: { params: Promise<{ id: string }> }) 
 
 function Stat({ label, value, hint, accent }: { label: string; value: string; hint?: string; accent?: boolean }) {
   return (
-    <div className="rounded-xl border border-border bg-bg-card p-4" title={hint}>
-      <div className="text-xs text-text-dim">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${accent ? "text-good" : ""}`}>{value}</div>
-    </div>
+    <Tooltip label={hint} className="w-full">
+      <div className="w-full rounded-xl border border-border bg-bg-card p-4">
+        <div className="text-xs text-text-dim">{label}</div>
+        <div className={`mt-1 text-2xl font-semibold ${accent ? "text-good" : ""}`}>{value}</div>
+      </div>
+    </Tooltip>
   );
 }
 

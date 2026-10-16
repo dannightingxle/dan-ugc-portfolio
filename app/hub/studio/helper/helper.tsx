@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Device } from "../../_lib/edits/types";
 import { call, CopyButton } from "../../projects/[id]/studio/studio";
+import { useConfirm } from "../../_lib/popups";
 
 /* The Mac helper: what it does, what it needs, connecting a Mac with a one-time
    code, and the Macs already connected. */
@@ -15,6 +16,7 @@ const ago = (iso: string | null) => {
 };
 
 export function Helper() {
+  const confirm = useConfirm();
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [code, setCode] = useState<{ code: string; expires: string; origin: string; at: number } | null>(null);
   const [connected, setConnected] = useState(false);
@@ -46,7 +48,7 @@ export function Helper() {
     }
   }
   async function disconnect(d: Device) {
-    if (!confirm(`Disconnect ${d.name}? Its helper will stop getting work until you connect it again.`)) return;
+    if (!(await confirm({ title: `Disconnect ${d.name}?`, message: "Its helper will stop getting work until you connect it again.", confirmLabel: "Disconnect", danger: true }))) return;
     await call(`/api/hub/edits/devices?id=${d.id}`, "DELETE").catch((e: Error) => setError(e.message));
     setDevices((list) => list?.filter((x) => x.id !== d.id) ?? null);
   }

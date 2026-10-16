@@ -21,6 +21,7 @@ import {
 } from "../../_lib/store";
 import { compact, money, shortDate } from "../../_lib/ui";
 import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "../fields";
+import { useConfirm } from "../../_lib/popups";
 
 /* One project: dates, payment, contact, the full brief, links and notes.
    Every change saves straight away - there's no save button. */
@@ -38,6 +39,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const { id } = use(params);
   const { projects, save, remove } = useProjects();
   const router = useRouter();
+  const confirm = useConfirm();
   const ready = useDataReady();
   const sync = useSyncStatus();
   const studio = useFeature("studio");
@@ -366,8 +368,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => {
-                if (confirm(`Delete "${project.title || project.brand || "this project"}"? This can't be undone.`)) {
+              onClick={async () => {
+                const name = project.title || project.brand || "this project";
+                if (await confirm({ title: `Delete "${name}"?`, message: "This can't be undone.", confirmLabel: "Delete", danger: true })) {
                   remove(project.id);
                   router.push("/hub/projects");
                 }

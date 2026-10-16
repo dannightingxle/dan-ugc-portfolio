@@ -10,6 +10,7 @@ import { useFeature } from "../../../account-provider";
 import { Edits } from "./edits";
 import { weekDataBlock } from "../../../_lib/studio/custom-template";
 import { cleanHandle } from "../../../_lib/studio/brand-types";
+import { useConfirm } from "../../../_lib/popups";
 
 /* Studio: everything a Claude Project held for this job, plus the weekly
    shoot sheet, the Friday review and the account checklist. Edits save by
@@ -318,7 +319,7 @@ function WeekTab({
                     </li>
                   ))}
                 </ul>
-                <p className="mt-1">Paste that page&apos;s text (with its reference links) into this week&apos;s brief and make the sheet again.</p>
+                <p className="mt-1">If any of these matter for this week, paste their text or a working link into this week&apos;s brief and make the sheet again.</p>
               </div>
             )}
             <div className="flex flex-wrap gap-4">
@@ -349,10 +350,15 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
   const [uploads, setUploads] = useState<Upload[]>([]);
   const action = useAction();
   const setUp = Boolean(ws.instructions);
+  const confirm = useConfirm();
 
   async function run(e: React.FormEvent) {
     e.preventDefault();
-    if (setUp && !confirm("This rewrites the instructions, brief and app notes from the new material. Winners and script bank stay. Carry on?")) return;
+    if (
+      setUp &&
+      !(await confirm({ title: "Set this job up again?", message: "This rewrites the instructions, brief and app notes from the new material. Winners and script bank stay.", confirmLabel: "Set up again" }))
+    )
+      return;
     await action.run(async () => onWorkspace(await call<Workspace>(`${api}/intake`, "POST", { material, filming, voice, uploads })));
   }
 
@@ -640,6 +646,7 @@ function TrackedProfiles({ profiles, handles, onChange }: { profiles: Profile[];
 }
 
 export function SheetList({ sheets, setSheets }: { sheets: SheetSummary[]; setSheets: (s: SheetSummary[]) => void }) {
+  const confirm = useConfirm();
   return (
     <Section title="Shoot sheets">
       {sheets.length === 0 ? (
@@ -657,7 +664,7 @@ export function SheetList({ sheets, setSheets }: { sheets: SheetSummary[]; setSh
               <button
                 type="button"
                 onClick={async () => {
-                  if (!confirm(`Delete "${s.title}"? Its hooks stay in the script bank.`)) return;
+                  if (!(await confirm({ title: `Delete "${s.title}"?`, message: "Its hooks stay in the script bank.", confirmLabel: "Delete", danger: true }))) return;
                   await call(`/api/hub/studio/sheets/${s.id}`, "DELETE");
                   setSheets(sheets.filter((x) => x.id !== s.id));
                 }}
