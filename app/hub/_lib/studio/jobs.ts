@@ -7,6 +7,7 @@ import { getWorkspace, saveSheet, saveWorkspace } from "./data";
 import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
 import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
 import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
+import { linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
 import { canUse } from "../features";
 import { createEdit } from "../edits/data";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types";
@@ -43,13 +44,16 @@ function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockPara
   });
 }
 
-const hasLinks = (s: string) => /https?:\/\/\S+/i.test(s);
 const today = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 /* ---- Set up a job ---- */
 
 export async function setUpJob(user: HubUser, projectId: string, input: { material: string; filming: string; voice: string; uploads: Upload[] }) {
   const job = await projectBasics(user.id, projectId);
+  // Public Notion pages and Google Docs are read here (Claude's web fetch only sees their loading screen).
+  const linked = await readLinkedPages(input.material);
+  const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
+  const rest = otherLinks(input.material, linked.pages);
   const result = await ask({
     system: SYSTEM_INTAKE,
     content: [
@@ -58,7 +62,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
         type: "text",
         text: [
           `New job: ${job.brand}${job.title ? ` - ${job.title}` : ""}. Today is ${today()}.`,
-          `Everything I have on it:\n${input.material || "(see the attached files)"}`,
+          `Everything I have on it:\n${material || "(see the attached files)"}`,
           job.notes && `My notes from the tracker:\n${job.notes}`,
           `How I film: ${input.filming || "solo, phone on a tripod, at home and around town, second phone for app shots"}.`,
           `My voice: ${input.voice || "casual, direct, a bit dry"}.`,
@@ -68,7 +72,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
       },
     ],
     schema: IntakeResult,
-    webFetch: hasLinks(input.material),
+    webFetch: rest.length > 0,
     effort: "high",
   });
   const ws = await getWorkspace(user.id, projectId);
@@ -78,7 +82,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     files: { ...ws.files, brief: result.brief, appNotes: result.appNotes, references: result.references || ws.files.references },
     clientQuestions: result.clientQuestions,
     needsDan: result.needsDan,
-    couldntOpen: result.couldntOpen,
+    couldntOpen: [...new Set([...linked.failed, ...result.couldntOpen])],
   });
 }
 
@@ -92,7 +96,10 @@ export async function makeShootSheet(
   const job = await projectBasics(user.id, projectId);
   let ws = await getWorkspace(user.id, projectId);
   // A brief update goes under the current brief, dated - or, when asked, replaces it (never two sets of rules).
-  const update = input.newBrief.trim();
+  // Public Notion pages and Google Docs in the update are read here and kept in the brief with it.
+  const linked = await readLinkedPages(input.newBrief);
+  const rest = otherLinks(input.newBrief, linked.pages);
+  const update = [input.newBrief.trim(), linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
   if (update) {
     const stamped = `## Update, ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}\n${update}`;
     const brief = input.briefMode === "replace" || !ws.files.brief.trim() ? update : `${ws.files.brief.trim()}\n\n${stamped}`;
@@ -100,7 +107,7 @@ export async function makeShootSheet(
   }
 
   const ask_ = input.newBrief.trim()
-    ? `${input.briefMode === "replace" ? "New brief is in the brief file" : "The brief has an update at the end of the brief file"}${hasLinks(input.newBrief) ? " - open its links for the full details" : ""}. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
+    ? `${input.briefMode === "replace" ? "New brief is in the brief file" : "The brief has an update at the end of the brief file"}${linked.pages.length ? " (its linked pages have been opened for you and are in there too)" : ""}${rest.length ? " - open its other links for the full details" : ""}. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
     : `I need this week's content: ${input.videos} videos.`;
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...uploadsToBlocks(input.uploads),
@@ -109,7 +116,7 @@ export async function makeShootSheet(
       text: [
         ask_,
         // Web fetch opens links that are in the request itself.
-        hasLinks(input.newBrief) && `Links in the new brief: ${(input.newBrief.match(/https?:\/\/\S+/gi) ?? []).join(" ")}`,
+        rest.length > 0 && `Links in the new brief: ${rest.join(" ")}`,
         `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
         input.lastWeek && `How last week went: ${input.lastWeek}`,
         input.trending && `Doing well in the niche right now - adapt these for the app:\n${input.trending}`,
@@ -133,7 +140,7 @@ export async function makeShootSheet(
         { type: "text", text: `The template's WEEK DATA block (constants: ${block.names.join(", ")}):\n\n${block.source}\n\nAnd its header, with the text to fill in brackets:\n${headerOf(ws.template)}` },
       ],
       schema: CustomSheetResult,
-      webFetch: hasLinks(input.newBrief),
+      webFetch: rest.length > 0,
       effort: "medium",
     });
     const read = readTemplateData(result.dataJson, block.names);
@@ -143,7 +150,7 @@ export async function makeShootSheet(
     ({ scriptBankEntry, oneLine, couldntOpen } = result);
     title = `${result.h1} · ${date}`;
   } else {
-    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, webFetch: hasLinks(input.newBrief), effort: "medium" });
+    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, webFetch: rest.length > 0, effort: "medium" });
     sheet = result.sheet;
     ({ scriptBankEntry, oneLine, couldntOpen } = result);
     title = `${result.sheet.h1} · ${date}`;
@@ -154,7 +161,7 @@ export async function makeShootSheet(
   const entry = `## ${title}\n${scriptBankEntry.trim()}`;
   ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, ws.files.scriptBank.trim()].filter(Boolean).join("\n\n") } });
   await makeEditCards(user, projectId, id, title, sheet);
-  return { id, oneLine, couldntOpen, workspace: ws };
+  return { id, oneLine, couldntOpen: [...new Set([...linked.failed, ...couldntOpen])], workspace: ws };
 }
 
 /** The template's header markup, so Claude can see the bracketed text to fill. */

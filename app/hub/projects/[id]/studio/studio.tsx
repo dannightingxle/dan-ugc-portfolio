@@ -313,8 +313,8 @@ function WeekTab({
                 label="Paste it here"
                 hint={
                   briefMode === "add"
-                    ? "It goes under the current brief, dated. Notion and Google Docs links usually can't be opened from here - paste the page's text too, reference links included."
-                    : "It becomes the whole brief file, so there's only ever one set of rules. Notion and Google Docs links usually can't be opened from here - paste the text."
+                    ? "It goes under the current brief, dated. Notion pages and Google Docs shared by link are read in full, reference videos included; for a private one, paste its text."
+                    : "It becomes the whole brief file, so there's only ever one set of rules. Notion pages and Google Docs shared by link are read in full; for a private one, paste its text."
                 }
               >
                 <textarea rows={6} className={input} value={newBrief} onChange={(e) => setNewBrief(e.target.value)} />
@@ -380,8 +380,8 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
     <div className="space-y-5">
       <Section title={setUp ? "Set up again from new material" : "Set up this job"}>
         <p className="text-sm text-text-muted">
-          Paste everything you have: the brief, emails, rates, kickoff messages. Public links (notion.site, Google Docs) get opened too; for a Notion page
-          in the client&apos;s workspace, export it to PDF and attach it. You get the filled-in instructions, the brief, app notes and references, plus
+          Paste everything you have: the brief, emails, rates, kickoff messages. Notion pages and Google Docs shared by link are read in full, reference
+          videos included; for a private one, paste its text or attach a PDF. You get the filled-in instructions, the brief, app notes and references, plus
           questions for the client - no brackets to fill in.
         </p>
         <form onSubmit={run} className="space-y-4">
