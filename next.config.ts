@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Reference videos are turned into frames with ffmpeg (app/hub/_lib/studio/videos.ts):
+  // ship its binary with the two routes that do it.
+  outputFileTracingIncludes: {
+    "/api/hub/studio/\\[projectId\\]/week": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/hub/studio/\\[projectId\\]/intake": ["./node_modules/ffmpeg-static/ffmpeg"],
+  },
   async headers() {
     // Creator Desk pages can't be framed by other sites (stops click-jacking
     // tricks on things like "Delete account"), and don't leak full URLs.

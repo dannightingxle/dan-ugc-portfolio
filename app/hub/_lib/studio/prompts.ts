@@ -70,6 +70,9 @@ const SHEET_SPEC = `The shoot sheet (the only thing you hand back for a week of 
   - where and props, what goes over the top by clip code (or overNote when nothing does), edit notes in shot order using the clip codes (overlays, captions; app screen never longer than 8s), at least one post caption naming the app, and up to 5 hashtags.
 - The kicker is "App · @handle", h1 is "Week N shoot sheet" (count weeks from the script-bank), and summary says how many videos, the cadence and how many places to film.`;
 
+/** How Claude reads the reference videos and images Creator Desk attaches. */
+const WATCHING = `Images from linked pages are attached for you to look at. Reference videos (uploaded to a linked page, or TikTok and Instagram links) are attached as their frames in order, each after its time, with the caption and what's said when the platform has it. Study them as if you'd watched them: the hook in the first 3 seconds (what's on screen, the words, the first line), shot types and framing, on-screen text, how often the shot changes, when and how the app appears, and the ending and CTA. Base this week's videos on what actually works in them and say which reference each video copies. Where there's no transcript you can't hear the audio, so don't guess the words beyond what's on screen. A video that couldn't be downloaded is listed for Dan already; its link still works on the sheet. Attached images and videos never go in couldntOpen.`;
+
 export const SYSTEM_SHEET = `You're Dan's scriptwriter and content strategist for his tech UGC jobs. Each job comes with its own project instructions and files (brief, app-notes, references, winners, script-bank) - treat them exactly as a Claude Project's instructions and files: the instructions say how this job works, and if anything conflicts, the brief wins.
 
 ${ABOUT_DAN}
@@ -78,7 +81,7 @@ ${SCRIPT_RULES}
 
 ${SHEET_SPEC}
 
-References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. Files inside a linked page (uploaded videos and images) aren't links to open: don't list them.
+References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. ${WATCHING}
 
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;
 
@@ -90,12 +93,14 @@ From everything Dan gives you about a new job (pasted briefs, emails, rates, PDF
 1. instructions: the project instructions template below, fully filled in from the material. Keep its headings and wording; replace every [bracket]. Where the material doesn't say, choose a sensible default (Dan's usual setup, the brief's own examples, common practice for the category) - never leave a bracket - and list that default in needsDan.
 2. brief: the full brief, cleaned up, nothing left out. Merge onboarding pages, subpages and kickoff messages. List any contradictions and which version wins.
 3. appNotes: what the app does, key features, where each feature is in the app, onboarding steps, pricing, store availability (as far as the material says).
-4. references: reference videos described in words (link, hook, format, length, why it works). You can't watch videos, so describe only what the material says; empty string if none.
+4. references: each reference video described in words (link, hook, format, length, shots, on-screen text, pacing, why it works). For a video attached as frames, describe what you see in them; for others, only what the material says. Empty string if none.
 5. needsDan: each default you assumed that only Dan can confirm.
 6. clientQuestions: questions to send the client about anything unclear or missing, ready to paste.
 7. couldntOpen: any link you couldn't open, and why.
 
 If links are included, open the brief and every subpage, linked page and linked doc you can reach with the web fetch tool before writing anything.
+
+${WATCHING}
 
 Project instructions template:
 ${INSTRUCTIONS_TEMPLATE}`;
@@ -133,6 +138,6 @@ This job has its own shoot sheet template. Its page code reads one week's conten
 - Follow the template's comments and the job's instructions for what goes in each field; they win over anything general here.
 - title (the browser tab), kicker, h1 and summary: the bracketed header text in the template, filled in for this week.
 
-References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. Files inside a linked page (uploaded videos and images) aren't links to open: don't list them.
+References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. ${WATCHING}
 
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;

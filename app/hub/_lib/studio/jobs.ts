@@ -7,7 +7,8 @@ import { getWorkspace, saveSheet, saveWorkspace } from "./data";
 import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
 import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
 import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
-import { linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
+import { imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
+import { videoBlocks, watchVideos } from "./videos";
 import { canUse } from "../features";
 import { createEdit } from "../edits/data";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types";
@@ -52,12 +53,16 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
   const job = await projectBasics(user.id, projectId);
   // Public Notion pages and Google Docs are read here (Claude's web fetch only sees their loading screen).
   const linked = await readLinkedPages(input.material);
+  // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at.
+  const watched = await watchVideos(input.material, linked.pages);
   const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
   const rest = otherLinks(input.material, linked.pages);
   const result = await ask({
     system: SYSTEM_INTAKE,
     content: [
       ...uploadsToBlocks(input.uploads),
+      ...imageBlocks(linked.images),
+      ...videoBlocks(watched),
       {
         type: "text",
         text: [
@@ -82,7 +87,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     files: { ...ws.files, brief: result.brief, appNotes: result.appNotes, references: result.references || ws.files.references },
     clientQuestions: result.clientQuestions,
     needsDan: result.needsDan,
-    couldntOpen: [...new Set([...linked.failed, ...result.couldntOpen])],
+    couldntOpen: [...new Set([...linked.failed, ...watched.failed, ...result.couldntOpen])],
   });
 }
 
@@ -100,12 +105,17 @@ export async function makeShootSheet(
   const linked = await readLinkedPages(input.weekBrief);
   const rest = otherLinks(input.weekBrief, linked.pages);
   const weekBrief = [input.weekBrief.trim(), linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
+  // Reference videos in the brief or what's trending, as frames Claude can look at.
+  const watched = await watchVideos([input.weekBrief, input.trending].join("\n"), linked.pages);
 
   const ask_ = weekBrief
     ? `Here's this week's brief from the brand, for this week's videos (the project brief file still applies)${rest.length ? " - open its links for the full details" : ""}. Pull out the formats, deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.\n\n<this_weeks_brief>\n${weekBrief}\n</this_weeks_brief>`
     : `I need this week's content: ${input.videos} videos.`;
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...uploadsToBlocks(input.uploads),
+    // Images from the linked pages (market cards, photos) so Claude can see them, not just their names.
+    ...imageBlocks(linked.images),
+    ...videoBlocks(watched),
     {
       type: "text",
       text: [
@@ -157,7 +167,7 @@ export async function makeShootSheet(
   const entry = `## ${title}\n${scriptBankEntry.trim()}`;
   ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, ws.files.scriptBank.trim()].filter(Boolean).join("\n\n") } });
   await makeEditCards(user, projectId, id, title, sheet);
-  return { id, oneLine, couldntOpen: [...new Set([...linked.failed, ...couldntOpen])], workspace: ws };
+  return { id, oneLine, couldntOpen: [...new Set([...linked.failed, ...watched.failed, ...couldntOpen])], workspace: ws };
 }
 
 /** The template's header markup, so Claude can see the bracketed text to fill. */
