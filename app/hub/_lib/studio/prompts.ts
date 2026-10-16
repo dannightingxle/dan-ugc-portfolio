@@ -78,6 +78,8 @@ ${SCRIPT_RULES}
 
 ${SHEET_SPEC}
 
+References and links: every video's reference is a real video link from the brief, the new brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says.
+
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;
 
 export const SYSTEM_INTAKE = `You set up Dan's tech UGC jobs. Each job gets its own workspace - project instructions plus files - that every later request (weekly shoot sheets, reviews) is run against, the way a Claude Project would be.
@@ -130,5 +132,7 @@ This job has its own shoot sheet template. Its page code reads one week's conten
 - dataJson: a JSON object (as a string) with one key per constant in the block, using the same names, and values in the same shape as the example - same field names, same kinds of value, same codes. Where the example builds a value from another constant (e.g. a shared shot list), write the full value out. Keep lookup constants such as TYPE as they are unless this week needs a new entry. Strings only - no code, functions or HTML. Links are full https URLs.
 - Follow the template's comments and the job's instructions for what goes in each field; they win over anything general here.
 - title (the browser tab), kicker, h1 and summary: the bracketed header text in the template, filled in for this week.
+
+References and links: every video's reference is a real video link from the brief, the new brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says.
 
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;

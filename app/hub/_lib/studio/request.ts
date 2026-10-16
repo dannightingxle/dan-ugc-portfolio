@@ -32,6 +32,8 @@ export const WeekBody = z.object({
   lastWeek: text(5_000),
   trending: text(10_000),
   newBrief: text(200_000),
+  /** add: the new text goes under the current brief, dated; replace: it becomes the whole brief. */
+  briefMode: z.enum(["add", "replace"]).default("add"),
   uploads: Uploads,
 });
 export const ReviewBody = z.object({ numbers: text(20_000), uploads: Uploads });

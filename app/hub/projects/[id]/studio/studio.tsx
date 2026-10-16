@@ -253,16 +253,17 @@ function WeekTab({
   const [lastWeek, setLastWeek] = useState("");
   const [trending, setTrending] = useState("");
   const [newBrief, setNewBrief] = useState("");
+  const [briefMode, setBriefMode] = useState<"add" | "replace">("add");
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const [made, setMade] = useState<{ id: string; oneLine: string } | null>(null);
+  const [made, setMade] = useState<{ id: string; oneLine: string; couldntOpen: string[] } | null>(null);
   const action = useAction();
 
   async function make(e: React.FormEvent) {
     e.preventDefault();
     await action.run(async () => {
-      const r = await call<{ id: string; oneLine: string; workspace: Workspace }>(`${api}/week`, "POST", { videos, filmingOn, lastWeek, trending, newBrief, uploads });
+      const r = await call<{ id: string; oneLine: string; couldntOpen?: string[]; workspace: Workspace }>(`${api}/week`, "POST", { videos, filmingOn, lastWeek, trending, newBrief, briefMode, uploads });
       onWorkspace(r.workspace);
-      setMade({ id: r.id, oneLine: r.oneLine });
+      setMade({ id: r.id, oneLine: r.oneLine, couldntOpen: r.couldntOpen ?? [] });
       setSheets((await call<{ sheets: SheetSummary[] }>(api, "GET")).sheets);
       setNewBrief("");
     });
@@ -296,9 +297,26 @@ function WeekTab({
             <textarea rows={2} className={input} value={trending} onChange={(e) => setTrending(e.target.value)} />
           </Field>
           <details className="rounded-xl border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-medium">New brief this week?</summary>
-            <div className="mt-3">
-              <Field label="Paste the new brief" hint="It replaces the old brief file, so there's only ever one set of rules.">
+            <summary className="cursor-pointer text-sm font-medium">Brief update this week?</summary>
+            <div className="mt-3 space-y-3">
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm" role="radiogroup" aria-label="What to do with it">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="briefMode" checked={briefMode === "add"} onChange={() => setBriefMode("add")} className="accent-[var(--accent)]" />
+                  Add to the brief (a new format, a change)
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="briefMode" checked={briefMode === "replace"} onChange={() => setBriefMode("replace")} className="accent-[var(--accent)]" />
+                  Replace the whole brief
+                </label>
+              </div>
+              <Field
+                label="Paste it here"
+                hint={
+                  briefMode === "add"
+                    ? "It goes under the current brief, dated. Notion and Google Docs links usually can't be opened from here - paste the page's text too, reference links included."
+                    : "It becomes the whole brief file, so there's only ever one set of rules. Notion and Google Docs links usually can't be opened from here - paste the text."
+                }
+              >
                 <textarea rows={6} className={input} value={newBrief} onChange={(e) => setNewBrief(e.target.value)} />
               </Field>
             </div>
@@ -309,7 +327,20 @@ function WeekTab({
         </form>
         {made && (
           <div className="space-y-2 rounded-xl bg-good-soft px-4 py-3 text-sm text-good">
-            <p>{made.oneLine} Its hooks are now in the script bank.</p>
+            <p>{made.oneLine.trim().replace(/([^.!?])$/, "$1.")} Its hooks are now in the script bank.</p>
+            {made.couldntOpen.length > 0 && (
+              <div className="rounded-lg bg-warn-soft px-3 py-2 text-warn">
+                <p className="font-semibold">Claude couldn&apos;t open:</p>
+                <ul className="list-disc pl-5">
+                  {made.couldntOpen.map((c) => (
+                    <li key={c} className="break-words">
+                      {c}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1">Paste that page&apos;s text (with its reference links) into the brief update and make the sheet again.</p>
+              </div>
+            )}
             <div className="flex flex-wrap gap-4">
               <a href={`/hub/studio/sheets/${made.id}`} target="_blank" rel="noopener" className="inline-block font-semibold underline">
                 Open the shoot sheet →

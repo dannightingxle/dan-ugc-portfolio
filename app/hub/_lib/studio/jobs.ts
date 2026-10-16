@@ -87,15 +87,20 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
 export async function makeShootSheet(
   user: HubUser,
   projectId: string,
-  input: { videos: number; filmingOn: string; lastWeek: string; trending: string; newBrief: string; uploads: Upload[] },
+  input: { videos: number; filmingOn: string; lastWeek: string; trending: string; newBrief: string; briefMode: "add" | "replace"; uploads: Upload[] },
 ) {
   const job = await projectBasics(user.id, projectId);
   let ws = await getWorkspace(user.id, projectId);
-  // A new brief replaces the old one (never two sets of rules).
-  if (input.newBrief.trim()) ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, brief: input.newBrief.trim() } });
+  // A brief update goes under the current brief, dated - or, when asked, replaces it (never two sets of rules).
+  const update = input.newBrief.trim();
+  if (update) {
+    const stamped = `## Update, ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}\n${update}`;
+    const brief = input.briefMode === "replace" || !ws.files.brief.trim() ? update : `${ws.files.brief.trim()}\n\n${stamped}`;
+    ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, brief } });
+  }
 
   const ask_ = input.newBrief.trim()
-    ? `New brief is in the brief file${hasLinks(input.newBrief) ? " - open its links for the full brief" : ""}. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
+    ? `${input.briefMode === "replace" ? "New brief is in the brief file" : "The brief has an update at the end of the brief file"}${hasLinks(input.newBrief) ? " - open its links for the full details" : ""}. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
     : `I need this week's content: ${input.videos} videos.`;
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...uploadsToBlocks(input.uploads),
@@ -118,7 +123,7 @@ export async function makeShootSheet(
   // The job's own template (from its Claude Project) when it has one, else the Creator Desk sheet.
   const block = ws.template ? weekDataBlock(ws.template) : null;
   let sheet: SheetData | CustomSheet;
-  let title: string, scriptBankEntry: string, oneLine: string;
+  let title: string, scriptBankEntry: string, oneLine: string, couldntOpen: string[];
   if (block) {
     const result = await ask({
       system: SYSTEM_SHEET_TEMPLATE,
@@ -135,12 +140,12 @@ export async function makeShootSheet(
     if ("error" in read) throw new StudioError(read.error);
     const header = { title: result.title, kicker: result.kicker, h1: result.h1, summary: result.summary };
     sheet = { ...read.data, videos: read.data.videos as CustomSheet["videos"], custom: { html: fillTemplate(ws.template, header, read.data), header } };
-    ({ scriptBankEntry, oneLine } = result);
+    ({ scriptBankEntry, oneLine, couldntOpen } = result);
     title = `${result.h1} · ${date}`;
   } else {
     const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, webFetch: hasLinks(input.newBrief), effort: "medium" });
     sheet = result.sheet;
-    ({ scriptBankEntry, oneLine } = result);
+    ({ scriptBankEntry, oneLine, couldntOpen } = result);
     title = `${result.sheet.h1} · ${date}`;
   }
 
@@ -149,7 +154,7 @@ export async function makeShootSheet(
   const entry = `## ${title}\n${scriptBankEntry.trim()}`;
   ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, ws.files.scriptBank.trim()].filter(Boolean).join("\n\n") } });
   await makeEditCards(user, projectId, id, title, sheet);
-  return { id, oneLine, workspace: ws };
+  return { id, oneLine, couldntOpen, workspace: ws };
 }
 
 /** The template's header markup, so Claude can see the bracketed text to fill. */
