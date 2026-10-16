@@ -91,23 +91,18 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
 export async function makeShootSheet(
   user: HubUser,
   projectId: string,
-  input: { videos: number; filmingOn: string; lastWeek: string; trending: string; newBrief: string; briefMode: "add" | "replace"; uploads: Upload[] },
+  input: { videos: number; filmingOn: string; lastWeek: string; trending: string; weekBrief: string; uploads: Upload[] },
 ) {
   const job = await projectBasics(user.id, projectId);
   let ws = await getWorkspace(user.id, projectId);
-  // A brief update goes under the current brief, dated - or, when asked, replaces it (never two sets of rules).
-  // Public Notion pages and Google Docs in the update are read here and kept in the brief with it.
-  const linked = await readLinkedPages(input.newBrief);
-  const rest = otherLinks(input.newBrief, linked.pages);
-  const update = [input.newBrief.trim(), linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
-  if (update) {
-    const stamped = `## Update, ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}\n${update}`;
-    const brief = input.briefMode === "replace" || !ws.files.brief.trim() ? update : `${ws.files.brief.trim()}\n\n${stamped}`;
-    ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, brief } });
-  }
+  // This week's brief from the brand is for this sheet only: the project brief (Files tab) never changes here.
+  // Public Notion pages and Google Docs in it are read here and sent with it.
+  const linked = await readLinkedPages(input.weekBrief);
+  const rest = otherLinks(input.weekBrief, linked.pages);
+  const weekBrief = [input.weekBrief.trim(), linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
 
-  const ask_ = input.newBrief.trim()
-    ? `${input.briefMode === "replace" ? "New brief is in the brief file" : "The brief has an update at the end of the brief file"}${linked.pages.length ? " (its linked pages have been opened for you and are in there too)" : ""}${rest.length ? " - open its other links for the full details" : ""}. Pull out the deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.`
+  const ask_ = weekBrief
+    ? `Here's this week's brief from the brand, for this week's videos (the project brief file still applies)${rest.length ? " - open its links for the full details" : ""}. Pull out the formats, deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.\n\n<this_weeks_brief>\n${weekBrief}\n</this_weeks_brief>`
     : `I need this week's content: ${input.videos} videos.`;
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...uploadsToBlocks(input.uploads),
@@ -116,7 +111,7 @@ export async function makeShootSheet(
       text: [
         ask_,
         // Web fetch opens links that are in the request itself.
-        rest.length > 0 && `Links in the new brief: ${rest.join(" ")}`,
+        rest.length > 0 && `Links in this week's brief: ${rest.join(" ")}`,
         `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
         input.lastWeek && `How last week went: ${input.lastWeek}`,
         input.trending && `Doing well in the niche right now - adapt these for the app:\n${input.trending}`,
@@ -156,7 +151,8 @@ export async function makeShootSheet(
     title = `${result.sheet.h1} · ${date}`;
   }
 
-  const id = await saveSheet(user.id, projectId, title, sheet);
+  // This week's brief is kept with the sheet it was for.
+  const id = await saveSheet(user.id, projectId, title, weekBrief ? { ...sheet, weekBrief } : sheet);
   // Newest first, so the next sheet sees what's already been made.
   const entry = `## ${title}\n${scriptBankEntry.trim()}`;
   ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, ws.files.scriptBank.trim()].filter(Boolean).join("\n\n") } });

@@ -31,9 +31,8 @@ export const WeekBody = z.object({
   filmingOn: text(500),
   lastWeek: text(5_000),
   trending: text(10_000),
-  newBrief: text(200_000),
-  /** add: the new text goes under the current brief, dated; replace: it becomes the whole brief. */
-  briefMode: z.enum(["add", "replace"]).default("add"),
+  /** What the brand sent for this week's videos. Used for this sheet only; the project brief isn't changed. */
+  weekBrief: text(200_000),
   uploads: Uploads,
 });
 export const ReviewBody = z.object({ numbers: text(20_000), uploads: Uploads });

@@ -252,8 +252,7 @@ function WeekTab({
   const [filmingOn, setFilmingOn] = useState("Monday, Wednesday and Thursday afternoons");
   const [lastWeek, setLastWeek] = useState("");
   const [trending, setTrending] = useState("");
-  const [newBrief, setNewBrief] = useState("");
-  const [briefMode, setBriefMode] = useState<"add" | "replace">("add");
+  const [weekBrief, setWeekBrief] = useState("");
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [made, setMade] = useState<{ id: string; oneLine: string; couldntOpen: string[] } | null>(null);
   const action = useAction();
@@ -261,11 +260,11 @@ function WeekTab({
   async function make(e: React.FormEvent) {
     e.preventDefault();
     await action.run(async () => {
-      const r = await call<{ id: string; oneLine: string; couldntOpen?: string[]; workspace: Workspace }>(`${api}/week`, "POST", { videos, filmingOn, lastWeek, trending, newBrief, briefMode, uploads });
+      const r = await call<{ id: string; oneLine: string; couldntOpen?: string[]; workspace: Workspace }>(`${api}/week`, "POST", { videos, filmingOn, lastWeek, trending, weekBrief, uploads });
       onWorkspace(r.workspace);
       setMade({ id: r.id, oneLine: r.oneLine, couldntOpen: r.couldntOpen ?? [] });
       setSheets((await call<{ sheets: SheetSummary[] }>(api, "GET")).sheets);
-      setNewBrief("");
+      setWeekBrief("");
     });
   }
 
@@ -290,37 +289,18 @@ function WeekTab({
               <input className={input} value={filmingOn} onChange={(e) => setFilmingOn(e.target.value)} />
             </Field>
           </div>
+          <Field
+            label="This week's brief"
+            hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
+          >
+            <textarea rows={5} className={input} value={weekBrief} onChange={(e) => setWeekBrief(e.target.value)} placeholder="Paste what the brand sent, or the link to it…" />
+          </Field>
           <Field label="How last week went" hint="What did best, what flopped. Or leave it for the Friday review to cover.">
             <textarea rows={2} className={input} value={lastWeek} onChange={(e) => setLastWeek(e.target.value)} placeholder="The 'Pingo Laughs' restaurant one hit 40k, the SAY IT!!! ones stalled under 1k…" />
           </Field>
           <Field label="Trending in the niche (optional)" hint="Describe 2-3 videos doing well (hook, format, length) and they'll be adapted for the app.">
             <textarea rows={2} className={input} value={trending} onChange={(e) => setTrending(e.target.value)} />
           </Field>
-          <details className="rounded-xl border border-border px-4 py-3">
-            <summary className="cursor-pointer text-sm font-medium">Brief update this week?</summary>
-            <div className="mt-3 space-y-3">
-              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm" role="radiogroup" aria-label="What to do with it">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="briefMode" checked={briefMode === "add"} onChange={() => setBriefMode("add")} className="accent-[var(--accent)]" />
-                  Add to the brief (a new format, a change)
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="briefMode" checked={briefMode === "replace"} onChange={() => setBriefMode("replace")} className="accent-[var(--accent)]" />
-                  Replace the whole brief
-                </label>
-              </div>
-              <Field
-                label="Paste it here"
-                hint={
-                  briefMode === "add"
-                    ? "It goes under the current brief, dated. Notion pages and Google Docs shared by link are read in full, reference videos included; for a private one, paste its text."
-                    : "It becomes the whole brief file, so there's only ever one set of rules. Notion pages and Google Docs shared by link are read in full; for a private one, paste its text."
-                }
-              >
-                <textarea rows={6} className={input} value={newBrief} onChange={(e) => setNewBrief(e.target.value)} />
-              </Field>
-            </div>
-          </details>
           <FilePicker accept="image/png,image/jpeg,image/webp,application/pdf" label="Screenshots or PDFs (optional)" onChange={setUploads} />
           <ActionButton busy={action.busy} seconds={action.seconds} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
           {action.error && <p className="text-sm text-accent">{action.error}</p>}
@@ -338,7 +318,7 @@ function WeekTab({
                     </li>
                   ))}
                 </ul>
-                <p className="mt-1">Paste that page&apos;s text (with its reference links) into the brief update and make the sheet again.</p>
+                <p className="mt-1">Paste that page&apos;s text (with its reference links) into this week&apos;s brief and make the sheet again.</p>
               </div>
             )}
             <div className="flex flex-wrap gap-4">
