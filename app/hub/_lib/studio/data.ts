@@ -94,8 +94,10 @@ export async function deleteSheet(userId: string, id: string) {
 
 /** Project ids come from the browser: keep them to the shape the app makes. */
 export function validProjectId(id: unknown): id is string {
-  return typeof id === "string" && /^[\w-]{1,80}$/.test(id) && id !== BRAND_ID;
+  return typeof id === "string" && /^[\w-]{1,80}$/.test(id) && id !== BRAND_ID && id !== ACCOUNTS_ID;
 }
 
 /** The personal brand's workspace and shoot sheets are stored under this id. */
 export const BRAND_ID = "personal-brand";
+/** The Accounts page's settings are stored under this id. */
+export const ACCOUNTS_ID = "creator-accounts";

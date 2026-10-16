@@ -58,7 +58,16 @@ export const WorkspaceBody = z.object({
   clientQuestions: z.array(z.string().max(2_000)).max(50).default([]),
   needsDan: z.array(z.string().max(2_000)).max(50).default([]),
   couldntOpen: z.array(z.string().max(2_000)).max(50).default([]),
-  account: z.object({ handles: text(2_000), checks: z.record(z.string().max(40), z.boolean()).default({}), notes: text(10_000) }),
+  account: z.object({
+    handles: text(2_000),
+    checks: z.record(z.string().max(40), z.boolean()).default({}),
+    notes: text(10_000),
+    // Left out by pages opened before Accounts existed: the saved ones are kept.
+    profiles: z
+      .array(z.object({ platform: z.enum(["tiktok", "instagram"]), handle: z.string().trim().max(200) }))
+      .max(10)
+      .optional(),
+  }),
   lastReview: z
     .object({ at: z.string().max(40), moreOf: z.array(z.string().max(2_000)).max(30), lessOf: z.array(z.string().max(2_000)).max(30), nextWeek: text(10_000) })
     .nullable()

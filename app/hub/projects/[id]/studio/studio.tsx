@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjects } from "../../../_lib/store";
 import { shortDate } from "../../../_lib/ui";
-import { ACCOUNT_CHECKS, FILES, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
+import { ACCOUNT_CHECKS, FILES, type Profile, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
 import { Field, Section, input } from "../../fields";
 import { useFeature } from "../../../account-provider";
 import { Edits } from "./edits";
 import { weekDataBlock } from "../../../_lib/studio/custom-template";
+import { cleanHandle } from "../../../_lib/studio/brand-types";
 
 /* Studio: everything a Claude Project held for this job, plus the weekly
    shoot sheet, the Friday review and the account checklist. Edits save by
@@ -58,6 +59,7 @@ export function Studio({ projectId }: { projectId: string }) {
   const [tab, setTab] = useState<Tab>("week");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const editsOn = useFeature("edits");
+  const accountsOn = useFeature("accounts");
 
   useEffect(() => {
     call<{ workspace: Workspace; sheets: SheetSummary[]; claude: boolean }>(api, "GET")
@@ -65,7 +67,10 @@ export function Studio({ projectId }: { projectId: string }) {
         setWs(r.workspace);
         setSheets(r.sheets);
         setClaude(r.claude);
-        if (!r.workspace.instructions) setTab("setup");
+        // A link can open a tab directly (e.g. ?tab=account from the Accounts page).
+        const asked = new URLSearchParams(window.location.search).get("tab");
+        if (TABS.some(([key]) => key === asked)) setTab(asked as Tab);
+        else if (!r.workspace.instructions) setTab("setup");
       })
       .catch((e: Error) => setLoadError(e.message));
   }, [api]);
@@ -148,7 +153,7 @@ export function Studio({ projectId }: { projectId: string }) {
       {tab === "setup" && <SetupTab api={api} ws={ws} edit={edit} onWorkspace={setWs} />}
       {tab === "files" && <FilesTab ws={ws} edit={edit} />}
       {tab === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
-      {tab === "account" && <AccountTab ws={ws} edit={edit} />}
+      {tab === "account" && <AccountTab ws={ws} edit={edit} stats={accountsOn} />}
       {tab === "edits" && editsOn && <Edits projectId={projectId} sheets={sheets} />}
     </div>
   );
@@ -541,7 +546,7 @@ function ReviewTab({ api, ws, onWorkspace }: { api: string; ws: Workspace; onWor
 
 /* ---- Account ---- */
 
-function AccountTab({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => void }) {
+function AccountTab({ ws, edit, stats }: { ws: Workspace; edit: (w: Workspace) => void; stats: boolean }) {
   const a = ws.account;
   const set = (patch: Partial<Workspace["account"]>) => edit({ ...ws, account: { ...a, ...patch } });
   const done = ACCOUNT_CHECKS.filter((c) => a.checks[c.id]).length;
@@ -552,6 +557,7 @@ function AccountTab({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => void 
           <textarea rows={3} className={input} value={a.handles} onChange={(e) => set({ handles: e.target.value })} placeholder={"TikTok @danlearnsmarkets\nInstagram @danlearnsmarkets"} />
         </Field>
       </Section>
+      {stats && <TrackedProfiles profiles={a.profiles} handles={a.handles} onChange={(profiles) => set({ profiles })} />}
       <Section title="New account checklist" action={<span className="text-xs text-text-dim">{done}/{ACCOUNT_CHECKS.length}</span>}>
         <ul className="space-y-1">
           {ACCOUNT_CHECKS.map((c) => (
@@ -569,6 +575,56 @@ function AccountTab({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => void 
         <textarea rows={4} className={input} value={a.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Feed test results, first-video views, phone used for verification…" />
       </Section>
     </div>
+  );
+}
+
+/** "TikTok @danlearnsmarkets" lines → accounts to track (Instagram if the line says so, else TikTok). */
+function profilesFromText(text: string): Profile[] {
+  return text
+    .split("\n")
+    .map((line) => ({ platform: /insta|\big\b/i.test(line) ? ("instagram" as const) : ("tiktok" as const), handle: /@([\w.]+)/.exec(line)?.[1]?.toLowerCase() ?? "" }))
+    .filter((p) => p.handle);
+}
+
+/** The job's accounts on the Accounts page: followers, views and latest posts. */
+function TrackedProfiles({ profiles, handles, onChange }: { profiles: Profile[]; handles: string; onChange: (p: Profile[]) => void }) {
+  const suggested = profiles.length ? [] : profilesFromText(handles);
+  const update = (i: number, patch: Partial<Profile>) => onChange(profiles.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  return (
+    <Section title="Stats" action={<Link href="/hub/studio/accounts" className="text-sm text-accent hover:underline">See stats →</Link>}>
+      <p className="text-sm text-text-muted">The accounts to show on the Accounts page, with followers, views and the latest posts.</p>
+      {profiles.map((p, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <select aria-label="Platform" className={`${input} shrink-0`} style={{ width: "8.5rem" }} value={p.platform} onChange={(e) => update(i, { platform: e.target.value as Profile["platform"] })}>
+            <option value="tiktok">TikTok</option>
+            <option value="instagram">Instagram</option>
+          </select>
+          <input
+            aria-label="Handle"
+            className={`${input} min-w-0 flex-1`}
+            value={p.handle}
+            onChange={(e) => update(i, { handle: e.target.value })}
+            onBlur={(e) => e.target.value && update(i, { handle: cleanHandle(e.target.value) })}
+            placeholder="@handle"
+          />
+          <button type="button" onClick={() => onChange(profiles.filter((_, j) => j !== i))} className="shrink-0 px-1 text-sm text-text-dim hover:text-accent" aria-label={`Remove ${p.handle || "account"}`}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-3 text-sm">
+        {profiles.length < 10 && (
+          <button type="button" onClick={() => onChange([...profiles, { platform: "tiktok", handle: "" }])} className="rounded-lg border border-border px-3 py-1.5 font-medium hover:border-accent hover:text-accent">
+            Add an account
+          </button>
+        )}
+        {suggested.length > 0 && (
+          <button type="button" onClick={() => onChange(suggested)} className="rounded-lg border border-accent/40 px-3 py-1.5 font-medium text-accent hover:border-accent">
+            Use {suggested.map((p) => `@${p.handle}`).join(", ")}
+          </button>
+        )}
+      </div>
+    </Section>
   );
 }
 

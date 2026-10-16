@@ -1,6 +1,7 @@
 import { crossSite } from "../../../../hub/_lib/same-origin";
 import { claudeEnabled, getWorkspace, listSheets, saveWorkspace, studioApiUser, validProjectId } from "../../../../hub/_lib/studio/data";
 import { WorkspaceBody, studioAction } from "../../../../hub/_lib/studio/request";
+import { cleanHandle } from "../../../../hub/_lib/studio/brand-types";
 
 /* A job's Studio workspace (owners only): GET it with its shoot sheets, PUT edits. */
 
@@ -21,7 +22,15 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/hub/studio/[
     request,
     projectId,
     WorkspaceBody,
-    async ({ user, body }) => saveWorkspace(user.id, projectId, { ...body, template: body.template ?? (await getWorkspace(user.id, projectId)).template }),
+    async ({ user, body }) => {
+      const saved = body.template === undefined || body.account.profiles === undefined ? await getWorkspace(user.id, projectId) : null;
+      return saveWorkspace(user.id, projectId, {
+        ...body,
+        template: body.template ?? saved!.template,
+        // A row still being typed (no handle yet) isn't saved.
+        account: { ...body.account, profiles: (body.account.profiles ?? saved!.account.profiles).map((p) => ({ platform: p.platform, handle: cleanHandle(p.handle) })).filter((p) => p.handle) },
+      });
+    },
     { needsClaude: false },
   );
 }

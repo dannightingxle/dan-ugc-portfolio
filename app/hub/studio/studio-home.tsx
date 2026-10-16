@@ -9,6 +9,7 @@ import { useFeature } from "../account-provider";
 export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
   const { projects } = useProjects();
   const edits = useFeature("edits");
+  const accounts = useFeature("accounts");
   const otherJobs = projects.filter((p) => !p.techStage && p.stage !== "Paid");
 
   return (
@@ -27,6 +28,13 @@ export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
         <Link href="/hub/studio/brand" className="block rounded-2xl border border-accent/30 bg-accent-soft p-5 transition hover:border-accent">
           <p className="font-semibold text-accent">Personal brand</p>
           <p className="mt-1 text-sm text-text-muted">This week&apos;s plan from your top posts and the creators you track.</p>
+        </Link>
+      )}
+
+      {accounts && (
+        <Link href="/hub/studio/accounts" className="block rounded-2xl border border-border bg-bg-card p-5 transition hover:border-accent">
+          <p className="font-semibold">Accounts</p>
+          <p className="mt-1 text-sm text-text-muted">Followers, views and the latest posts for your own accounts and every tech UGC job.</p>
         </Link>
       )}
 

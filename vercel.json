@@ -1,7 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    { "path": "/api/hub/cron/weekly?step=stats", "schedule": "0 5 * * 1" },
-    { "path": "/api/hub/cron/weekly?step=plan", "schedule": "30 5 * * 1" }
+    {
+      "path": "/api/hub/cron/weekly?step=stats",
+      "schedule": "0 5 * * 1"
+    },
+    {
+      "path": "/api/hub/cron/weekly?step=plan",
+      "schedule": "30 5 * * 1"
+    },
+    {
+      "path": "/api/hub/cron/daily",
+      "schedule": "0 6 * * *"
+    }
   ]
 }

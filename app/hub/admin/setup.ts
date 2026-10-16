@@ -18,11 +18,12 @@ async function hasTable(table: string) {
 
 export async function setupChecks(configInStep: boolean): Promise<Check[]> {
   const env = (k: string) => Boolean(process.env[k]);
-  const [m1, m2, m3, m4, confirming, price] = await Promise.all([
+  const [m1, m2, m3, m4, m5, confirming, price] = await Promise.all([
     hasTable("hub_projects"),
     hasTable("hub_billing"),
     hasTable("hub_workspaces"),
     hasTable("hub_edits"),
+    hasTable("hub_account_stats"),
     emailsConfirmed(),
     priceLabel(),
   ]);
@@ -31,6 +32,7 @@ export async function setupChecks(configInStep: boolean): Promise<Check[]> {
     [m2, "20261007090000_creator_desk_launch.sql"],
     [m3, "20261010120000_creator_studio.sql"],
     [m4, "20261016090000_creator_edits.sql"],
+    [m5, "20261017090000_creator_accounts.sql"],
   ] as const;
   const missing = migrations.filter(([ok]) => !ok).map(([, f]) => f);
 

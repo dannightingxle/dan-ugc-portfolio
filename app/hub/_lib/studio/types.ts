@@ -25,6 +25,8 @@ export const ACCOUNT_CHECKS = [
   { id: "firstvideo", text: "First-video test at 24h: 1,000+ views healthy, 400-1,000 OK, lower = likely an account problem" },
 ] as const;
 
+export type Profile = { platform: "tiktok" | "instagram"; handle: string };
+
 export type Workspace = {
   instructions: string;
   files: Record<FileKey, string>;
@@ -33,7 +35,8 @@ export type Workspace = {
   clientQuestions: string[];
   needsDan: string[];
   couldntOpen: string[];
-  account: { handles: string; checks: Record<string, boolean>; notes: string };
+  /** profiles: the job's TikTok / Instagram accounts, for the Accounts page. */
+  account: { handles: string; checks: Record<string, boolean>; notes: string; profiles: Profile[] };
   lastReview: { at: string; moreOf: string[]; lessOf: string[]; nextWeek: string } | null;
   updatedAt: string | null;
 };
@@ -46,7 +49,7 @@ export function emptyWorkspace(): Workspace {
     clientQuestions: [],
     needsDan: [],
     couldntOpen: [],
-    account: { handles: "", checks: {}, notes: "" },
+    account: { handles: "", checks: {}, notes: "", profiles: [] },
     lastReview: null,
     updatedAt: null,
   };
@@ -60,7 +63,7 @@ export function readWorkspace(raw: unknown): Workspace {
     ...base,
     ...w,
     files: { ...base.files, ...w.files },
-    account: { ...base.account, ...w.account, checks: { ...w.account?.checks } },
+    account: { ...base.account, ...w.account, checks: { ...w.account?.checks }, profiles: Array.isArray(w.account?.profiles) ? w.account.profiles : [] },
   };
 }
 

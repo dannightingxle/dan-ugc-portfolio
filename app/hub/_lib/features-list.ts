@@ -6,6 +6,7 @@ export const FEATURES = [
   { key: "studio", name: "Studio", about: "Claude workspace per job: set-up from a brief, weekly shoot sheets, Friday review, account checklist." },
   { key: "followups", name: "Tech jobs & follow-ups", about: "Tech UGC stages, pay model, 'waiting on' and chase dates, and the Waiting on list on the home page." },
   { key: "brand", name: "Personal brand plan", about: "Weekly content plan from your own top posts and the creators you track (stats via Apify)." },
+  { key: "accounts", name: "Accounts", about: "Followers, views and recent posts for your own accounts and each tech UGC job's account, refreshed daily (stats via Apify)." },
   { key: "edits", name: "Edits on your Mac", about: "An edit card per video, edited in CapCut on your own Mac by the Creator Desk Helper and your Claude Code." },
 ] as const;
 
