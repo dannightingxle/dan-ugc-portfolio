@@ -130,7 +130,7 @@ export function renderNotion(recordMap: RecordMap, pageId: string) {
       case "bookmark": {
         const name = text || b.type;
         if (/^https?:\/\//.test(source)) lines.push(`[${b.type}: ${name}](${source})`);
-        else lines.push(`(${b.type} uploaded to the Notion page: ${name} - open the page to see it)`);
+        else lines.push(`(${b.type} file in the Notion page: ${name}. Dan can see it there; describe what to do with it from the text around it.)`);
         break;
       }
       case "page":

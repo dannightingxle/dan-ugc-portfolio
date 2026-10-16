@@ -8,6 +8,7 @@ import type { DataSource } from "./_lib/types";
 import { isPublicPath, useAccount } from "./account-provider";
 import { BRAND } from "./_lib/brand";
 import { FeedbackButton } from "./feedback";
+import { Tooltip } from "./_lib/popups";
 
 const LINKS = [
   { href: "/hub", label: "Home", icon: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
@@ -75,15 +76,17 @@ export function HubNav() {
               </span>
             )}
             {user && (
-              <Link
-                href="/hub/account"
-                title={`${user.name} - account`}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold uppercase transition ${
-                  path.startsWith("/hub/account") ? "bg-accent text-on-accent" : "bg-accent-soft text-accent hover:bg-accent hover:text-on-accent"
-                }`}
-              >
-                {user.name.slice(0, 1)}
-              </Link>
+              <Tooltip label={`${user.name} - account`} side="bottom" align="end">
+                <Link
+                  href="/hub/account"
+                  aria-label={`${user.name} - account`}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold uppercase transition ${
+                    path.startsWith("/hub/account") ? "bg-accent text-on-accent" : "bg-accent-soft text-accent hover:bg-accent hover:text-on-accent"
+                  }`}
+                >
+                  {user.name.slice(0, 1)}
+                </Link>
+              </Tooltip>
             )}
           </div>
         </div>

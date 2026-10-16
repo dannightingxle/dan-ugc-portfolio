@@ -6,6 +6,7 @@ import { STATUS_LABEL, WHOLE_SHEET, type Device, type DeviceFile, type EditCard,
 import type { SheetSummary } from "../../../_lib/studio/types";
 import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
+import { Tooltip, useConfirm } from "../../../_lib/popups";
 
 /* Edit cards: one per video. Pick the clips (from your Mac's latest videos or
    its file picker), press Edit in CapCut, and the Creator Desk Helper on your
@@ -210,6 +211,7 @@ function Card({
   onDelete: () => void;
 }) {
   const [error, setError] = useState("");
+  const confirm = useConfirm();
   const api = `/api/hub/edits/${card.id}`;
   async function act(fn: () => Promise<{ edit?: EditCard } | unknown>) {
     setError("");
@@ -265,15 +267,16 @@ function Card({
                 Stop
               </button>
             ) : (
-              <button
-                type="button"
-                disabled={!card.files.length || !mac}
-                onClick={() => act(() => call(`${api}/run`, "POST", { fresh: card.status === "ready" || card.status === "done" || card.status === "failed" }))}
-                className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
-                title={!mac ? "Connect your Mac first" : !card.files.length ? "Pick the clips first" : undefined}
-              >
-                {card.status !== "todo" ? "Edit again from scratch" : card.videoCode === WHOLE_SHEET ? "Edit all the videos in CapCut" : "Edit in CapCut"}
-              </button>
+              <Tooltip label={!mac ? "Connect your Mac first" : !card.files.length ? "Pick the clips first" : null}>
+                <button
+                  type="button"
+                  disabled={!card.files.length || !mac}
+                  onClick={() => act(() => call(`${api}/run`, "POST", { fresh: card.status === "ready" || card.status === "done" || card.status === "failed" }))}
+                  className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {card.status !== "todo" ? "Edit again from scratch" : card.videoCode === WHOLE_SHEET ? "Edit all the videos in CapCut" : "Edit in CapCut"}
+                </button>
+              </Tooltip>
             )}
             {card.status === "ready" && (
               <button type="button" onClick={() => act(() => call(api, "PATCH", { status: "done" }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-good hover:text-good">
@@ -283,8 +286,8 @@ function Card({
             <CopyButton text={card.brief} label="Copy everything" />
             <button
               type="button"
-              onClick={() => {
-                if (!confirm("Delete this edit card? (The CapCut draft stays on your Mac.)")) return;
+              onClick={async () => {
+                if (!(await confirm({ title: "Delete this edit card?", message: "The CapCut draft stays on your Mac.", confirmLabel: "Delete", danger: true }))) return;
                 void call(api, "DELETE").then(onDelete, (e: Error) => setError(e.message));
               }}
               className="ml-auto text-sm text-text-dim hover:text-accent"
@@ -341,20 +344,26 @@ function ClipPicker({
           </span>
         ) : (
           <>
-            <button type="button" disabled={!mac?.online} onClick={() => onPick("files")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50" title={mac?.online ? undefined : "Start the helper on your Mac first"}>
-              Choose on my Mac…
-            </button>
-            <button type="button" disabled={!mac?.online} onClick={() => onPick("folder")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50" title={mac?.online ? undefined : "Start the helper on your Mac first"}>
-              Choose a folder…
-            </button>
+            <Tooltip label={mac?.online ? null : "Start the helper on your Mac first"}>
+              <button type="button" disabled={!mac?.online} onClick={() => onPick("files")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50">
+                Choose on my Mac…
+              </button>
+            </Tooltip>
+            <Tooltip label={mac?.online ? null : "Start the helper on your Mac first"}>
+              <button type="button" disabled={!mac?.online} onClick={() => onPick("folder")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50">
+                Choose a folder…
+              </button>
+            </Tooltip>
           </>
         )}
       </div>
       {card.files.length > 0 ? (
         <ul className="flex flex-wrap gap-1.5">
           {card.files.map((f) => (
-            <li key={f.path} className="flex max-w-full items-center gap-1.5 rounded-full bg-bg-elevated py-1 pl-3 pr-1.5 text-xs" title={f.path}>
-              <span className="truncate">{f.name}</span>
+            <li key={f.path} className="flex max-w-full items-center gap-1.5 rounded-full bg-bg-elevated py-1 pl-3 pr-1.5 text-xs">
+              <Tooltip label={f.path} className="min-w-0">
+                <span className="truncate">{f.name}</span>
+              </Tooltip>
               {f.duration ? <span className="text-text-dim">{mmss(f.duration)}</span> : null}
               <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(card.files.filter((x) => x.path !== f.path))} className="rounded-full px-1 text-text-dim hover:text-accent">
                 ✕
@@ -368,25 +377,25 @@ function ClipPicker({
       {browsing && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           {files.map((f) => (
-            <button
-              key={f.path}
-              type="button"
-              onClick={() => toggle(f)}
-              className={`min-w-0 overflow-hidden rounded-lg border text-left text-[11px] ${chosen.has(f.path) ? "border-accent ring-2 ring-accent" : "border-border hover:border-border-strong"}`}
-              title={f.path}
-              aria-pressed={chosen.has(f.path)}
-            >
-              {f.thumb ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={f.thumb} alt="" className="aspect-[9/16] w-full bg-bg-elevated object-cover" />
-              ) : (
-                <div className="aspect-[9/16] w-full bg-bg-elevated" />
-              )}
-              <span className="block truncate px-1.5 pt-1">{f.name}</span>
-              <span className="block truncate px-1.5 pb-1 text-text-dim">
-                {mmss(f.duration)} {f.modifiedAt && `· ${new Date(f.modifiedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
-              </span>
-            </button>
+            <Tooltip key={f.path} label={f.path} className="min-w-0">
+              <button
+                type="button"
+                onClick={() => toggle(f)}
+                className={`w-full min-w-0 overflow-hidden rounded-lg border text-left text-[11px] ${chosen.has(f.path) ? "border-accent ring-2 ring-accent" : "border-border hover:border-border-strong"}`}
+                aria-pressed={chosen.has(f.path)}
+              >
+                {f.thumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={f.thumb} alt="" className="aspect-[9/16] w-full bg-bg-elevated object-cover" />
+                ) : (
+                  <div className="aspect-[9/16] w-full bg-bg-elevated" />
+                )}
+                <span className="block truncate px-1.5 pt-1">{f.name}</span>
+                <span className="block truncate px-1.5 pb-1 text-text-dim">
+                  {mmss(f.duration)} {f.modifiedAt && `· ${new Date(f.modifiedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+                </span>
+              </button>
+            </Tooltip>
           ))}
         </div>
       )}
