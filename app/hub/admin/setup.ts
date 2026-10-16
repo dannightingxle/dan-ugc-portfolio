@@ -18,11 +18,12 @@ async function hasTable(table: string) {
 
 export async function setupChecks(configInStep: boolean): Promise<Check[]> {
   const env = (k: string) => Boolean(process.env[k]);
-  const [m1, m2, m3, m4, confirming, price] = await Promise.all([
+  const [m1, m2, m3, m4, m5, confirming, price] = await Promise.all([
     hasTable("hub_projects"),
     hasTable("hub_billing"),
     hasTable("hub_workspaces"),
     hasTable("hub_edits"),
+    hasTable("hub_account_stats"),
     emailsConfirmed(),
     priceLabel(),
   ]);
@@ -31,6 +32,7 @@ export async function setupChecks(configInStep: boolean): Promise<Check[]> {
     [m2, "20261007090000_creator_desk_launch.sql"],
     [m3, "20261010120000_creator_studio.sql"],
     [m4, "20261016090000_creator_edits.sql"],
+    [m5, "20261017090000_creator_accounts.sql"],
   ] as const;
   const missing = migrations.filter(([ok]) => !ok).map(([, f]) => f);
 
@@ -44,7 +46,7 @@ export async function setupChecks(configInStep: boolean): Promise<Check[]> {
     { group: "launch", label: "Stripe live mode", ok: STRIPE_LIVE, fix: "Still on test keys - fine for testing; switch to live keys to take real payments (step 8)." },
     { group: "launch", label: "Database paywall in step", ok: configInStep, fix: "Reload in a minute; if it stays, look for 'hub_config' in Vercel → Logs." },
     { group: "launch", label: "Support email and legal name", ok: Boolean(BRAND.supportEmail && BRAND.legalName), fix: "Add NEXT_PUBLIC_SUPPORT_EMAIL and NEXT_PUBLIC_LEGAL_NAME in Vercel (shown on the legal pages)." },
-    { group: "tools", label: "Claude (Studio, personal brand plan)", ok: env("ANTHROPIC_API_KEY"), fix: "Add ANTHROPIC_API_KEY in Vercel (console.anthropic.com → API keys) and set a spend limit." },
+    { group: "tools", label: "Claude (Studio, personal brand plan)", ok: env("ANTHROPIC_API_KEY"), fix: "Add ANTHROPIC_API_KEY in Vercel (console.anthropic.com → API keys) and set a spend limit. If Claude says the key isn't scoped to a workspace, also add ANTHROPIC_WORKSPACE_ID (the workspace's ID, starting wrkspc_)." },
     { group: "tools", label: "Apify (automatic stats)", ok: env("APIFY_TOKEN"), fix: "Add APIFY_TOKEN in Vercel (apify.com → Settings → API & Integrations)." },
     { group: "tools", label: "Monday auto-plans", ok: env("CRON_SECRET"), fix: "Add CRON_SECRET in Vercel: any long random value." },
     { group: "tools", label: "TrendTrack (your key)", ok: env("TRENDTRACK_API_KEY"), fix: "Add TRENDTRACK_API_KEY in Vercel." },

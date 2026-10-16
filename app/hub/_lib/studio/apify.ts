@@ -106,3 +106,45 @@ export async function pullPosts(accounts: Handle[], tracked: Handle[]): Promise<
   }
   return { posts, problems };
 }
+
+/** Followers for each account, keyed "platform:handle". TikTok's come with its posts; Instagram's need a profile lookup. */
+function tiktokFollowers(items: Item[]) {
+  const out: Record<string, number> = {};
+  for (const i of items) {
+    const author = (i.authorMeta ?? {}) as Item;
+    const handle = str(author.name).toLowerCase();
+    if (handle && typeof author.fans === "number") out[`tiktok:${handle}`] = author.fans;
+  }
+  return out;
+}
+
+/** Your own accounts: their latest posts and follower counts. */
+export async function pullAccounts(accounts: { platform: Handle["platform"]; handle: string }[]): Promise<{ posts: Post[]; followers: Record<string, number>; problems: string[] }> {
+  const handles = (platform: Handle["platform"]) => [...new Set(accounts.filter((h) => h.platform === platform).map((h) => cleanHandle(h.handle)).filter(Boolean))];
+  const tt = handles("tiktok");
+  const ig = handles("instagram");
+  const mine = new Set([...tt, ...ig]);
+  const problems: string[] = [];
+  const followers: Record<string, number> = {};
+  const fail = (label: string) => (e: Error) => (problems.push(`${label}: ${e.message}`), [] as Item[]);
+
+  const [ttItems, igPosts, igProfiles] = await Promise.all([
+    tt.length ? run("clockworks/tiktok-profile-scraper", { profiles: tt, resultsPerPage: POSTS_PER_ACCOUNT, profileSorting: "latest", excludePinnedPosts: true }).catch(fail("TikTok")) : [],
+    ig.length ? run("apify/instagram-reel-scraper", { username: ig, resultsLimit: POSTS_PER_ACCOUNT, skipPinnedPosts: true }).catch(fail("Instagram")) : [],
+    ig.length ? run("apify/instagram-profile-scraper", { usernames: ig }).catch(fail("Instagram followers")) : [],
+  ]);
+  Object.assign(followers, tiktokFollowers(ttItems));
+  for (const p of igProfiles) {
+    const handle = str(p.username).toLowerCase();
+    if (handle && typeof p.followersCount === "number") followers[`instagram:${handle}`] = p.followersCount;
+  }
+  const posts = [...tiktok(ttItems, mine), ...instagram(igPosts, mine)];
+  for (const [platform, list] of [["tiktok", tt], ["instagram", ig]] as const) {
+    for (const h of list) {
+      if (!posts.some((p) => p.platform === platform && p.handle === h) && followers[`${platform}:${h}`] == null) {
+        problems.push(`Nothing found for @${h} on ${platform === "tiktok" ? "TikTok" : "Instagram"} - check the handle (private accounts can't be read).`);
+      }
+    }
+  }
+  return { posts, followers, problems };
+}
