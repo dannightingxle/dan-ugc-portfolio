@@ -82,7 +82,7 @@ function Board() {
         })}
       </div>
 
-      {archived.length > 0 && (
+      {ready && projects.length > 0 && (
         <details className="group rounded-2xl border border-border bg-bg-card">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
             <span>
@@ -93,11 +93,15 @@ function Board() {
               ›
             </span>
           </summary>
-          <div className="grid gap-2 border-t border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
-            {archived.map((p) => (
-              <ProjectCard key={p.id} p={p} archivedAs={isLost(p) ? "Lost" : "Ended"} />
-            ))}
-          </div>
+          {archived.length ? (
+            <div className="grid gap-2 border-t border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
+              {archived.map((p) => (
+                <ProjectCard key={p.id} p={p} archivedAs={isLost(p) ? "Lost" : "Ended"} />
+              ))}
+            </div>
+          ) : (
+            <p className="border-t border-border px-4 py-3 text-sm text-text-muted">Nothing archived yet. Mark a job Ended or Lost and it moves here.</p>
+          )}
         </details>
       )}
 
