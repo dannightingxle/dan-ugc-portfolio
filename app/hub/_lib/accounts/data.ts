@@ -48,7 +48,13 @@ async function trackedAccounts(userId: string): Promise<Tracked[]> {
     db.from("hub_workspaces").select("project_id, data").eq("user_id", userId).not("project_id", "in", `(${BRAND_ID},${ACCOUNTS_ID})`),
     db.from("hub_projects").select("id, data").eq("user_id", userId),
   ]);
-  const names = new Map((projects.data ?? []).map((p) => [p.id as string, String((p.data as { brand?: string })?.brand ?? "")]));
+  // Ended and lost jobs drop off (no point paying to refresh them); their history stays in the database.
+  type Job = { brand?: string; stage?: string; techStage?: string };
+  const live = (projects.data ?? []).filter((p) => {
+    const d = (p.data ?? {}) as Job;
+    return d.stage !== "Lost" && d.techStage !== "Lost" && d.techStage !== "Ended";
+  });
+  const names = new Map(live.map((p) => [p.id as string, String((p.data as Job)?.brand ?? "")]));
   const out: Tracked[] = [];
   const seen = new Set<string>();
   const add = (platform: Platform, raw: string, group: AccountGroup) => {

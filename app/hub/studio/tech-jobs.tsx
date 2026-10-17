@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { techMonthly, useDataReady, useProjects, type Project } from "../_lib/store";
+import { isArchived, techMonthly, useDataReady, useProjects, type Project } from "../_lib/store";
 import { useMoney } from "../_lib/money";
 import { money, shortDate } from "../_lib/ui";
 
@@ -12,7 +12,7 @@ const ORDER: Project["techStage"][] = ["Active", "Warm-up", "Setup", "Account cr
 
 function liveTechJobs(projects: Project[]) {
   return projects
-    .filter((p) => p.techStage && p.techStage !== "Ended")
+    .filter((p) => p.techStage && !isArchived(p))
     .sort((a, b) => ORDER.indexOf(a.techStage) - ORDER.indexOf(b.techStage) || a.brand.localeCompare(b.brand));
 }
 

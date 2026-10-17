@@ -10,6 +10,8 @@ import {
   STAGES,
   SOURCES,
   TECH_STAGES,
+  isArchived,
+  isLost,
   paymentDue,
   techMonthly,
   useDataReady,
@@ -133,6 +135,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </button>
           ))}
         </div>
+        {isArchived(project) && (
+          <p className="text-sm text-text-muted">
+            Archived ({isLost(project) ? "lost" : "ended"}): it&apos;s off the board and in the Archived section on{" "}
+            <Link href="/hub/projects" className="text-accent hover:underline">
+              Projects
+            </Link>
+            . Change the stage to bring it back.
+          </p>
+        )}
       </header>
 
       {studio && (
@@ -153,7 +164,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <aside className="space-y-5 lg:order-2">
           {followups && (
             <Section title="Job type & follow-up">
-              <Field label="Tech UGC stage" hint="For a dedicated account posting for an app. Leave as 'Not a tech job' for brand deals.">
+              <Field label="Tech UGC stage" hint="For a dedicated account posting for an app. Leave as 'Not a tech job' for brand deals. Ended or Lost moves the job to Archived.">
                 <select className={input} value={project.techStage} onChange={(e) => set("techStage", e.target.value as Project["techStage"])}>
                   <option value="">Not a tech job</option>
                   {TECH_STAGES.map((s) => (
