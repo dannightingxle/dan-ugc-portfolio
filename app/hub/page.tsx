@@ -6,7 +6,7 @@ import type { Ad, AdDetail, Brand, Paged, Source } from "./_lib/types";
 import { ImportLocal } from "./import-local";
 import { WelcomeBanner } from "./welcome-banner";
 import { ExampleTag } from "./projects/fields";
-import { paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
+import { isArchived, isLost, paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { useFeature } from "./account-provider";
 import { TechJobs } from "./studio/tech-jobs";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, daysAgo, money, shortDate, useApi } from "./_lib/ui";
@@ -34,16 +34,16 @@ export default function HubHome() {
   const overdue = invoiced.filter((p) => paymentDue(p)?.overdue).length;
   // Soonest due first; ones without an invoice date go last so they get one.
   const invoicesOut = [...invoiced].sort((a, b) => (paymentDue(a)?.date ?? "9999").localeCompare(paymentDue(b)?.date ?? "9999"));
-  const pipeline = total(projects.filter((p) => p.paymentStatus === "Not invoiced"));
+  const pipeline = total(projects.filter((p) => p.paymentStatus === "Not invoiced" && !isLost(p)));
   const converted = projects.some((p) => p.fee != null && p.feeCurrency !== base);
   // Tech jobs have their own list above when Studio is on.
   const upNext = projects
-    .filter((p) => p.stage !== "Delivered" && p.stage !== "Paid" && !(studio && p.techStage))
+    .filter((p) => p.stage !== "Delivered" && p.stage !== "Paid" && !isArchived(p) && !(studio && p.techStage))
     .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"))
     .slice(0, 4);
   // Anything waiting on someone else, soonest chase first (no date goes last).
   const today = new Date().toISOString().slice(0, 10);
-  const waiting = projects.filter((p) => p.waitingOn.trim()).sort((a, b) => (a.chaseOn || "9999").localeCompare(b.chaseOn || "9999"));
+  const waiting = projects.filter((p) => p.waitingOn.trim() && !isArchived(p)).sort((a, b) => (a.chaseOn || "9999").localeCompare(b.chaseOn || "9999"));
 
   return (
     <div className="space-y-12">

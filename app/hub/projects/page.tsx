@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { STAGES, TECH_STAGES, addExampleProject, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
+import { BOARD_STAGES, TECH_STAGES, addExampleProject, isArchived, isLost, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
 import { money, shortDate } from "../_lib/ui";
 import { useAccount, useFeature } from "../account-provider";
 import { CurrencySelect, ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
@@ -25,6 +25,8 @@ function Board() {
   const studio = useFeature("studio");
   // ?new=1 opens the add form; ?new=tech opens it set up for a tech UGC job.
   const [adding, setAdding] = useState(params.get("new") === "1" || params.get("new") === "tech");
+  const active = projects.filter((p) => !isArchived(p));
+  const archived = projects.filter(isArchived).sort((a, b) => a.brand.localeCompare(b.brand));
 
   return (
     <div className="space-y-6">
@@ -62,8 +64,8 @@ function Board() {
       )}
 
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6">
-        {STAGES.map((stage) => {
-          const items = projects.filter((p) => p.stage === stage);
+        {BOARD_STAGES.map((stage) => {
+          const items = active.filter((p) => p.stage === stage);
           return (
             <div key={stage} className="w-64 shrink-0 space-y-2">
               <div className="flex items-baseline justify-between px-1">
@@ -80,12 +82,31 @@ function Board() {
         })}
       </div>
 
+      {archived.length > 0 && (
+        <details className="group rounded-2xl border border-border bg-bg-card">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className="font-medium">Archived</span> <span className="text-sm text-text-dim">{archived.length}</span>
+              <span className="block text-sm text-text-muted">Jobs marked Ended or Lost. Change a job&apos;s stage to bring it back.</span>
+            </span>
+            <span className="text-text-dim transition group-open:rotate-90" aria-hidden>
+              ›
+            </span>
+          </summary>
+          <div className="grid gap-2 border-t border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
+            {archived.map((p) => (
+              <ProjectCard key={p.id} p={p} archivedAs={isLost(p) ? "Lost" : "Ended"} />
+            ))}
+          </div>
+        </details>
+      )}
+
       {adding && <QuickAdd tech={params.get("new") === "tech"} onClose={() => setAdding(false)} />}
     </div>
   );
 }
 
-function ProjectCard({ p }: { p: Project }) {
+function ProjectCard({ p, archivedAs }: { p: Project; archivedAs?: "Ended" | "Lost" }) {
   const followups = useFeature("followups");
   const done = p.deliverables.filter((d) => d.done).length;
   const chaseLate = Boolean(p.chaseOn && p.chaseOn <= new Date().toISOString().slice(0, 10));
@@ -95,6 +116,7 @@ function ProjectCard({ p }: { p: Project }) {
         <p className="flex items-center gap-1.5 text-xs text-text-dim">
           {p.brand || "No brand"}
           {p.example && <ExampleTag />}
+          {archivedAs && <span className="ml-auto rounded-full bg-text/5 px-2 py-0.5 text-[11px] font-medium text-text-muted">{archivedAs}</span>}
         </p>
         <p className="text-sm font-medium">{p.title || "Untitled"}</p>
       </div>
@@ -107,7 +129,7 @@ function ProjectCard({ p }: { p: Project }) {
         <span>{p.due ? `Due ${shortDate(p.due)}` : ""}</span>
       </div>
       {p.contact.name && <p className="truncate text-xs text-text-dim">👤 {p.contact.name}</p>}
-      {followups && (p.techStage || p.waitingOn || p.platform || p.forGroup) && (
+      {followups && !archivedAs && (p.techStage || p.waitingOn || p.platform || p.forGroup) && (
         <div className="flex flex-wrap gap-1.5 text-[11px]">
           {p.techStage && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent">Tech · {p.techStage}</span>}
           {p.source === "Platform" && p.platform && <span className="rounded-full bg-text/5 px-2 py-0.5 text-text-muted">{p.platform}</span>}
@@ -202,7 +224,7 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
         )}
         <Field label="Stage">
           <select className={input} value={p.stage} onChange={(e) => setP({ ...p, stage: e.target.value as Project["stage"] })}>
-            {STAGES.map((s) => (
+            {BOARD_STAGES.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>

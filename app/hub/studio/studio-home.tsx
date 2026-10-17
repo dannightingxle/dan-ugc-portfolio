@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useProjects } from "../_lib/store";
+import { isArchived, useProjects } from "../_lib/store";
 import { TechJobs } from "./tech-jobs";
 import { useFeature } from "../account-provider";
 
@@ -10,7 +10,7 @@ export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
   const { projects } = useProjects();
   const edits = useFeature("edits");
   const accounts = useFeature("accounts");
-  const otherJobs = projects.filter((p) => !p.techStage && p.stage !== "Paid");
+  const otherJobs = projects.filter((p) => !p.techStage && p.stage !== "Paid" && !isArchived(p));
 
   return (
     <div className="space-y-8">
