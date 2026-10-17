@@ -10,11 +10,18 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Loaded as-is at run time so it can find its own binary.
+  serverExternalPackages: ["ffmpeg-static"],
   // Reference videos are turned into frames with ffmpeg (app/hub/_lib/studio/videos.ts):
   // ship its binary with the two routes that do it.
   outputFileTracingIncludes: {
     "/api/hub/studio/\\[projectId\\]/week": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/studio/\\[projectId\\]/intake": ["./node_modules/ffmpeg-static/ffmpeg"],
+  },
+  // The portfolio's videos are served as static files; no server code needs them (and they'd push
+  // functions over Vercel's size limit).
+  outputFileTracingExcludes: {
+    "/*": ["./public/**/*.mp4", "./public/**/*.mov"],
   },
   async headers() {
     // Creator Desk pages can't be framed by other sites (stops click-jacking

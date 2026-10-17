@@ -4,6 +4,7 @@ import { accessSync, chmodSync, constants, copyFileSync, existsSync } from "node
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ffmpegStatic from "ffmpeg-static";
 import { type SocialVideo, apifyEnabled, fetchSocialVideos } from "./apify";
 import type { LinkedPage } from "./linked-pages";
 
@@ -62,13 +63,13 @@ export function findVideos(text: string, pages: LinkedPage[]) {
 
 // ---------------------------------------------------------------- frames
 
-/** ffmpeg: the copy bundled with the app (node_modules/ffmpeg-static), else one on the machine. */
+/** ffmpeg: the copy bundled with the app (ffmpeg-static), else one on the machine. */
 let ffmpegBin = "";
 function ffmpegPath() {
   if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
   if (ffmpegBin) return ffmpegBin;
-  const bundled = path.join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg");
-  ffmpegBin = !existsSync(bundled) ? "ffmpeg" : runnable(bundled);
+  const bundled = ffmpegStatic;
+  ffmpegBin = !bundled || !existsSync(bundled) ? "ffmpeg" : runnable(bundled);
   return ffmpegBin;
 }
 
@@ -87,9 +88,9 @@ function runnable(file: string) {
 
 function ffmpeg(args: string[]): Promise<{ stdout: Buffer; stderr: string; ok: boolean }> {
   return new Promise((resolve) => {
-    execFile(ffmpegPath(), ["-hide_banner", "-nostdin", ...args], { encoding: "buffer", maxBuffer: 20_000_000, timeout: 60_000 }, (err, stdout, stderr) =>
-      resolve({ stdout, stderr: stderr.toString(), ok: !err }),
-    );
+    const done = (err: Error | null, stdout: Buffer, stderr: Buffer) => resolve({ stdout, stderr: stderr.toString(), ok: !err });
+    // Called through Reflect so the build doesn't try to trace which program runs (it would bundle the whole project).
+    Reflect.apply(execFile, null, [ffmpegPath(), ["-hide_banner", "-nostdin", ...args], { encoding: "buffer", maxBuffer: 20_000_000, timeout: 60_000 }, done]);
   });
 }
 
