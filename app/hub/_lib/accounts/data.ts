@@ -15,6 +15,16 @@ import { accountKey, type AccountGroup, type AccountView, type AccountsData } fr
 
 const HISTORY_DAYS = 90;
 
+/** A database error, or a plain explanation when the Accounts table hasn't been added to the database yet. */
+function statsError(error: { code?: string; message?: string }) {
+  if (error.code === "PGRST205" || error.code === "42P01" || /hub_account_stats/.test(error.message ?? "")) {
+    return new StudioError(
+      "Accounts isn't switched on in your database yet. In Supabase, open SQL Editor and run supabase/migrations/20261017090000_creator_accounts.sql (part-7-accounts.sql), then reload this page.",
+    );
+  }
+  return error;
+}
+
 type Settings = { autoDaily: boolean; lastRefresh: string | null; problems: string[] };
 type Tracked = { platform: Platform; handle: string; group: AccountGroup };
 
@@ -66,7 +76,7 @@ export async function getAccounts(userId: string): Promise<AccountsData> {
     .eq("user_id", userId)
     .gte("day", since)
     .order("day");
-  if (error) throw error;
+  if (error) throw statsError(error);
   const rows = data ?? [];
   const accounts: AccountView[] = tracked.map((t) => {
     const mine = rows.filter((r) => r.platform === t.platform && r.handle === t.handle);
@@ -98,7 +108,7 @@ export async function refreshAccounts(userId: string): Promise<AccountsData> {
     .filter((r) => r.posts.length || r.followers != null);
   if (rows.length) {
     const { error } = await adminClient().from("hub_account_stats").upsert(rows, { onConflict: "user_id,platform,handle,day" });
-    if (error) throw error;
+    if (error) throw statsError(error);
   }
   await saveSettings(userId, { lastRefresh: new Date().toISOString(), problems });
   return getAccounts(userId);

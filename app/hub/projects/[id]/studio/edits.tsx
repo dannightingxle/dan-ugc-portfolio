@@ -15,6 +15,8 @@ import { Tooltip, useConfirm } from "../../../_lib/popups";
 
 type Data = { edits: EditCard[]; devices: Device[]; files: DeviceFile[] };
 const BUSY = new Set(["queued", "editing"]);
+/** Claude Code on the Mac needs signing in again (expired or missing login). */
+const signedOut = (text: string) => /OAuth|401|authenticat|\/login|not logged in|invalid api key/i.test(text);
 const mmss = (s?: number | null) => (s == null ? "" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
 
 export function Edits({ projectId, sheets }: { projectId: string; sheets: SheetSummary[] }) {
@@ -446,8 +448,9 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
     <div className="space-y-3">
       <p className="text-sm font-medium">With Claude on your Mac</p>
       <ol className="max-h-[28rem] space-y-2 overflow-y-auto rounded-xl bg-bg-elevated p-3 text-sm">
-        {events.map((e) =>
-          e.kind === "tool" || e.kind === "status" ? (
+        {events.map((e, i) =>
+          // A failed run repeats Claude's last message as the error: show it once.
+          e.kind === "assistant" && events[i + 1]?.kind === "error" && events[i + 1].text === e.text ? null : e.kind === "tool" || e.kind === "status" ? (
             <li key={e.id} className="text-xs text-text-dim">
               {e.text}
             </li>
@@ -459,6 +462,13 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
               }`}
             >
               {e.text}
+              {e.kind === "error" && signedOut(e.text) && (
+                <span className="mt-2 block text-text">
+                  Claude Code on your Mac has been signed out (this happens every so often). On your Mac, open Terminal, type <code className="rounded bg-bg-card px-1">claude</code> and
+                  press Enter, then type <code className="rounded bg-bg-card px-1">/login</code> and follow the steps in your browser. Once it says you&apos;re logged in, come back
+                  here and press <strong>Edit again from scratch</strong>.
+                </span>
+              )}
             </li>
           ),
         )}
