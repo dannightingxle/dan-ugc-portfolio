@@ -7,11 +7,13 @@ import { PLATFORM_LABEL, PLATFORMS, summarise, type BrandData, type Handle } fro
 import type { SheetSummary } from "../../_lib/studio/types";
 import { Field, Section, input } from "../../projects/fields";
 import { ActionButton, FilePicker, SheetList, call, useAction, type Upload } from "../../projects/[id]/studio/studio";
+import { IdeasTab } from "./ideas";
 
 /* Personal brand: your accounts and the creators you track, their latest
-   stats, and a weekly plan + shoot sheet made from what's working. */
+   stats, an inbox of ideas found in their posts, and a weekly plan + shoot
+   sheet made from what's working. */
 
-type Tab = "week" | "setup" | "files";
+type Tab = "ideas" | "week" | "setup" | "files";
 const API = "/api/hub/studio/brand";
 
 export function BrandStudio() {
@@ -19,7 +21,7 @@ export function BrandStudio() {
   const [sheets, setSheets] = useState<SheetSummary[]>([]);
   const [flags, setFlags] = useState({ claude: true, apify: true });
   const [loadError, setLoadError] = useState("");
-  const [tab, setTab] = useState<Tab>("week");
+  const [tab, setTab] = useState<Tab>("ideas");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export function BrandStudio() {
         setBrand(r.brand);
         setSheets(r.sheets);
         setFlags({ claude: r.claude, apify: r.apify });
-        if (!r.brand.accounts.length && !r.brand.tracked.length) setTab("setup");
+        if (!r.brand.accounts.length && !r.brand.tracked.length && !r.brand.ideaAccounts.length) setTab("setup");
       })
       .catch((e: Error) => setLoadError(e.message));
   }, []);
@@ -42,8 +44,9 @@ export function BrandStudio() {
     pending.current = null;
     setSaveState("saving");
     try {
-      const { about, accounts, tracked, winners, scriptBank, notes, autoPlan } = next;
-      await call(API, "PUT", { about, accounts: accounts.filter((h) => h.handle.trim()), tracked: tracked.filter((h) => h.handle.trim()), winners, scriptBank, notes, autoPlan });
+      const { about, accounts, tracked, ideaAccounts, winners, scriptBank, notes, autoPlan, autoIdeas } = next;
+      const named = (list: Handle[]) => list.filter((h) => h.handle.trim());
+      await call(API, "PUT", { about, accounts: named(accounts), tracked: named(tracked), ideaAccounts: named(ideaAccounts), winners, scriptBank, notes, autoPlan, autoIdeas });
       setSaveState(pending.current ? "saving" : "saved");
     } catch {
       setSaveState("error");
@@ -81,7 +84,7 @@ export function BrandStudio() {
       <div>
         <p className="text-sm font-medium uppercase tracking-widest text-accent">Studio</p>
         <h1 className="font-serif text-4xl">Personal brand</h1>
-        <p className="mt-1 text-text-muted">A plan every week from what&apos;s working for you and for the creators you track.</p>
+        <p className="mt-1 text-text-muted">Ideas from what&apos;s working for the creators you track, and a plan every week from them and your own best posts.</p>
       </div>
 
       {!flags.claude && (
@@ -93,6 +96,7 @@ export function BrandStudio() {
       <div className="flex flex-wrap gap-1" role="tablist">
         {(
           [
+            ["ideas", "Ideas"],
             ["week", "This week"],
             ["setup", "Accounts & creators"],
             ["files", "Files"],
@@ -111,6 +115,9 @@ export function BrandStudio() {
         ))}
       </div>
 
+      {tab === "ideas" && (
+        <IdeasTab brand={brand} apify={flags.apify} onBrand={(part) => setBrand((b) => (b ? { ...b, ...part } : b))} edit={edit} goSetup={() => setTab("setup")} />
+      )}
       {tab === "week" && <WeekTab brand={brand} apify={flags.apify} sheets={sheets} setSheets={setSheets} onBrand={setBrand} edit={edit} goSetup={() => setTab("setup")} />}
       {tab === "setup" && <SetupTab brand={brand} edit={edit} />}
       {tab === "files" && (
@@ -257,7 +264,7 @@ function WeekTab({
           <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--accent)]" checked={brand.autoPlan} onChange={(e) => edit({ ...brand, autoPlan: e.target.checked })} />
           <span className="text-sm">
             <span className="font-medium">Plan my week automatically</span>
-            <span className="block text-text-dim">Every Monday by 7am: fresh stats and a new plan (5 videos), ready in Shoot sheets.</span>
+            <span className="block text-text-dim">Every Monday by 7am: fresh stats and a new plan (5 videos), ready in Shoot sheets. Ideas you picked or saved go in first.</span>
           </span>
         </label>
       </Section>
@@ -384,6 +391,13 @@ function SetupTab({ brand, edit }: { brand: BrandData; edit: (b: BrandData) => v
         hint="Creators doing well that you want to learn from. Their posts that beat their own average get turned into ideas for you."
         list={brand.tracked}
         onChange={(tracked) => edit({ ...brand, tracked })}
+        withNote
+      />
+      <HandleList
+        title="Content idea accounts"
+        hint={'Creators who post content ideas and formats for other creators ("no ideas? put this sound over B-roll with this text"). Every idea they share gets turned into your version.'}
+        list={brand.ideaAccounts}
+        onChange={(ideaAccounts) => edit({ ...brand, ideaAccounts })}
         withNote
       />
       <Section title="Standing notes">

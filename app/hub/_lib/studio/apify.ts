@@ -1,5 +1,5 @@
 import "server-only";
-import { cleanHandle, type Handle, type Post } from "./brand-types";
+import { cleanHandle, type Handle, type Post, type Sound } from "./brand-types";
 
 /* Public post stats for TikTok and Instagram accounts, via Apify's
    pay-per-result scrapers (clockworks/tiktok-profile-scraper and
@@ -33,6 +33,22 @@ async function run(actor: string, input: object, seconds = 240): Promise<Item[]>
   return Array.isArray(data) ? data : [];
 }
 
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sound";
+
+function tiktokSound(i: Item): Sound | null {
+  const m = (i.musicMeta ?? {}) as Item;
+  const id = str(m.musicId);
+  if (!str(m.musicName) && !id) return null;
+  return { name: str(m.musicName), artist: str(m.musicAuthor), original: m.musicOriginal === true, url: id ? `https://www.tiktok.com/music/${slug(str(m.musicName))}-${id}` : "" };
+}
+
+function instagramSound(i: Item): Sound | null {
+  const m = (i.musicInfo ?? {}) as Item;
+  const id = str(m.audio_id);
+  if (!str(m.song_name) && !id) return null;
+  return { name: str(m.song_name) || "Original audio", artist: str(m.artist_name), original: m.uses_original_audio === true, url: id ? `https://www.instagram.com/reels/audio/${id}/` : "" };
+}
+
 function tiktok(items: Item[], mine: Set<string>): Post[] {
   return items
     .filter((i) => !i.isPinned && !i.isAd && str(i.webVideoUrl))
@@ -52,6 +68,7 @@ function tiktok(items: Item[], mine: Set<string>): Post[] {
         shares: num(i.shareCount),
         seconds: num(video.duration),
         postedAt: str(i.createTimeISO),
+        sound: tiktokSound(i),
       };
     });
 }
@@ -70,9 +87,10 @@ function instagram(items: Item[], mine: Set<string>): Post[] {
         views: num(i.videoPlayCount) || num(i.videoViewCount),
         likes: num(i.likesCount),
         comments: num(i.commentsCount),
-        shares: 0,
+        shares: num(i.sharesCount),
         seconds: num(i.videoDuration),
         postedAt: str(i.timestamp),
+        sound: instagramSound(i),
       };
     });
 }

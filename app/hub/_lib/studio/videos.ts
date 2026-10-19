@@ -151,11 +151,11 @@ async function download(url: string, file: string) {
 // ---------------------------------------------------------------- watching
 
 /** Download each video and turn it into timed frames (and captions where the platform has them). */
-export async function watchVideos(text: string, pages: LinkedPage[]): Promise<Watched> {
+export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_VIDEOS): Promise<Watched> {
   const { uploads, social } = findVideos(text, pages);
   const failed: string[] = [];
-  const sources: Source[] = uploads.slice(0, MAX_VIDEOS);
-  const wanted = social.slice(0, MAX_VIDEOS - sources.length);
+  const sources: Source[] = uploads.slice(0, max);
+  const wanted = social.slice(0, max - sources.length);
   if (wanted.length && !apifyEnabled) {
     failed.push(...wanted.map((s) => `${s.url} - Creator Desk needs Apify connected to download TikTok and Instagram videos.`));
   } else if (wanted.length) {

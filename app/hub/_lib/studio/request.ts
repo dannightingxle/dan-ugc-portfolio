@@ -5,6 +5,7 @@ import { BRAND_ID, claudeEnabled, studioApiUser, validProjectId } from "./data";
 import type { FeatureKey } from "../features-list";
 import { studioErrorMessage } from "./claude";
 import type { HubUser } from "../supabase/server";
+import { IDEA_STATUSES } from "./brand-types";
 
 /* Shared plumbing for the Studio API routes: owner check, same-site check,
    body validation and turning failures into readable messages. */
@@ -42,11 +43,15 @@ export const BrandBody = z.object({
   about: text(20_000),
   accounts: z.array(Handle).max(10).default([]),
   tracked: z.array(Handle).max(40).default([]),
+  // Left out by pages opened before the ideas inbox existed: the saved ones are kept.
+  ideaAccounts: z.array(Handle).max(20).optional(),
   winners: text(200_000),
   scriptBank: text(400_000),
   notes: text(5_000),
   autoPlan: z.boolean().default(false),
+  autoIdeas: z.boolean().optional(),
 });
+export const IdeaStatusBody = z.object({ id: z.string().max(40), status: z.enum(IDEA_STATUSES), reason: text(300) });
 export const BrandPlanBody = z.object({ videos: z.number().int().min(1).max(21).default(5), filmingOn: text(500), notes: text(5_000), uploads: Uploads });
 export const Empty = z.object({}).passthrough();
 

@@ -21,7 +21,14 @@ export async function PUT(request: Request) {
     async ({ user, body }) => {
       const tidy = (list: typeof body.accounts) => list.map((h) => ({ ...h, handle: cleanHandle(h.handle) })).filter((h) => h.handle);
       const current = await getBrand(user.id);
-      return saveBrand(user.id, { ...current, ...body, accounts: tidy(body.accounts), tracked: tidy(body.tracked) });
+      return saveBrand(user.id, {
+        ...current,
+        ...body,
+        accounts: tidy(body.accounts),
+        tracked: tidy(body.tracked),
+        ideaAccounts: body.ideaAccounts ? tidy(body.ideaAccounts) : current.ideaAccounts,
+        autoIdeas: body.autoIdeas ?? current.autoIdeas,
+      });
     },
     { needsClaude: false, feature: "brand" },
   );
