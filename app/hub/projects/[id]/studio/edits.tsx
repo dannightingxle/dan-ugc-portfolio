@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { STATUS_LABEL, WHOLE_SHEET, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
+import { HELPER_FOR_LIBRARY, LIBRARY_LINE, STATUS_LABEL, WHOLE_SHEET, findsOwnClips, helperOlderThan, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
 import type { SheetSummary } from "../../../_lib/studio/types";
 import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
@@ -94,6 +94,11 @@ function MacBar({ devices }: { devices: Device[] }) {
       </span>
       {mac.info.capcut && <span className="text-text-dim">CapCut {mac.info.capcut}</span>}
       {mac.online && mac.info.capcutRunning && <span className="text-warn">CapCut is open - close it so edits can save</span>}
+      {helperOlderThan(mac.info.helper, HELPER_FOR_LIBRARY) && (
+        <Link href="/hub/studio/helper" className="text-warn hover:underline">
+          Update the helper to find B-roll and make trial versions →
+        </Link>
+      )}
       <Link href="/hub/studio/helper" className="ml-auto text-text-muted hover:text-accent">
         Mac helper
       </Link>
@@ -225,6 +230,7 @@ function Card({
     }
   }
   const setFiles = (next: EditFile[]) => act(() => call(api, "PATCH", { files: next }));
+  const ownClips = findsOwnClips(card.brief);
   const tone =
     card.status === "ready" || card.status === "done"
       ? "bg-good-soft text-good"
@@ -269,10 +275,10 @@ function Card({
                 Stop
               </button>
             ) : (
-              <Tooltip label={!mac ? "Connect your Mac first" : !card.files.length ? "Pick the clips first" : null}>
+              <Tooltip label={!mac ? "Connect your Mac first" : !card.files.length && !ownClips ? "Pick the clips first" : null}>
                 <button
                   type="button"
-                  disabled={!card.files.length || !mac}
+                  disabled={(!card.files.length && !ownClips) || !mac}
                   onClick={() => act(() => call(`${api}/run`, "POST", { fresh: card.status === "ready" || card.status === "done" || card.status === "failed" }))}
                   className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
                 >
@@ -359,6 +365,12 @@ function ClipPicker({
           </>
         )}
       </div>
+      {findsOwnClips(card.brief) && (
+        <p className="rounded-lg bg-accent-soft px-3 py-2 text-xs text-accent">
+          No need to pick clips: your Mac looks in Apple Photos and your drives for <strong>{LIBRARY_LINE.exec(card.brief)?.[1]}</strong> and Claude picks the ones that fit. Add any of your own
+          too.
+        </p>
+      )}
       {card.files.length > 0 ? (
         <ul className="flex flex-wrap gap-1.5">
           {card.files.map((f) => (

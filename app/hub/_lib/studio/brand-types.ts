@@ -5,6 +5,9 @@ import { SheetData } from "./types";
    stats for both, the ideas inbox found in their posts, and the weekly plan
    made from them. */
 
+/** The personal brand's id where jobs have theirs (its workspace row, shoot sheets and edit cards). */
+export const BRAND_ID = "personal-brand";
+
 export const PLATFORMS = ["tiktok", "instagram"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 export const PLATFORM_LABEL: Record<Platform, string> = { tiktok: "TikTok", instagram: "Instagram" };
@@ -54,7 +57,50 @@ export const IdeaDraft = z.object({
   pillar: z.string().describe("Which content pillar it fits, in a few words"),
 });
 export type IdeaDraft = z.infer<typeof IdeaDraft>;
-export type Idea = IdeaDraft & { id: string; foundAt: string; status: IdeaStatus; reason: string };
+export type Idea = IdeaDraft & { id: string; foundAt: string; status: IdeaStatus; reason: string; editId?: string };
+
+/** One idea as text: for pasting into notes, CapCut or a caption. */
+export function ideaCopy(i: Idea) {
+  return [
+    i.title,
+    i.yourVersion,
+    `Hook: ${i.hook}`,
+    i.onScreenText.length && `On screen:\n${i.onScreenText.map((t) => `- ${t}`).join("\n")}`,
+    i.sound.name && `Sound: ${i.sound.name}${i.sound.url ? ` ${i.sound.url}` : ""}${i.sound.note ? ` (${i.sound.note})` : ""}`,
+    i.shots.length && `Shots:\n${i.shots.map((s, n) => `${n + 1}. ${s}`).join("\n")}`,
+    `Caption: ${i.caption}`,
+    i.sourceUrl && `Inspired by @${i.handle}: ${i.sourceUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Talking to camera: the sound is Dan's own voice, not one to add when posting. */
+const ownVoice = (i: Idea) => !i.sound.name || /^original audio$/i.test(i.sound.name.trim());
+
+/** An idea as an edit card for the Mac helper. With Apple Photos searches it finds its own B-roll. */
+export function ideaEditBrief(i: Idea) {
+  const notes = [
+    "Vertical 9:16. Keep it as short as the idea allows.",
+    ownVoice(i)
+      ? "Keep my voice as the audio."
+      : `Don't add "${i.sound.name}" or any other music: I add the sound in the app when I post, so the video counts on the sound's page. Mute the clips' own sound. Time the cuts and the text to it${i.sound.note ? `: ${i.sound.note}` : ""}.`,
+    "On-screen text big and easy to read, inside the safe area (clear of the caption at the bottom and the buttons on the right).",
+    i.photosSearch.length ? "Use the clips the helper found for you; if a shot isn't there, use the closest thing you can find and tell me what you swapped." : "",
+  ].filter(Boolean);
+  return [
+    `${i.title}`,
+    `Personal brand · idea · ${EFFORT_LABEL[i.effort]}`,
+    "",
+    ideaCopy(i).split("\n\n").slice(1).join("\n\n"),
+    "",
+    "Edit notes:",
+    ...notes.map((n, k) => `${k + 1}. ${n}`),
+    i.photosSearch.length ? `\nLIBRARY SEARCH: ${i.photosSearch.join(", ")}` : "",
+  ]
+    .join("\n")
+    .trim();
+}
 
 export const IdeaScanResult = z.object({
   ideas: z.array(IdeaDraft),

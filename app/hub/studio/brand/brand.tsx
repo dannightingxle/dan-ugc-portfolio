@@ -7,13 +7,16 @@ import { PLATFORM_LABEL, PLATFORMS, summarise, type BrandData, type Handle } fro
 import type { SheetSummary } from "../../_lib/studio/types";
 import { Field, Section, input } from "../../projects/fields";
 import { ActionButton, FilePicker, SheetList, call, useAction, type Upload } from "../../projects/[id]/studio/studio";
+import { Edits } from "../../projects/[id]/studio/edits";
+import { useFeature } from "../../account-provider";
+import { BRAND_ID } from "../../_lib/studio/brand-types";
 import { IdeasTab } from "./ideas";
 
 /* Personal brand: your accounts and the creators you track, their latest
    stats, an inbox of ideas found in their posts, and a weekly plan + shoot
    sheet made from what's working. */
 
-type Tab = "ideas" | "week" | "setup" | "files";
+type Tab = "ideas" | "week" | "edits" | "setup" | "files";
 const API = "/api/hub/studio/brand";
 
 export function BrandStudio() {
@@ -23,6 +26,7 @@ export function BrandStudio() {
   const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState<Tab>("ideas");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const editsOn = useFeature("edits");
 
   useEffect(() => {
     call<{ brand: BrandData; sheets: SheetSummary[]; claude: boolean; apify: boolean }>(API, "GET")
@@ -98,10 +102,13 @@ export function BrandStudio() {
           [
             ["ideas", "Ideas"],
             ["week", "This week"],
+            ["edits", "Edits"],
             ["setup", "Accounts & creators"],
             ["files", "Files"],
           ] as [Tab, string][]
-        ).map(([key, label]) => (
+        )
+          .filter(([key]) => key !== "edits" || editsOn)
+          .map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -116,8 +123,16 @@ export function BrandStudio() {
       </div>
 
       {tab === "ideas" && (
-        <IdeasTab brand={brand} apify={flags.apify} onBrand={(part) => setBrand((b) => (b ? { ...b, ...part } : b))} edit={edit} goSetup={() => setTab("setup")} />
+        <IdeasTab
+          brand={brand}
+          apify={flags.apify}
+          onBrand={(part) => setBrand((b) => (b ? { ...b, ...part } : b))}
+          edit={edit}
+          goSetup={() => setTab("setup")}
+          goEdits={editsOn ? () => setTab("edits") : undefined}
+        />
       )}
+      {tab === "edits" && editsOn && <Edits projectId={BRAND_ID} sheets={sheets} />}
       {tab === "week" && <WeekTab brand={brand} apify={flags.apify} sheets={sheets} setSheets={setSheets} onBrand={setBrand} edit={edit} goSetup={() => setTab("setup")} />}
       {tab === "setup" && <SetupTab brand={brand} edit={edit} />}
       {tab === "files" && (

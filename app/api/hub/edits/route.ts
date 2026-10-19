@@ -1,16 +1,16 @@
 import { z } from "zod";
 import { createEdit, listDevices, listDeviceFiles, listEdits } from "../../../hub/_lib/edits/data";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../../../hub/_lib/edits/types";
-import { BadRequest, NotFound, editsApi, text, validProjectId } from "../../../hub/_lib/edits/request";
+import { BadRequest, NotFound, editableProject, editsApi, text } from "../../../hub/_lib/edits/request";
 import { getSheet } from "../../../hub/_lib/studio/data";
 
-/* A job's edit cards (with the connected Macs and their recent clips), and adding cards:
+/* A job's (or the personal brand's) edit cards (with the connected Macs and their recent clips), and adding cards:
    from a shoot sheet (one card per video) or from pasted "Copy everything" text. */
 
 export async function GET(request: Request) {
   const projectId = new URL(request.url).searchParams.get("projectId");
   return editsApi(request, null, async ({ user }) => {
-    if (!validProjectId(projectId)) throw new BadRequest("Unknown job.");
+    if (!editableProject(projectId)) throw new BadRequest("Unknown job.");
     const [edits, devices, files] = await Promise.all([listEdits(user.id, projectId), listDevices(user.id), listDeviceFiles(user.id)]);
     return { edits, devices, files };
   });
@@ -28,7 +28,7 @@ const Body = z.object({
 
 export async function POST(request: Request) {
   return editsApi(request, Body, async ({ user, body }) => {
-    if (!validProjectId(body.projectId)) throw new BadRequest("Unknown job.");
+    if (!editableProject(body.projectId)) throw new BadRequest("Unknown job.");
     if (body.sheetId) {
       const sheet = await getSheet(user.id, body.sheetId);
       if (!sheet || sheet.project_id !== body.projectId) throw new NotFound("That shoot sheet isn't there any more.");
