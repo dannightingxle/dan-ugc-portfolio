@@ -459,19 +459,21 @@ const TRIAL_LINE = /^TRIAL VERSIONS:/m;
 const LIBRARY_LINE = /^LIBRARY SEARCH:[ \t]*(.+)$/m;
 
 function trialPrompt(edit, clips) {
-  const name = edit.title.slice(0, 50) || "Trial";
+  const name = edit.title.replace(/ - trial versions$/, "").slice(0, 50) || "Trial";
+  const fromDraft = /^CapCut draft to start from:[ \t]*(.+)$/m.exec(edit.brief)?.[1]?.trim();
   const out = path.join(TRIALS, slug(name));
   return [
     "Make trial versions of this reel in CapCut for me: one draft per version on the card below, each changing only what that version says, so I can post them as Instagram trial reels and see which one wins.",
     "",
-    "The reel, on this Mac:",
-    clips || "(no file - ask me for the finished video or its clips and stop)",
+    ...(fromDraft
+      ? [`Start from my CapCut draft "${fromDraft}": duplicate it for each version and never change the original.${clips ? " These files are on this Mac too if you need them:" : ""}`, ...(clips ? [clips] : [])]
+      : ["The reel, on this Mac:", clips || "(no file - ask me for the finished video or its clips and stop)"]),
     "",
     "Trial card:",
     edit.brief,
     "",
     "For this run:",
-    "- If it's the finished video, build each version on top of it (trim, reorder the opening, swap the text, change the cover). If it's the clips, rebuild the original edit first, then make each version from it.",
+    "- If it's a draft or the finished video, build each version on top of it (trim, reorder the opening, swap the text, change the cover). If it's the clips, rebuild the original edit first, then make each version from it.",
     `- Name the drafts "${name} T1", "${name} T2" and so on, adding v2 if a name is taken. Never overwrite a draft.`,
     `- If you can export from CapCut, export each version as an mp4 into ${out}/ (T1.mp4, T2.mp4…). If you can't, say so: the drafts are enough.`,
     "- If CapCut being open stops a draft saving, say so and stop. I'll close it and reply.",

@@ -25,6 +25,10 @@ export const WHOLE_SHEET = "ALL";
 /** A card whose clips your Mac finds itself, in Apple Photos and on your drives: its brief has a line "LIBRARY SEARCH: laptop, coffee, desk". */
 export const LIBRARY_LINE = /^LIBRARY SEARCH:[ \t]*(.+)$/m;
 export const findsOwnClips = (brief: string) => LIBRARY_LINE.test(brief);
+/** A trial-versions card that starts from a CapCut draft already on the Mac. */
+export const DRAFT_LINE = /^CapCut draft to start from:[ \t]*(.+)$/m;
+/** Cards the Mac can edit without picked clips. */
+export const needsNoClips = (brief: string) => findsOwnClips(brief) || DRAFT_LINE.test(brief);
 
 /** The oldest helper that can do the above (and trial versions); older ones need updating. */
 export const HELPER_FOR_LIBRARY = "0.2.0";

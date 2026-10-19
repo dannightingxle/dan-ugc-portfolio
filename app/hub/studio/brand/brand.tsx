@@ -11,12 +11,13 @@ import { Edits } from "../../projects/[id]/studio/edits";
 import { useFeature } from "../../account-provider";
 import { BRAND_ID } from "../../_lib/studio/brand-types";
 import { IdeasTab } from "./ideas";
+import { TrialsTab } from "./trials";
 
 /* Personal brand: your accounts and the creators you track, their latest
    stats, an inbox of ideas found in their posts, and a weekly plan + shoot
    sheet made from what's working. */
 
-type Tab = "ideas" | "week" | "edits" | "setup" | "files";
+type Tab = "ideas" | "week" | "trials" | "edits" | "setup" | "files";
 const API = "/api/hub/studio/brand";
 
 export function BrandStudio() {
@@ -102,6 +103,7 @@ export function BrandStudio() {
           [
             ["ideas", "Ideas"],
             ["week", "This week"],
+            ["trials", "Trial reels"],
             ["edits", "Edits"],
             ["setup", "Accounts & creators"],
             ["files", "Files"],
@@ -132,7 +134,25 @@ export function BrandStudio() {
           goEdits={editsOn ? () => setTab("edits") : undefined}
         />
       )}
-      {tab === "edits" && editsOn && <Edits projectId={BRAND_ID} sheets={sheets} />}
+      {tab === "trials" && (
+        <TrialsTab
+          brand={brand}
+          onBrand={(part) => setBrand((b) => (b ? { ...b, ...part } : b))}
+          goEdits={editsOn ? () => setTab("edits") : undefined}
+          goWeek={() => setTab("week")}
+        />
+      )}
+      {tab === "edits" && editsOn && (
+        <Edits
+          projectId={BRAND_ID}
+          sheets={sheets}
+          onTrials={() => {
+            // Made from an edit card, so this page hasn't seen it yet.
+            void call<{ brand: BrandData }>(API, "GET").then((r) => setBrand((b) => (b ? { ...b, trials: r.brand.trials } : b)));
+            setTab("trials");
+          }}
+        />
+      )}
       {tab === "week" && <WeekTab brand={brand} apify={flags.apify} sheets={sheets} setSheets={setSheets} onBrand={setBrand} edit={edit} goSetup={() => setTab("setup")} />}
       {tab === "setup" && <SetupTab brand={brand} edit={edit} />}
       {tab === "files" && (

@@ -19,7 +19,8 @@ const BUSY = new Set(["queued", "editing"]);
 const signedOut = (text: string) => /OAuth|401|authenticat|\/login|not logged in|invalid api key/i.test(text);
 const mmss = (s?: number | null) => (s == null ? "" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
 
-export function Edits({ projectId, sheets }: { projectId: string; sheets: SheetSummary[] }) {
+/** onTrials: set on the personal brand, where finished edits can become trial reels. */
+export function Edits({ projectId, sheets, onTrials }: { projectId: string; sheets: SheetSummary[]; onTrials?: () => void }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -66,6 +67,8 @@ export function Edits({ projectId, sheets }: { projectId: string; sheets: SheetS
               onToggle={() => setOpen(open === card.id ? null : card.id)}
               onChange={replace}
               onDelete={() => setData((d) => d && { ...d, edits: d.edits.filter((e) => e.id !== card.id) })}
+              onTrials={onTrials}
+              onAdded={(c) => setData((d) => d && { ...d, edits: [...d.edits.filter((e) => e.id !== c.id), c] })}
             />
           ))}
         </div>
@@ -208,6 +211,8 @@ function Card({
   onToggle,
   onChange,
   onDelete,
+  onTrials,
+  onAdded,
 }: {
   card: EditCard;
   files: DeviceFile[];
@@ -216,8 +221,12 @@ function Card({
   onToggle: () => void;
   onChange: (c: EditCard) => void;
   onDelete: () => void;
+  onTrials?: () => void;
+  onAdded: (c: EditCard) => void;
 }) {
   const [error, setError] = useState("");
+  const [trialBusy, setTrialBusy] = useState(false);
+  const [trialMade, setTrialMade] = useState(false);
   const confirm = useConfirm();
   const api = `/api/hub/edits/${card.id}`;
   async function act(fn: () => Promise<{ edit?: EditCard } | unknown>) {
@@ -290,6 +299,31 @@ function Card({
               <button type="button" onClick={() => act(() => call(api, "PATCH", { status: "done" }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-good hover:text-good">
                 Looks good - done
               </button>
+            )}
+            {onTrials && (card.status === "ready" || card.status === "done") && card.videoCode !== WHOLE_SHEET && !/^TRIAL VERSIONS:/m.test(card.brief) && (
+              <Tooltip label="Claude writes 5 versions with different openings, and your Mac makes them from this draft, ready to post as trial reels">
+                <button
+                  type="button"
+                  disabled={trialBusy}
+                  onClick={async () => {
+                    if (trialMade) return onTrials();
+                    setTrialBusy(true);
+                    setError("");
+                    try {
+                      const r = await call<{ trial: { editId?: string } }>("/api/hub/studio/brand/trials", "POST", { kind: "edit", editId: card.id });
+                      if (r.trial.editId) onAdded((await call<{ edit: EditCard }>(`/api/hub/edits/${r.trial.editId}`, "GET")).edit);
+                      setTrialMade(true);
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : String(e));
+                    } finally {
+                      setTrialBusy(false);
+                    }
+                  }}
+                  className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
+                >
+                  {trialBusy ? "Writing 5 versions…" : trialMade ? "5 versions made - see Trial reels →" : "Make 5 trial versions"}
+                </button>
+              </Tooltip>
             )}
             <CopyButton text={card.brief} label="Copy everything" />
             <button

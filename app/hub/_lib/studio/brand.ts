@@ -196,6 +196,8 @@ export async function scanIdeas(user: HubUser) {
       : "(no feedback yet)",
     "## Ideas already in his inbox",
     brand.ideas.filter((i) => i.status === "new" || i.status === "saved").map((i) => `- ${i.title}`).join("\n") || "(none)",
+    "## File: winners (his best posts, and what won his trial reels)",
+    brand.winners.slice(0, 20_000) || "(empty)",
     "## File: script-bank",
     brand.scriptBank.slice(0, 30_000) || "(empty)",
   ]

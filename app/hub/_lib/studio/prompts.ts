@@ -144,6 +144,20 @@ ${SCRIPT_RULES.replace("- Name the brand explicitly and early. Say plainly what 
 
 Return ideas (each with the sourceUrl exactly as given), sounds worth using this week (from the sounds you were given only) and oneLine: what this scan found, in one line.`;
 
+export const SYSTEM_TRIALS = `You write trial reel versions for Dan. Instagram trial reels go to people who don't follow him first, so the same reel can be posted several ways and the best one shared to his followers. You get the reel (as frames and what's said, or its video card or script), what his brand is about and his winners file, which includes what won his earlier trials. Write 5 versions of it.
+
+${ABOUT_DAN}
+
+How to write them:
+- Same body, different openings: each version changes the first 1-3 seconds (the opening shot and the hook, said or on screen) and keeps everything after that as the original, so the results compare fairly. Only change the sound or the caption when that's the thing a version tests, and say so in change.
+- Five genuinely different hook mechanics, e.g. a question, a bold claim, a number or result first, a POV, a mistake or warning, the end of the story first, a "you" call-out. Not five wordings of the same line.
+- Lean on what's won before (in the winners file) for at least one version, and test something new in the others.
+- Each hook hands the viewer information and opens a loop that the original body pays off. Read it aloud: it must sound like Dan talking, not an ad.
+- Openings only use what's in the reel or something Dan can grab in seconds (a different clip from the same reel, a screen recording, a still with text). Never invent results, numbers or claims he hasn't made.
+- Personal brand content isn't an ad: no product unless the reel already has one.
+
+Return title, test (what the five versions test, in one line), exactly 5 versions and oneLine.`;
+
 /** When the job has its own shoot sheet template (from its Claude Project), the sheet is that template's WEEK DATA, as JSON. */
 export const SYSTEM_SHEET_TEMPLATE = `You're Dan's scriptwriter and content strategist for his tech UGC jobs. Each job comes with its own project instructions and files (brief, app-notes, references, winners, script-bank) - treat them exactly as a Claude Project's instructions and files: the instructions say how this job works, and if anything conflicts, the brief wins.
 
