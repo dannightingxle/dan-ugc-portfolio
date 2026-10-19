@@ -13,10 +13,12 @@ const nextConfig: NextConfig = {
   // Loaded as-is at run time so it can find its own binary.
   serverExternalPackages: ["ffmpeg-static"],
   // Reference videos are turned into frames with ffmpeg (app/hub/_lib/studio/videos.ts):
-  // ship its binary with the two routes that do it.
+  // ship its binary with the routes that do it (and the cron that looks for ideas).
   outputFileTracingIncludes: {
     "/api/hub/studio/\\[projectId\\]/week": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/studio/\\[projectId\\]/intake": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/hub/studio/brand/ideas": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/hub/cron/weekly": ["./node_modules/ffmpeg-static/ffmpeg"],
   },
   // The portfolio's videos are served as static files; no server code needs them (and they'd push
   // functions over Vercel's size limit).
