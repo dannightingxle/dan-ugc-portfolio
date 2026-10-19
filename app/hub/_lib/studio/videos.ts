@@ -105,7 +105,7 @@ async function videoSeconds(file: string) {
 export function frameTimes(seconds: number, max = MAX_FRAMES_PER_VIDEO) {
   const end = Math.max(0, seconds - 0.1);
   if (end <= 0) return [0];
-  if (Math.ceil(end) <= max) return Array.from({ length: Math.floor(end) + 1 }, (_, i) => i);
+  if (Math.floor(end) + 1 <= max) return Array.from({ length: Math.floor(end) + 1 }, (_, i) => i);
   const hook = [0, 1, 2];
   const rest = max - hook.length;
   const from = 3;
