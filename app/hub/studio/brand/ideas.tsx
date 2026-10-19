@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { shortDate } from "../../_lib/ui";
-import { EFFORT_LABEL, IDEA_EFFORTS, type BrandData, type Idea, type IdeaEffort, type IdeaStatus } from "../../_lib/studio/brand-types";
+import { EFFORT_LABEL, IDEA_EFFORTS, ideaCopy, type BrandData, type Idea, type IdeaEffort, type IdeaStatus } from "../../_lib/studio/brand-types";
 import { Section } from "../../projects/fields";
 import { ActionButton, call, useAction } from "../../projects/[id]/studio/studio";
 
@@ -24,7 +24,22 @@ const VIEWS: [IdeaStatus, string][] = [
 ];
 const REASONS = ["Not my niche", "Too much work", "Done it already", "Don't like the format"];
 
-export function IdeasTab({ brand, apify, onBrand, edit, goSetup }: { brand: BrandData; apify: boolean; onBrand: (b: Partial<BrandData>) => void; edit: (b: BrandData) => void; goSetup: () => void }) {
+export function IdeasTab({
+  brand,
+  apify,
+  onBrand,
+  edit,
+  goSetup,
+  goEdits,
+}: {
+  brand: BrandData;
+  apify: boolean;
+  onBrand: (b: Partial<BrandData>) => void;
+  edit: (b: BrandData) => void;
+  goSetup: () => void;
+  /** Set when edits on the Mac are switched on for you. */
+  goEdits?: () => void;
+}) {
   const [view, setView] = useState<IdeaStatus>("new");
   const [effort, setEffort] = useState<IdeaEffort | "all">("all");
   const [phase, setPhase] = useState<"stats" | "ideas">("ideas");
@@ -56,8 +71,8 @@ export function IdeasTab({ brand, apify, onBrand, edit, goSetup }: { brand: Bran
 
       <Section title="Find ideas" action={brand.lastScan && <span className="text-xs text-text-dim">Last looked {shortDate(brand.lastScan.at)}</span>}>
         <p className="text-sm text-text-muted">
-          Looks at the posts beating their usual views from the creators you track, the latest from your idea accounts and the sounds they&apos;re using. Claude watches the best few and
-          turns them into ideas for you, with the no-filming ones (a sound, clips you already have and text on screen) marked.
+          Looks at the posts beating their usual views from the creators you track, the latest from your idea accounts and the sounds they&apos;re using. Claude watches the best
+          few and turns them into ideas for you, with the no-filming ones (a sound, clips you already have and text on screen) marked.
         </p>
         {apify ? (
           <form
@@ -98,7 +113,9 @@ export function IdeasTab({ brand, apify, onBrand, edit, goSetup }: { brand: Bran
           <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--accent)]" checked={brand.autoIdeas} onChange={(e) => edit({ ...brand, autoIdeas: e.target.checked })} />
           <span className="text-sm">
             <span className="font-medium">Find ideas twice a week</span>
-            <span className="block text-text-dim">Monday and Thursday mornings before 7am, with fresh stats. On Mondays it runs before your weekly plan, so the plan can use them.</span>
+            <span className="block text-text-dim">
+              Monday and Thursday mornings before 7am, with fresh stats. On Mondays it runs before your weekly plan, so the plan can use them.
+            </span>
           </span>
         </label>
       </Section>
@@ -148,7 +165,20 @@ export function IdeasTab({ brand, apify, onBrand, edit, goSetup }: { brand: Bran
         ) : (
           <ul className="space-y-3">
             {shown.map((i) => (
-              <IdeaCard key={i.id} idea={i} setStatus={setStatus} />
+              <IdeaCard
+                key={i.id}
+                idea={i}
+                setStatus={setStatus}
+                onMake={
+                  goEdits &&
+                  (async () => {
+                    const r = await call<{ brand: BrandData; sent: boolean }>(`${API}/ideas/make`, "POST", { id: i.id });
+                    onBrand({ ideas: r.brand.ideas });
+                    return r.sent;
+                  })
+                }
+                goEdits={goEdits}
+              />
             ))}
           </ul>
         )}
@@ -170,31 +200,29 @@ function Chip({ on, small, onClick, children }: { on: boolean; small?: boolean; 
   );
 }
 
-/** One idea as text: for pasting into notes, CapCut or a caption. */
-function ideaCopy(i: Idea) {
-  return [
-    i.title,
-    i.yourVersion,
-    `Hook: ${i.hook}`,
-    i.onScreenText.length && `On screen:\n${i.onScreenText.map((t) => `- ${t}`).join("\n")}`,
-    i.sound.name && `Sound: ${i.sound.name}${i.sound.url ? ` ${i.sound.url}` : ""}${i.sound.note ? ` (${i.sound.note})` : ""}`,
-    i.shots.length && `Shots:\n${i.shots.map((s, n) => `${n + 1}. ${s}`).join("\n")}`,
-    `Caption: ${i.caption}`,
-    i.sourceUrl && `Inspired by @${i.handle}: ${i.sourceUrl}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-function IdeaCard({ idea: i, setStatus }: { idea: Idea; setStatus: (id: string, s: IdeaStatus, reason?: string) => void }) {
+function IdeaCard({
+  idea: i,
+  setStatus,
+  onMake,
+  goEdits,
+}: {
+  idea: Idea;
+  setStatus: (id: string, s: IdeaStatus, reason?: string) => void;
+  onMake?: () => Promise<boolean>;
+  goEdits?: () => void;
+}) {
   const [why, setWhy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const make = useAction();
+  const [made, setMade] = useState<"sent" | "card" | null>(null);
   const button = "rounded-lg border border-border px-3 py-1.5 text-sm hover:border-accent hover:text-accent";
 
   return (
     <li className="space-y-2 rounded-xl border border-border p-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className={`rounded-full px-2 py-0.5 font-medium ${i.effort === "no_filming" ? "bg-good-soft text-good" : "bg-bg-elevated text-text-muted"}`}>{EFFORT_LABEL[i.effort]}</span>
+        <span className={`rounded-full px-2 py-0.5 font-medium ${i.effort === "no_filming" ? "bg-good-soft text-good" : "bg-bg-elevated text-text-muted"}`}>
+          {EFFORT_LABEL[i.effort]}
+        </span>
         {i.pillar && <span className="text-text-dim">{i.pillar}</span>}
         <span className="text-text-dim">· {shortDate(i.foundAt)}</span>
         {/^https?:\/\//.test(i.sourceUrl) && (
@@ -300,7 +328,27 @@ function IdeaCard({ idea: i, setStatus }: { idea: Idea; setStatus: (id: string, 
               Not this week
             </button>
           )}
-          {i.status === "planned" && <span className="text-sm text-text-dim">In a shoot sheet</span>}
+          {onMake && !i.editId && i.status !== "dismissed" && (
+            <button
+              type="button"
+              disabled={make.busy}
+              className={button}
+              onClick={() => make.run(async () => setMade((await onMake()) ? "sent" : "card"))}
+              title={
+                i.photosSearch.length
+                  ? "Your Mac finds the clips in Apple Photos and your drives, and Claude makes the CapCut draft"
+                  : "Makes an edit card: add your clips once you've filmed it"
+              }
+            >
+              {make.busy ? "Making…" : i.photosSearch.length ? "Make it on my Mac" : "Make an edit card"}
+            </button>
+          )}
+          {i.status === "planned" && !i.editId && <span className="text-sm text-text-dim">In a shoot sheet</span>}
+          {i.editId && goEdits && (
+            <button type="button" className="px-2 text-sm text-accent hover:underline" onClick={goEdits}>
+              {made === "sent" ? "Sent to your Mac - see Edits →" : made === "card" ? "Edit card made - add your clips in Edits →" : "In Edits →"}
+            </button>
+          )}
           {i.status === "dismissed" ? (
             <button type="button" className={button} onClick={() => setStatus(i.id, "saved")}>
               Actually, save it
@@ -315,6 +363,7 @@ function IdeaCard({ idea: i, setStatus }: { idea: Idea; setStatus: (id: string, 
         </div>
       )}
       {i.status === "dismissed" && i.reason && <p className="text-xs text-text-dim">{i.reason}</p>}
+      {make.error && <p className="text-sm text-accent">{make.error}</p>}
     </li>
   );
 }

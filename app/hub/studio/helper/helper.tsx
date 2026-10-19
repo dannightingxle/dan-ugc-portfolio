@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { Device } from "../../_lib/edits/types";
+import { HELPER_FOR_LIBRARY, helperOlderThan, type Device } from "../../_lib/edits/types";
 import { call, CopyButton } from "../../projects/[id]/studio/studio";
 import { useConfirm } from "../../_lib/popups";
 
@@ -16,6 +16,8 @@ const ago = (iso: string | null) => {
 };
 
 export function Helper() {
+  // Only shown once the Macs have loaded, so after the page is up.
+  const [origin] = useState(() => (typeof window === "undefined" ? "" : window.location.origin));
   const confirm = useConfirm();
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [code, setCode] = useState<{ code: string; expires: string; origin: string; at: number } | null>(null);
@@ -54,6 +56,7 @@ export function Helper() {
   }
 
   const command = code ? `curl -fsSL ${code.origin}/helper/install.sh | bash -s -- ${code.code}` : "";
+  const update = `curl -fsSL ${origin}/helper/creator-desk-helper.mjs -o ~/.creator-desk/creator-desk-helper.mjs`;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -91,6 +94,19 @@ export function Helper() {
                   </p>
                   {d.online && d.info.capcutRunning && <p className="text-xs text-warn">CapCut is open. Close it before an edit saves, or Claude will wait for you.</p>}
                   {d.info.folders?.length ? <p className="text-xs text-text-dim">Looks for clips in {d.info.folders.map((f) => f.replace(/^\/Users\/[^/]+/, "~")).join(", ")}</p> : null}
+                  {d.info.libraries?.length ? <p className="text-xs text-text-dim">Finds B-roll in Apple Photos and {d.info.libraries.join(", ")}</p> : null}
+                  {helperOlderThan(d.info.helper, HELPER_FOR_LIBRARY) && (
+                    <div className="mt-2 space-y-1 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+                      <p>
+                        This helper can&apos;t find B-roll or make trial versions yet. Update it once (it keeps itself up to date after this): in Terminal, paste this, press Enter, then
+                        start the helper again.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="min-w-0 flex-1 break-all">{update}</code>
+                        <CopyButton text={update} label="Copy" />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <button type="button" onClick={() => disconnect(d)} className="text-sm text-text-dim hover:text-accent">
                   Disconnect
@@ -149,6 +165,10 @@ export function Helper() {
             Or have it start by itself when you log in: <code className="text-xs">node ~/.creator-desk/creator-desk-helper.mjs autostart on</code>
           </p>
           <p>Claude Code runs without a window, so the helper lets it use your CapCut tool, run commands and write files in your editing folder without asking each time.</p>
+          <p>
+            For B-roll from <strong>Apple Photos</strong>, the first time it looks your Mac asks to let Terminal (or Node) control Photos: say OK. External drives plugged in are
+            looked through by themselves.
+          </p>
         </div>
       </section>
     </div>

@@ -5,6 +5,9 @@ import { SheetData } from "./types";
    stats for both, the ideas inbox found in their posts, and the weekly plan
    made from them. */
 
+/** The personal brand's id where jobs have theirs (its workspace row, shoot sheets and edit cards). */
+export const BRAND_ID = "personal-brand";
+
 export const PLATFORMS = ["tiktok", "instagram"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 export const PLATFORM_LABEL: Record<Platform, string> = { tiktok: "TikTok", instagram: "Instagram" };
@@ -54,7 +57,50 @@ export const IdeaDraft = z.object({
   pillar: z.string().describe("Which content pillar it fits, in a few words"),
 });
 export type IdeaDraft = z.infer<typeof IdeaDraft>;
-export type Idea = IdeaDraft & { id: string; foundAt: string; status: IdeaStatus; reason: string };
+export type Idea = IdeaDraft & { id: string; foundAt: string; status: IdeaStatus; reason: string; editId?: string };
+
+/** One idea as text: for pasting into notes, CapCut or a caption. */
+export function ideaCopy(i: Idea) {
+  return [
+    i.title,
+    i.yourVersion,
+    `Hook: ${i.hook}`,
+    i.onScreenText.length && `On screen:\n${i.onScreenText.map((t) => `- ${t}`).join("\n")}`,
+    i.sound.name && `Sound: ${i.sound.name}${i.sound.url ? ` ${i.sound.url}` : ""}${i.sound.note ? ` (${i.sound.note})` : ""}`,
+    i.shots.length && `Shots:\n${i.shots.map((s, n) => `${n + 1}. ${s}`).join("\n")}`,
+    `Caption: ${i.caption}`,
+    i.sourceUrl && `Inspired by @${i.handle}: ${i.sourceUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Talking to camera: the sound is Dan's own voice, not one to add when posting. */
+const ownVoice = (i: Idea) => !i.sound.name || /^original audio$/i.test(i.sound.name.trim());
+
+/** An idea as an edit card for the Mac helper. With Apple Photos searches it finds its own B-roll. */
+export function ideaEditBrief(i: Idea) {
+  const notes = [
+    "Vertical 9:16. Keep it as short as the idea allows.",
+    ownVoice(i)
+      ? "Keep my voice as the audio."
+      : `Don't add "${i.sound.name}" or any other music: I add the sound in the app when I post, so the video counts on the sound's page. Mute the clips' own sound. Time the cuts and the text to it${i.sound.note ? `: ${i.sound.note}` : ""}.`,
+    "On-screen text big and easy to read, inside the safe area (clear of the caption at the bottom and the buttons on the right).",
+    i.photosSearch.length ? "Use the clips the helper found for you; if a shot isn't there, use the closest thing you can find and tell me what you swapped." : "",
+  ].filter(Boolean);
+  return [
+    `${i.title}`,
+    `Personal brand · idea · ${EFFORT_LABEL[i.effort]}`,
+    "",
+    ideaCopy(i).split("\n\n").slice(1).join("\n\n"),
+    "",
+    "Edit notes:",
+    ...notes.map((n, k) => `${k + 1}. ${n}`),
+    i.photosSearch.length ? `\nLIBRARY SEARCH: ${i.photosSearch.join(", ")}` : "",
+  ]
+    .join("\n")
+    .trim();
+}
 
 export const IdeaScanResult = z.object({
   ideas: z.array(IdeaDraft),
@@ -62,6 +108,61 @@ export const IdeaScanResult = z.object({
   oneLine: z.string(),
 });
 export type IdeaScanResult = z.infer<typeof IdeaScanResult>;
+
+export const TrialResult = z.object({
+  title: z.string().describe("A short name for the reel, 2-6 words"),
+  test: z.string().describe("What these versions test and why, in one line"),
+  versions: z
+    .array(
+      z.object({
+        change: z.string().describe("What's different from the original, in a few words (e.g. 'Question hook', 'Result first')"),
+        opening: z.string().describe("What's on screen in the first 1-2 seconds"),
+        hook: z.string().describe("The opening line, said or on screen, ready to use"),
+        onScreenText: z.array(z.string()).describe("The text overlays that change, in order. Empty if the text stays as the original"),
+        caption: z.string().describe("The post caption for this version"),
+        sound: z.string().describe("'Same as the original' unless this version tests the sound - then which sound, from the material only"),
+      }),
+    )
+    .describe("Exactly 5 versions, each with a different hook mechanic"),
+  oneLine: z.string(),
+});
+export type TrialResult = z.infer<typeof TrialResult>;
+export type TrialVersion = TrialResult["versions"][number] & { code: string; views: number | null };
+export type Trial = {
+  id: string;
+  createdAt: string;
+  title: string;
+  test: string;
+  /** Where it came from: one of your posts, an edit card, or pasted. */
+  source: { kind: "post" | "edit" | "paste"; url: string; draft: string; label: string };
+  versions: TrialVersion[];
+  editId?: string;
+  winner: string | null;
+  learned: string;
+};
+
+/** The trial versions as an edit card for the Mac helper: one draft per version, from the original draft when there is one. */
+export function trialEditBrief(t: Trial) {
+  const head = [
+    `${t.title} - trial versions`,
+    `TRIAL VERSIONS: ${t.versions.length}`,
+    `What this tests: ${t.test}`,
+    t.source.draft && `CapCut draft to start from: ${t.source.draft}`,
+    t.source.url && `The original: ${t.source.url}`,
+  ];
+  const versions = t.versions.map((v) =>
+    [
+      `${v.code} - ${v.change}`,
+      `Opening: ${v.opening}`,
+      `Hook: ${v.hook}`,
+      v.onScreenText.length > 0 && `On-screen text: ${v.onScreenText.join(" / ")}`,
+      !/^same as the original/i.test(v.sound.trim()) && `Sound: ${v.sound}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+  return [head.filter(Boolean).join("\n"), ...versions, "Keep everything after the opening exactly as the original, so the versions only differ in what each one says."].join("\n\n");
+}
 
 export type BrandData = {
   about: string;
@@ -79,12 +180,14 @@ export type BrandData = {
   /** Posts already looked at for ideas, so a scan never pays to watch one twice. */
   seen: string[];
   lastScan: { at: string; sounds: IdeaScanResult["sounds"]; oneLine: string; problems: string[] } | null;
+  /** Trial reels: 5 versions of a reel, posted as Instagram trial reels, and which one won. */
+  trials: Trial[];
   stats: { at: string; posts: Post[]; problems: string[] } | null;
   lastPlan: { at: string; workingForYou: string[]; notWorking: string[]; fromTracked: { handle: string; idea: string; url: string }[]; plan: string } | null;
 };
 
 export function emptyBrand(): BrandData {
-  return { about: "", accounts: [], tracked: [], ideaAccounts: [], winners: "", scriptBank: "", notes: "", autoPlan: false, autoIdeas: false, ideas: [], seen: [], lastScan: null, stats: null, lastPlan: null };
+  return { about: "", accounts: [], tracked: [], ideaAccounts: [], winners: "", scriptBank: "", notes: "", autoPlan: false, autoIdeas: false, ideas: [], seen: [], lastScan: null, trials: [], stats: null, lastPlan: null };
 }
 
 export function readBrand(raw: unknown): BrandData {

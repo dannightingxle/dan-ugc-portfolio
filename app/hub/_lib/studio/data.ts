@@ -97,7 +97,7 @@ export function validProjectId(id: unknown): id is string {
   return typeof id === "string" && /^[\w-]{1,80}$/.test(id) && id !== BRAND_ID && id !== ACCOUNTS_ID;
 }
 
-/** The personal brand's workspace and shoot sheets are stored under this id. */
-export const BRAND_ID = "personal-brand";
+import { BRAND_ID } from "./brand-types";
+export { BRAND_ID };
 /** The Accounts page's settings are stored under this id. */
 export const ACCOUNTS_ID = "creator-accounts";

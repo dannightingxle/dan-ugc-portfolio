@@ -11,25 +11,39 @@
   It also tells Creator Desk your latest video files (name, length, a small thumbnail), so you
   can pick clips from the website. Videos never leave your Mac.
 
+  For a card made from an idea ("LIBRARY SEARCH: laptop, coffee" in its brief) it finds the
+  B-roll itself first: it searches Apple Photos (the same search as the Photos app, so "beach",
+  "dog" or "laptop" work) and exports what it finds, and looks through every video on your
+  external drives by folder and file name. Claude Code then picks the clips that fit.
+
+  It keeps itself up to date: when Creator Desk has a newer helper, it downloads it and restarts
+  between edits (set CDH_NO_UPDATE=1 to stop that).
+
   Usage:
     node creator-desk-helper.mjs connect ABCD-EFGH     connect this Mac (code from Creator Desk)
     node creator-desk-helper.mjs                       run (keep the window open)
     node creator-desk-helper.mjs autostart on|off      start by itself when you log in
     node creator-desk-helper.mjs status                show what it can see
+    node creator-desk-helper.mjs find "laptop"         try the B-roll search (Apple Photos and drives)
 
   Needs: macOS, Node 18+, Claude Code (`claude`) signed in, CapCut desktop. ffmpeg/ffprobe for
-  clip lengths and thumbnails (optional). Settings: ~/.creator-desk/helper.json
+  clip lengths and thumbnails (optional). Settings: ~/.creator-desk/helper.json ("libraries":
+  the folders to look through for B-roll; by default every external drive under /Volumes).
 */
 
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
+const LIBRARY = path.join(HOME, "library.json");
+const LIBRARY_LIST = path.join(HOME, "library.txt");
+const BROLL = path.join(os.homedir(), "Movies", "Creator Desk", "B-roll");
+const TRIALS = path.join(os.homedir(), "Movies", "Creator Desk", "Trial reels");
 const POLL_MS = Number(process.env.CDH_POLL_MS) || 2000;
 const VIDEO = /\.(mov|mp4|m4v)$/i;
 
@@ -60,6 +74,7 @@ function defaults(cfg) {
     ...(process.env.CDH_FOLDERS ? { folders: process.env.CDH_FOLDERS.split(":") } : {}),
     ...(process.env.CDH_WORKDIR ? { workdir: process.env.CDH_WORKDIR } : {}),
     ...(process.env.CDH_CLAUDE ? { claude: process.env.CDH_CLAUDE } : {}),
+    ...(process.env.CDH_LIBRARIES ? { libraries: process.env.CDH_LIBRARIES.split(":") } : {}),
   };
 }
 
@@ -142,6 +157,7 @@ function info() {
     claude: run(cfg.claude, ["--version"]) || null,
     ffmpeg: Boolean(ffmpeg()),
     folders: cfg.folders,
+    libraries: libraries(),
     workdir: cfg.workdir,
   };
 }
@@ -188,6 +204,194 @@ async function report(force = false) {
   if (key !== lastFilesKey || force) body.files = files;
   await api("POST", "/api/hub/helper/report", body);
   lastFilesKey = key;
+}
+
+// ------------------------------------------------------------ finding B-roll: Apple Photos and your drives
+
+// The folders to look through for B-roll: your setting, or every external drive that's plugged in.
+function libraries() {
+  if (Array.isArray(cfg.libraries)) return cfg.libraries;
+  let names = [];
+  try {
+    names = fs.readdirSync("/Volumes");
+  } catch {
+    return [];
+  }
+  return names
+    .filter((n) => !n.startsWith(".") && !/^(Recovery|Preboot|VM|Update|com\.apple\..*)$/i.test(n))
+    .map((n) => path.join("/Volumes", n))
+    .filter((p) => {
+      try {
+        return fs.realpathSync(p) !== "/"; // the Mac's own disk shows up here too
+      } catch {
+        return false;
+      }
+    });
+}
+
+const SKIP_DIR = /^(\$RECYCLE\.BIN|System Volume Information|Backups\.backupdb|node_modules|CapCut|Library)$|\.(photoslibrary|fcpbundle|imovielibrary|app|lrdata)$/i;
+
+// Every video on those drives, by path and date. Kept for a few hours, since walking a big drive takes a
+// while; a walk that ran out of time is only kept for half an hour, so the next search finishes it.
+async function libraryIndex() {
+  const roots = libraries();
+  try {
+    const cached = JSON.parse(fs.readFileSync(LIBRARY, "utf8"));
+    const keep = cached.complete === false ? 30 * 60_000 : 6 * 3_600_000;
+    if (Date.now() - cached.builtAt < keep && JSON.stringify(cached.roots) === JSON.stringify(roots)) return cached.files;
+  } catch {}
+  const files = [];
+  const until = Date.now() + 180_000;
+  let complete = true;
+  const walk = async (dir, depth) => {
+    if (depth > 10) return;
+    if (files.length >= 100_000 || Date.now() > until) {
+      complete = false;
+      return;
+    }
+    let entries = [];
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!SKIP_DIR.test(e.name)) await walk(p, depth + 1);
+      } else if (VIDEO.test(e.name)) {
+        try {
+          files.push({ p, m: (await fs.promises.stat(p)).mtimeMs });
+        } catch {}
+      }
+    }
+  };
+  if (roots.length) log(`Looking through the videos on ${roots.join(", ")}…`);
+  for (const r of roots) await walk(r, 0);
+  if (!complete) log(`Only got through part of your drives (${files.length} videos) - the rest next time.`);
+  try {
+    fs.writeFileSync(LIBRARY, JSON.stringify({ builtAt: Date.now(), roots, files, complete }));
+    fs.writeFileSync(LIBRARY_LIST, files.map((f) => f.p).join("\n"));
+  } catch {}
+  return files;
+}
+
+// Videos on your drives whose folder or file name has every word of the search, newest first.
+function searchDrives(index, term, max = 6) {
+  const words = term.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return index
+    .filter((f) => {
+      const p = f.p.toLowerCase();
+      return words.every((w) => p.includes(w));
+    })
+    .sort((a, b) => b.m - a.m)
+    .slice(0, max)
+    .map((f) => f.p);
+}
+
+// Apple Photos' own search (the same as typing in the Photos search field), newest first: up to
+// a few videos, or a few photos when there are no videos, exported as originals into a folder.
+const PHOTOS_SCRIPT = [
+  "on run argv",
+  "set term to item 1 of argv",
+  "set dest to (POSIX file (item 2 of argv)) as alias",
+  "set maxVideos to (item 3 of argv) as integer",
+  'tell application "Photos"',
+  "with timeout of 900 seconds",
+  "set found to search for term",
+  "set vids to {}",
+  "set stills to {}",
+  "set n to count of found",
+  "set lowest to n - 300",
+  "if lowest < 1 then set lowest to 1",
+  "repeat with i from n to lowest by -1",
+  "set m to item i of found",
+  "set fn to filename of m",
+  'if fn ends with ".mov" or fn ends with ".mp4" or fn ends with ".m4v" then',
+  "set end of vids to m",
+  "if (count of vids) >= maxVideos then exit repeat",
+  "else if (count of stills) < 3 then",
+  "set end of stills to m",
+  "end if",
+  "end repeat",
+  "if (count of vids) > 0 then",
+  "export vids to dest with using originals",
+  "return (count of vids) as text",
+  "else if (count of stills) > 0 then",
+  "export stills to dest with using originals",
+  "return (count of stills) as text",
+  "end if",
+  'return "0"',
+  "end timeout",
+  "end tell",
+  "end run",
+];
+
+function searchPhotos(term, dir, max = 5) {
+  fs.mkdirSync(dir, { recursive: true });
+  // Already exported for this card (an edit run again): use those.
+  const done = fs.readdirSync(dir).filter((n) => !n.startsWith(".")).map((n) => path.join(dir, n));
+  if (done.length) return Promise.resolve({ files: done, error: "" });
+  return new Promise((resolve) => {
+    execFile("osascript", [...PHOTOS_SCRIPT.flatMap((l) => ["-e", l]), term, dir, String(max)], { timeout: 900_000 }, (err, stdout, stderr) => {
+      let files = [];
+      try {
+        files = fs.readdirSync(dir).filter((n) => !n.startsWith(".")).map((n) => path.join(dir, n));
+      } catch {}
+      if (err && !files.length) {
+        const why = /not allowed|-1743|not authori[sz]ed/i.test(stderr) ? "your Mac didn't let the helper use Photos (System Settings → Privacy & Security → Automation)" : (stderr || err.message).trim().split("\n").pop();
+        resolve({ files, error: why });
+      } else resolve({ files, error: "" });
+    });
+  });
+}
+
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || "clip";
+
+// For a card that finds its own clips: search Photos and the drives for each term, tell the card
+// what was found, and return the part of the prompt that lists it.
+async function gatherBroll(edit, terms) {
+  const dir = path.join(BROLL, `${slug(edit.title)}-${edit.id.slice(0, 6)}`);
+  await update(edit.id, { events: [{ kind: "status", text: `Looking for ${terms.join(", ")} in Apple Photos and on your drives…` }] });
+  // Searching can take minutes (big drives, Photos downloading from iCloud): keep telling Creator Desk this Mac is here.
+  const alive = setInterval(() => api("POST", "/api/hub/helper/report", { info: info() }).catch(() => {}), 20_000);
+  try {
+    return await gather(edit, terms, dir);
+  } finally {
+    clearInterval(alive);
+  }
+}
+
+async function gather(edit, terms, dir) {
+  const index = await libraryIndex();
+  const lines = [];
+  const found = [];
+  const problems = new Set();
+  for (const term of terms) {
+    const photos = await searchPhotos(term, path.join(dir, slug(term)));
+    if (photos.error) problems.add(photos.error);
+    const drives = searchDrives(index, term);
+    const all = [...photos.files, ...drives];
+    lines.push(`- "${term}": ${all.length ? all.map((f) => `${f}${duration(f) ? ` (${mmss(duration(f))})` : ""}`).join("; ") : "nothing found"}`);
+    found.push(...all);
+  }
+  const unique = [...new Set(found)];
+  const fromPhotos = unique.filter((f) => f.startsWith(dir)).length;
+  await update(edit.id, {
+    events: [
+      { kind: "status", text: `Found ${fromPhotos} in Apple Photos and ${unique.length - fromPhotos} on your drives.${problems.size ? ` (${[...problems].join("; ")})` : ""}` },
+    ],
+  });
+  if (unique.length) await update(edit.id, { pickDone: true, picked: unique.slice(0, 40).map((f) => ({ path: f, name: path.basename(f), duration: duration(f) })) });
+  return [
+    "B-roll I found for you (Apple Photos exports are in " + dir + "; the rest are on my drives):",
+    ...lines,
+    "",
+    "Look at a frame or two of each before choosing (ffmpeg -ss 1 -i FILE -frames:v 1 frame.jpg, then read the image) and use only what fits the shots; skip anything blurry, shaky or with people who aren't me unless the card wants them.",
+    `If something's missing, look again: search Photos (osascript: tell application "Photos" to search for "WORDS", then export with using originals), or search the list of every video on my drives in ${LIBRARY_LIST} (one path per line). Say what you used.`,
+  ].join("\n");
 }
 
 // ------------------------------------------------------------ picking clips with the Mac file picker
@@ -247,16 +451,16 @@ async function handlePick(p) {
 
 // ------------------------------------------------------------ editing with Claude Code
 
-function promptFor(edit) {
+function promptFor(edit, broll = "") {
   const clips = edit.files.map((f) => `- ${f.path}${f.duration ? ` (${mmss(f.duration)})` : ""}`).join("\n");
   if (edit.videoCode === "ALL") return wholeSheetPrompt(edit, clips);
-  const name = [edit.brand, edit.videoCode].filter(Boolean).join(" ") || "Creator Desk edit";
+  if (TRIAL_LINE.test(edit.brief)) return trialPrompt(edit, clips);
+  const name = [edit.brand, edit.videoCode].filter(Boolean).join(" ") || edit.title.slice(0, 50) || "Creator Desk edit";
   return [
     `Edit this video in CapCut for me, the same way as when I paste a video card and the clip names into this chat.${edit.brand ? ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.` : ""}`,
     "",
-    "Clips, on this Mac:",
-    clips,
-    "",
+    ...(broll ? [broll, ""] : []),
+    ...(clips ? [broll ? "Clips I picked myself, on this Mac:" : "Clips, on this Mac:", clips, ""] : []),
     "Video card:",
     edit.brief,
     "",
@@ -265,6 +469,34 @@ function promptFor(edit) {
     "- If CapCut being open stops the draft saving, say so and stop. I'll close it and reply.",
     "- If you need something from me, ask one clear question and stop.",
     "- Finish with a short summary of what you did and, on its own line, DRAFT: <the draft name>.",
+  ].join("\n");
+}
+
+// Trial versions of one reel: a draft per version, each changing only what its version says.
+const TRIAL_LINE = /^TRIAL VERSIONS:/m;
+const LIBRARY_LINE = /^LIBRARY SEARCH:[ \t]*(.+)$/m;
+
+function trialPrompt(edit, clips) {
+  const name = edit.title.replace(/ - trial versions$/, "").slice(0, 50) || "Trial";
+  const fromDraft = /^CapCut draft to start from:[ \t]*(.+)$/m.exec(edit.brief)?.[1]?.trim();
+  const out = path.join(TRIALS, slug(name));
+  return [
+    "Make trial versions of this reel in CapCut for me: one draft per version on the card below, each changing only what that version says, so I can post them as Instagram trial reels and see which one wins.",
+    "",
+    ...(fromDraft
+      ? [`Start from my CapCut draft "${fromDraft}": duplicate it for each version and never change the original.${clips ? " These files are on this Mac too if you need them:" : ""}`, ...(clips ? [clips] : [])]
+      : ["The reel, on this Mac:", clips || "(no file - ask me for the finished video or its clips and stop)"]),
+    "",
+    "Trial card:",
+    edit.brief,
+    "",
+    "For this run:",
+    "- If it's a draft or the finished video, build each version on top of it (trim, reorder the opening, swap the text, change the cover). If it's the clips, rebuild the original edit first, then make each version from it.",
+    `- Name the drafts "${name} T1", "${name} T2" and so on, adding v2 if a name is taken. Never overwrite a draft.`,
+    `- If you can export from CapCut, export each version as an mp4 into ${out}/ (T1.mp4, T2.mp4…). If you can't, say so: the drafts are enough.`,
+    "- If CapCut being open stops a draft saving, say so and stop. I'll close it and reply.",
+    "- If you need something from me, ask one clear question and stop.",
+    "- Finish with a short summary, then one line per draft you made: DRAFT: <the draft name>.",
   ].join("\n");
 }
 
@@ -423,8 +655,50 @@ async function handleWork(work) {
     if (!ok) continue;
     log(`Editing ${[e.brand, e.videoCode, e.title].filter(Boolean).join(" · ")}`);
     await update(e.id, { events: [{ kind: "status", text: `Your Mac (${os.hostname().replace(/\.local$/, "")}) has started the edit.` }] });
-    startClaude(e.id, promptFor(e), e.sessionId);
+    const terms = !e.sessionId && LIBRARY_LINE.exec(e.brief)?.[1].split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6);
+    let broll = "";
+    if (terms?.length) {
+      try {
+        broll = await gatherBroll(e, terms);
+      } catch (err) {
+        log("Couldn't look for B-roll:", err.message);
+      }
+    }
+    startClaude(e.id, promptFor(e, broll), e.sessionId);
     break;
+  }
+}
+
+// ------------------------------------------------------------ keeping itself up to date
+
+const newer = (a, b) => {
+  const x = a.split(".").map(Number);
+  const y = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+};
+
+let lastUpdateCheck = 0;
+// When Creator Desk has a newer helper: save it over this one and run it in this one's place.
+async function selfUpdate() {
+  if (process.env.CDH_NO_UPDATE || running.size || Date.now() - lastUpdateCheck < 6 * 3_600_000) return false;
+  lastUpdateCheck = Date.now();
+  try {
+    const res = await fetch(cfg.server.replace(/\/$/, "") + "/helper/creator-desk-helper.mjs", { headers: { "user-agent": `creator-desk-helper/${VERSION}` } });
+    if (!res.ok) return false;
+    const code = await res.text();
+    const latest = /const VERSION = "(\d+\.\d+\.\d+)"/.exec(code)?.[1];
+    if (!latest || !newer(latest, VERSION) || !code.startsWith("#!/usr/bin/env node")) return false;
+    const self = path.resolve(process.argv[1]);
+    fs.writeFileSync(self + ".new", code);
+    fs.renameSync(self + ".new", self);
+    log(`Updated the helper to ${latest}. Restarting…`);
+    const child = spawn(process.execPath, process.argv.slice(1), { stdio: "inherit", env: process.env });
+    child.on("exit", (c) => process.exit(c ?? 0));
+    return true;
+  } catch (e) {
+    log("Couldn't check for a newer helper:", e.message);
+    return false;
   }
 }
 
@@ -433,6 +707,8 @@ async function loop() {
   await report(true).catch((e) => log("Couldn't reach Creator Desk:", e.message));
   let failures = 0;
   for (;;) {
+    // The new helper carries on in this window; this one just waits for it.
+    if (await selfUpdate()) return new Promise(() => {});
     try {
       await handleWork(await api("GET", "/api/hub/helper/poll"));
       await report();
@@ -515,5 +791,12 @@ if (cmd === "connect") {
   cfg = defaults(cfg);
   if (cmd === "autostart") autostart(rest[0] !== "off");
   else if (cmd === "status") console.log(JSON.stringify({ ...info(), clips: recentClips().length }, null, 2));
+  else if (cmd === "find") {
+    // Try the B-roll search without an edit: node creator-desk-helper.mjs find "laptop"
+    const term = rest.join(" ") || "laptop";
+    const dir = path.join(BROLL, "_test", slug(term));
+    const photos = await searchPhotos(term, dir);
+    console.log(JSON.stringify({ photos: photos.files, photosProblem: photos.error || undefined, drives: searchDrives(await libraryIndex(), term), libraries: libraries() }, null, 2));
+  }
   else await loop();
 }

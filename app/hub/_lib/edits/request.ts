@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { crossSite } from "../same-origin";
-import { studioApiUser, validProjectId } from "../studio/data";
+import { BRAND_ID, studioApiUser, validProjectId } from "../studio/data";
 import type { HubUser } from "../supabase/server";
 
 /* Shared plumbing for the Edits API routes the web app calls (the helper's own routes use a device token instead). */
@@ -36,4 +36,5 @@ export async function editsApi<S extends z.ZodType>(
 
 export class NotFound extends Error {}
 export class BadRequest extends Error {}
-export { validProjectId };
+/** A job, or the personal brand: both can have edit cards. */
+export const editableProject = (id: unknown): id is string => validProjectId(id) || id === BRAND_ID;

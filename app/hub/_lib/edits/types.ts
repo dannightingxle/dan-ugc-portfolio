@@ -22,6 +22,24 @@ export type EditFile = { path: string; name: string; duration?: number | null };
 /** A card for a whole shoot sheet (every video, edited in one go) has this video code. */
 export const WHOLE_SHEET = "ALL";
 
+/** A card whose clips your Mac finds itself, in Apple Photos and on your drives: its brief has a line "LIBRARY SEARCH: laptop, coffee, desk". */
+export const LIBRARY_LINE = /^LIBRARY SEARCH:[ \t]*(.+)$/m;
+export const findsOwnClips = (brief: string) => LIBRARY_LINE.test(brief);
+/** A trial-versions card that starts from a CapCut draft already on the Mac. */
+export const DRAFT_LINE = /^CapCut draft to start from:[ \t]*(.+)$/m;
+/** Cards the Mac can edit without picked clips. */
+export const needsNoClips = (brief: string) => findsOwnClips(brief) || DRAFT_LINE.test(brief);
+
+/** The oldest helper that can do the above (and trial versions); older ones need updating. */
+export const HELPER_FOR_LIBRARY = "0.2.0";
+export function helperOlderThan(version: string | undefined, wanted: string) {
+  if (!version) return true;
+  const a = version.split(".").map(Number);
+  const b = wanted.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) < (b[i] || 0);
+  return false;
+}
+
 export type EditCard = {
   id: string;
   projectId: string;
@@ -45,7 +63,7 @@ export type Device = {
   name: string;
   lastSeen: string | null;
   online: boolean;
-  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[] };
+  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[] };
 };
 
 const TYPE: Record<string, string> = { th: "Talking head", ls: "Lip-sync", ac: "Acting", gs: "Green screen" };

@@ -12,6 +12,7 @@ import {
   IdeaScanResult,
   PLATFORM_LABEL,
   ideaCandidates,
+  ideaEditBrief,
   readBrand,
   soundsInUse,
   summarise,
@@ -20,6 +21,7 @@ import {
   type IdeaStatus,
 } from "./brand-types";
 import type { Upload } from "./jobs";
+import { addEvents, createEdit, updateEdit } from "../edits/data";
 
 /* The personal brand plan: stored as a workspace row under BRAND_ID, with
    its shoot sheets alongside the job ones. */
@@ -194,6 +196,8 @@ export async function scanIdeas(user: HubUser) {
       : "(no feedback yet)",
     "## Ideas already in his inbox",
     brand.ideas.filter((i) => i.status === "new" || i.status === "saved").map((i) => `- ${i.title}`).join("\n") || "(none)",
+    "## File: winners (his best posts, and what won his trial reels)",
+    brand.winners.slice(0, 20_000) || "(empty)",
     "## File: script-bank",
     brand.scriptBank.slice(0, 30_000) || "(empty)",
   ]
@@ -249,4 +253,21 @@ export async function setIdeaStatus(userId: string, id: string, status: IdeaStat
   const brand = await getBrand(userId);
   if (!brand.ideas.some((i) => i.id === id)) throw new StudioError("That idea isn't in your inbox any more.");
   return saveBrand(userId, { ...brand, ideas: brand.ideas.map((i) => (i.id === id ? { ...i, status, reason: status === "dismissed" ? reason : "" } : i)) });
+}
+
+
+/** Turn an idea into an edit card. One that finds its own B-roll goes straight to the Mac; one that needs filming waits for its clips. */
+export async function makeIdea(userId: string, id: string) {
+  const brand = await getBrand(userId);
+  const idea = brand.ideas.find((i) => i.id === id);
+  if (!idea) throw new StudioError("That idea isn't in your inbox any more.");
+  let edit = await createEdit(userId, { projectId: BRAND_ID, videoCode: "", title: idea.title.slice(0, 300), brief: ideaEditBrief(idea) });
+  const sent = idea.photosSearch.length > 0;
+  if (sent) {
+    edit = await updateEdit(userId, edit.id, { status: "queued", cancel_requested: false });
+    await addEvents(edit.id, [{ kind: "status", text: "Sent to your Mac." }]);
+  }
+  const latest = await getBrand(userId);
+  const saved = await saveBrand(userId, { ...latest, ideas: latest.ideas.map((i) => (i.id === id ? { ...i, status: "planned" as const, editId: edit.id } : i)) });
+  return { brand: saved, edit, sent };
 }
