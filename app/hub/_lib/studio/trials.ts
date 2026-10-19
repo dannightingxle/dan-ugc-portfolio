@@ -108,19 +108,18 @@ export async function saveTrialResults(userId: string, id: string, views: (numbe
   if (!trial) throw new StudioError("That trial isn't there any more.");
   const versions = trial.versions.map((v, i) => ({ ...v, views: views[i] ?? null }));
   const won = winner ? versions.find((v) => v.code === winner) : undefined;
-  let { winners } = brand;
-  let learned = trial.learned;
-  if (won && winner !== trial.winner) {
+  // Each trial has one line in the winners file, tagged with its id: replaced when the winner changes, removed when it's cleared.
+  const tag = `[trial ${trial.id}]`;
+  let learned = "";
+  let lines = brand.winners.split("\n").filter((l) => !l.includes(tag));
+  if (won) {
     const others = versions.filter((v) => v.code !== won.code && v.views != null).map((v) => `${v.code} ${v.views}`);
     learned = `${won.code} won${won.views != null ? ` with ${won.views} views` : ""}${others.length ? ` (${others.join(", ")})` : ""}: ${won.change} - "${won.hook}"`;
-    const entry = `- Trial ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}, "${trial.title}" (testing ${trial.test}): ${learned}`;
-    winners = [winners.trim(), entry].filter(Boolean).join("\n");
+    const day = new Date(trial.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    lines = [...lines, `- Trial reel ${day}, "${trial.title}" (testing ${trial.test}): ${learned} ${tag}`];
   }
-  const saved = await saveBrand(userId, {
-    ...brand,
-    winners,
-    trials: brand.trials.map((t) => (t.id === id ? { ...t, versions, winner: won ? won.code : null, learned: won ? learned : "" } : t)),
-  });
+  const winners = lines.join("\n").trim();
+  const saved = await saveBrand(userId, { ...brand, winners, trials: brand.trials.map((t) => (t.id === id ? { ...t, versions, winner: won ? won.code : null, learned } : t)) });
   return saved;
 }
 

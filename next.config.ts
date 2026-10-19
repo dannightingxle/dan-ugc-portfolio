@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
     "/api/hub/studio/\\[projectId\\]/week": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/studio/\\[projectId\\]/intake": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/studio/brand/ideas": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/hub/studio/brand/trials": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/cron/weekly": ["./node_modules/ffmpeg-static/ffmpeg"],
   },
   // The portfolio's videos are served as static files; no server code needs them (and they'd push

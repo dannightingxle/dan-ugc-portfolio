@@ -117,10 +117,8 @@ function TrialCard({ trial: t, onBrand, goEdits }: { trial: Trial; onBrand: (b: 
   const mac = useAction();
   const [macNote, setMacNote] = useState("");
   const confirm = useConfirm();
-  const best = () => {
-    const known = t.versions.map((v, i) => ({ code: v.code, n: views[i] })).filter((x): x is { code: string; n: number } => x.n != null);
-    return known.length ? known.sort((a, b) => b.n - a.n)[0].code : null;
-  };
+  // Only once every version has its views: one early number isn't a winner.
+  const best = () => (views.every((n) => n != null) ? t.versions.map((v, i) => ({ code: v.code, n: views[i] as number })).sort((a, b) => b.n - a.n)[0]?.code ?? null : null);
   const changed = views.some((v, i) => v !== t.versions[i].views) || winner !== t.winner;
 
   return (
@@ -241,6 +239,9 @@ function TrialCard({ trial: t, onBrand, goEdits }: { trial: Trial; onBrand: (b: 
       </div>
       {(save.error || mac.error) && <p className="text-sm text-accent">{save.error || mac.error}</p>}
       {!winner && views.every((v) => v != null) && <p className="text-xs text-text-dim">No winner picked: saving picks the one with the most views.</p>}
+      {!winner && views.some((v) => v != null) && views.some((v) => v == null) && (
+        <p className="text-xs text-text-dim">The winner is picked once every version has its views (or pick one yourself).</p>
+      )}
     </Section>
   );
 }

@@ -231,20 +231,27 @@ function libraries() {
 
 const SKIP_DIR = /^(\$RECYCLE\.BIN|System Volume Information|Backups\.backupdb|node_modules|CapCut|Library)$|\.(photoslibrary|fcpbundle|imovielibrary|app|lrdata)$/i;
 
-// Every video on those drives, by path and date. Kept for a few hours, since walking a big drive takes a while.
-function libraryIndex() {
+// Every video on those drives, by path and date. Kept for a few hours, since walking a big drive takes a
+// while; a walk that ran out of time is only kept for half an hour, so the next search finishes it.
+async function libraryIndex() {
   const roots = libraries();
   try {
     const cached = JSON.parse(fs.readFileSync(LIBRARY, "utf8"));
-    if (Date.now() - cached.builtAt < 6 * 3_600_000 && JSON.stringify(cached.roots) === JSON.stringify(roots)) return cached.files;
+    const keep = cached.complete === false ? 30 * 60_000 : 6 * 3_600_000;
+    if (Date.now() - cached.builtAt < keep && JSON.stringify(cached.roots) === JSON.stringify(roots)) return cached.files;
   } catch {}
   const files = [];
-  const until = Date.now() + 120_000;
-  const walk = (dir, depth) => {
-    if (depth > 10 || files.length >= 100_000 || Date.now() > until) return;
+  const until = Date.now() + 180_000;
+  let complete = true;
+  const walk = async (dir, depth) => {
+    if (depth > 10) return;
+    if (files.length >= 100_000 || Date.now() > until) {
+      complete = false;
+      return;
+    }
     let entries = [];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -252,18 +259,19 @@ function libraryIndex() {
       if (e.name.startsWith(".")) continue;
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
-        if (!SKIP_DIR.test(e.name)) walk(p, depth + 1);
+        if (!SKIP_DIR.test(e.name)) await walk(p, depth + 1);
       } else if (VIDEO.test(e.name)) {
         try {
-          files.push({ p, m: fs.statSync(p).mtimeMs });
+          files.push({ p, m: (await fs.promises.stat(p)).mtimeMs });
         } catch {}
       }
     }
   };
   if (roots.length) log(`Looking through the videos on ${roots.join(", ")}…`);
-  for (const r of roots) walk(r, 0);
+  for (const r of roots) await walk(r, 0);
+  if (!complete) log(`Only got through part of your drives (${files.length} videos) - the rest next time.`);
   try {
-    fs.writeFileSync(LIBRARY, JSON.stringify({ builtAt: Date.now(), roots, files }));
+    fs.writeFileSync(LIBRARY, JSON.stringify({ builtAt: Date.now(), roots, files, complete }));
     fs.writeFileSync(LIBRARY_LIST, files.map((f) => f.p).join("\n"));
   } catch {}
   return files;
@@ -347,7 +355,17 @@ const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g
 async function gatherBroll(edit, terms) {
   const dir = path.join(BROLL, `${slug(edit.title)}-${edit.id.slice(0, 6)}`);
   await update(edit.id, { events: [{ kind: "status", text: `Looking for ${terms.join(", ")} in Apple Photos and on your drives…` }] });
-  const index = libraryIndex();
+  // Searching can take minutes (big drives, Photos downloading from iCloud): keep telling Creator Desk this Mac is here.
+  const alive = setInterval(() => api("POST", "/api/hub/helper/report", { info: info() }).catch(() => {}), 20_000);
+  try {
+    return await gather(edit, terms, dir);
+  } finally {
+    clearInterval(alive);
+  }
+}
+
+async function gather(edit, terms, dir) {
+  const index = await libraryIndex();
   const lines = [];
   const found = [];
   const problems = new Set();
@@ -778,7 +796,7 @@ if (cmd === "connect") {
     const term = rest.join(" ") || "laptop";
     const dir = path.join(BROLL, "_test", slug(term));
     const photos = await searchPhotos(term, dir);
-    console.log(JSON.stringify({ photos: photos.files, photosProblem: photos.error || undefined, drives: searchDrives(libraryIndex(), term), libraries: libraries() }, null, 2));
+    console.log(JSON.stringify({ photos: photos.files, photosProblem: photos.error || undefined, drives: searchDrives(await libraryIndex(), term), libraries: libraries() }, null, 2));
   }
   else await loop();
 }
