@@ -15,6 +15,8 @@ const ago = (iso: string | null) => {
   return s < 60 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`;
 };
 
+const OSXPHOTOS_INSTALL = "curl -LsSf https://astral.sh/uv/install.sh | sh && ~/.local/bin/uv tool install --python 3.13 osxphotos";
+
 export function Helper() {
   // Only shown once the Macs have loaded, so after the page is up.
   const [origin] = useState(() => (typeof window === "undefined" ? "" : window.location.origin));
@@ -95,6 +97,18 @@ export function Helper() {
                   {d.online && d.info.capcutRunning && <p className="text-xs text-warn">CapCut is open. Close it before an edit saves, or Claude will wait for you.</p>}
                   {d.info.folders?.length ? <p className="text-xs text-text-dim">Looks for clips in {d.info.folders.map((f) => f.replace(/^\/Users\/[^/]+/, "~")).join(", ")}</p> : null}
                   {d.info.libraries?.length ? <p className="text-xs text-text-dim">Finds B-roll in Apple Photos and {d.info.libraries.join(", ")}</p> : null}
+                  {!helperOlderThan(d.info.helper, "0.2.1") && d.info.osxphotos === false && (
+                    <div className="mt-2 space-y-1 rounded-lg bg-bg-elevated px-3 py-2 text-xs text-text-muted">
+                      <p>
+                        <strong className="text-text">Photos in iCloud?</strong> If &ldquo;Optimise Mac Storage&rdquo; is on, Photos can&apos;t hand over clips that aren&apos;t downloaded.
+                        Install osxphotos (free) and the helper downloads them itself. In Terminal:
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="min-w-0 flex-1 break-all">{OSXPHOTOS_INSTALL}</code>
+                        <CopyButton text={OSXPHOTOS_INSTALL} label="Copy" />
+                      </div>
+                    </div>
+                  )}
                   {helperOlderThan(d.info.helper, HELPER_FOR_LIBRARY) && (
                     <div className="mt-2 space-y-1 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
                       <p>

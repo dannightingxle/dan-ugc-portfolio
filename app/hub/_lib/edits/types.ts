@@ -63,7 +63,7 @@ export type Device = {
   name: string;
   lastSeen: string | null;
   online: boolean;
-  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[] };
+  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[]; osxphotos?: boolean };
 };
 
 const TYPE: Record<string, string> = { th: "Talking head", ls: "Lip-sync", ac: "Acting", gs: "Green screen" };
