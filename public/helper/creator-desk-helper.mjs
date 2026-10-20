@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -158,6 +158,7 @@ function info() {
     ffmpeg: Boolean(ffmpeg()),
     folders: cfg.folders,
     libraries: libraries(),
+    osxphotos: Boolean(osxphotos()),
     workdir: cfg.workdir,
   };
 }
@@ -291,16 +292,15 @@ function searchDrives(index, term, max = 6) {
     .map((f) => f.p);
 }
 
-// Apple Photos' own search (the same as typing in the Photos search field), newest first: up to
-// a few videos, or a few photos when there are no videos, exported as originals into a folder.
-const PHOTOS_SCRIPT = [
+// Apple Photos' own search (the same as typing in the Photos search field), newest first: the ids
+// and file names of up to a few videos, or a few photos when there are no videos. Nothing is
+// exported here.
+const PHOTOS_FIND = [
   "on run argv",
-  "set term to item 1 of argv",
-  "set dest to (POSIX file (item 2 of argv)) as alias",
-  "set maxVideos to (item 3 of argv) as integer",
+  "set maxVideos to (item 2 of argv) as integer",
   'tell application "Photos"',
-  "with timeout of 900 seconds",
-  "set found to search for term",
+  "with timeout of 300 seconds",
+  "set found to search for (item 1 of argv)",
   "set vids to {}",
   "set stills to {}",
   "set n to count of found",
@@ -310,42 +310,84 @@ const PHOTOS_SCRIPT = [
   "set m to item i of found",
   "set fn to filename of m",
   'if fn ends with ".mov" or fn ends with ".mp4" or fn ends with ".m4v" then',
-  "set end of vids to m",
+  "set end of vids to (id of m) & tab & fn",
   "if (count of vids) >= maxVideos then exit repeat",
   "else if (count of stills) < 3 then",
-  "set end of stills to m",
+  "set end of stills to (id of m) & tab & fn",
   "end if",
   "end repeat",
-  "if (count of vids) > 0 then",
-  "export vids to dest with using originals",
-  "return (count of vids) as text",
-  "else if (count of stills) > 0 then",
-  "export stills to dest with using originals",
-  "return (count of stills) as text",
-  "end if",
-  'return "0"',
+  "if (count of vids) = 0 then set vids to stills",
+  "set AppleScript's text item delimiters to linefeed",
+  "return vids as text",
   "end timeout",
   "end tell",
   "end run",
 ];
 
-function searchPhotos(term, dir, max = 5) {
+// Photos' own export, by id. It only works for originals already on this Mac: for ones kept in
+// iCloud it says it's done and writes nothing, which is why osxphotos comes first.
+const PHOTOS_EXPORT = [
+  "on run argv",
+  "set dest to (POSIX file (item 1 of argv)) as alias",
+  'tell application "Photos"',
+  "with timeout of 900 seconds",
+  "set picked to {}",
+  "repeat with i from 2 to count of argv",
+  "set end of picked to media item id (item i of argv)",
+  "end repeat",
+  "export picked to dest with using originals",
+  "end timeout",
+  "end tell",
+  "end run",
+];
+
+const runAsync = (cmd, args, timeout) =>
+  new Promise((resolve) => execFile(cmd, args, { timeout, maxBuffer: 10_000_000 }, (err, stdout, stderr) => resolve({ err, stdout: String(stdout), stderr: String(stderr) })));
+const filesIn = (dir) => {
+  try {
+    return fs.readdirSync(dir).filter((n) => !n.startsWith(".")).map((n) => path.join(dir, n));
+  } catch {
+    return [];
+  }
+};
+
+// osxphotos (github.com/RhetTbull/osxphotos) downloads originals that only live in iCloud.
+function osxphotos() {
+  const found = [cfg.osxphotos, process.env.CDH_OSXPHOTOS, run("/usr/bin/which", ["osxphotos"]), path.join(os.homedir(), ".local", "bin", "osxphotos"), "/opt/homebrew/bin/osxphotos", "/usr/local/bin/osxphotos"];
+  return found.find((p) => p && fs.existsSync(p)) || "";
+}
+
+const photosDenied = (text) => /not allowed|-1743|not authori[sz]ed/i.test(text);
+const DENIED = "your Mac didn't let the helper use Photos (System Settings → Privacy & Security → Automation)";
+
+async function searchPhotos(term, dir, max = 5) {
   fs.mkdirSync(dir, { recursive: true });
   // Already exported for this card (an edit run again): use those.
-  const done = fs.readdirSync(dir).filter((n) => !n.startsWith(".")).map((n) => path.join(dir, n));
-  if (done.length) return Promise.resolve({ files: done, error: "" });
-  return new Promise((resolve) => {
-    execFile("osascript", [...PHOTOS_SCRIPT.flatMap((l) => ["-e", l]), term, dir, String(max)], { timeout: 900_000 }, (err, stdout, stderr) => {
-      let files = [];
-      try {
-        files = fs.readdirSync(dir).filter((n) => !n.startsWith(".")).map((n) => path.join(dir, n));
-      } catch {}
-      if (err && !files.length) {
-        const why = /not allowed|-1743|not authori[sz]ed/i.test(stderr) ? "your Mac didn't let the helper use Photos (System Settings → Privacy & Security → Automation)" : (stderr || err.message).trim().split("\n").pop();
-        resolve({ files, error: why });
-      } else resolve({ files, error: "" });
-    });
-  });
+  const done = filesIn(dir);
+  if (done.length) return { files: done, error: "" };
+
+  const find = await runAsync("osascript", [...PHOTOS_FIND.flatMap((l) => ["-e", l]), term, String(max)], 300_000);
+  if (find.err) return { files: [], error: photosDenied(find.stderr) ? DENIED : (find.stderr || find.err.message).trim().split("\n").pop() };
+  const ids = find.stdout.split("\n").map((l) => l.split("\t")[0].trim()).filter(Boolean);
+  if (!ids.length) return { files: [], error: "" };
+
+  // osxphotos wants the id without Photos' "/L0/001" ending.
+  const bin = osxphotos();
+  let why = "";
+  if (bin) {
+    const out = await runAsync(bin, ["export", dir, "--download-missing", "--use-photokit", ...ids.flatMap((id) => ["--uuid", id.split("/")[0]])], 900_000);
+    if (filesIn(dir).length) return { files: filesIn(dir), error: "" };
+    why = `osxphotos couldn't export them: ${(out.stderr || out.stdout || out.err?.message || "").trim().split("\n").pop()}`;
+  }
+  const out = await runAsync("osascript", [...PHOTOS_EXPORT.flatMap((l) => ["-e", l]), dir, ...ids], 900_000);
+  // Photos can finish writing a moment after it says it's done.
+  for (let i = 0; i < 15 && !filesIn(dir).length; i++) await sleep(2000);
+  if (filesIn(dir).length) return { files: filesIn(dir), error: "" };
+  if (out.err && photosDenied(out.stderr)) return { files: [], error: DENIED };
+  return {
+    files: [],
+    error: why || `Photos found ${ids.length} for "${term}" but didn't export them - they're probably kept in iCloud. Install osxphotos so the helper can download them (Creator Desk → Studio → Mac helper shows how).`,
+  };
 }
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || "clip";
@@ -390,7 +432,7 @@ async function gather(edit, terms, dir) {
     ...lines,
     "",
     "Look at a frame or two of each before choosing (ffmpeg -ss 1 -i FILE -frames:v 1 frame.jpg, then read the image) and use only what fits the shots; skip anything blurry, shaky or with people who aren't me unless the card wants them.",
-    `If something's missing, look again: search Photos (osascript: tell application "Photos" to search for "WORDS", then export with using originals), or search the list of every video on my drives in ${LIBRARY_LIST} (one path per line). Say what you used.`,
+    `If something's missing, look again: search Photos (osascript: tell application "Photos" to search for "WORDS" gives each item's id; then ${osxphotos() ? `${osxphotos()} export FOLDER --download-missing --use-photokit --uuid ID (the id before "/L0/001")` : 'export them with "export ... with using originals" - most of my originals are in iCloud, so check the files actually arrived'}), or search the list of every video on my drives in ${LIBRARY_LIST} (one path per line). Say what you used.`,
   ].join("\n");
 }
 
@@ -796,7 +838,9 @@ if (cmd === "connect") {
     const term = rest.join(" ") || "laptop";
     const dir = path.join(BROLL, "_test", slug(term));
     const photos = await searchPhotos(term, dir);
-    console.log(JSON.stringify({ photos: photos.files, photosProblem: photos.error || undefined, drives: searchDrives(await libraryIndex(), term), libraries: libraries() }, null, 2));
+    console.log(
+      JSON.stringify({ photos: photos.files, photosProblem: photos.error || undefined, osxphotos: osxphotos() || "not installed", drives: searchDrives(await libraryIndex(), term), libraries: libraries() }, null, 2),
+    );
   }
   else await loop();
 }
