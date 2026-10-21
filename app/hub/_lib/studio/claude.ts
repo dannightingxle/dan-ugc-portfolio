@@ -55,7 +55,9 @@ async function askOnce<S extends z.ZodType>({ system, context, content, schema, 
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: [...content, ...shape] }];
 
   // A turn that uses web fetch can pause; send it back to carry on (a few times at most).
-  for (let turn = 0; turn < 4; turn++) {
+  // An answer that doesn't fit the shape gets one go at fixing it, as you'd ask in a chat.
+  let fixed = false;
+  for (let turn = 0; turn < 5; turn++) {
     const stream = anthropic().beta.messages.stream({
       model: MODEL,
       max_tokens: 64000,
@@ -78,13 +80,34 @@ async function askOnce<S extends z.ZodType>({ system, context, content, schema, 
     if (msg.stop_reason === "refusal") throw new StudioError("Claude couldn't help with that one. Try rewording, or take out anything unusual from the material.");
     if (msg.stop_reason === "max_tokens") throw new StudioError("That was too much to write in one go. Try fewer videos.");
     const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    try {
-      return schema.parse(JSON.parse(structured ? text : jsonPart(text)));
-    } catch {
-      throw new StudioError("Claude's answer came back incomplete. Please try again.");
+    const read = readAnswer(schema, structured ? text : jsonPart(text));
+    if (read.ok) return read.data;
+    console.warn("Creator Desk studio: answer didn't fit the shape:", read.problem, text.slice(0, 500));
+    if (fixed) throw new StudioError(`Claude's answer didn't come back in the right shape (${read.problem}). Please try again.`);
+    fixed = true;
+    if (text.trim()) {
+      messages.push({ role: "assistant", content: [{ type: "text", text }] });
+      messages.push({
+        role: "user",
+        content: [{ type: "text", text: `That reply didn't fit the required JSON shape: ${read.problem}. Reply again with only the complete, corrected JSON object - nothing else.` }],
+      });
     }
   }
   throw new StudioError("Opening the links took too long. Paste the brief text in instead.");
+}
+
+/** The answer checked against the shape, or what's wrong with it in a few words. */
+function readAnswer<S extends z.ZodType>(schema: S, text: string): { ok: true; data: z.infer<S> } | { ok: false; problem: string } {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { ok: false, problem: text.trim() ? "it wasn't complete, valid JSON" : "it was empty" };
+  }
+  const parsed = schema.safeParse(json);
+  if (parsed.success) return { ok: true, data: parsed.data };
+  const issues = parsed.error.issues.slice(0, 4).map((i) => `${i.path.join(".") || "the answer"}: ${i.message}`);
+  return { ok: false, problem: issues.join("; ") };
 }
 
 /** The JSON object in a reply, even if it came wrapped in a code fence or a sentence. */
