@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createEdit, editFolder, listDevices, listDeviceFiles, listEdits, setEditFolder } from "../../../hub/_lib/edits/data";
+import { createEdit, editFolder, listDevices, listDeviceFiles, listEdits, releaseOffline, setEditFolder } from "../../../hub/_lib/edits/data";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../../../hub/_lib/edits/types";
 import { BadRequest, NotFound, editableProject, editsApi, text } from "../../../hub/_lib/edits/request";
 import { getSheet } from "../../../hub/_lib/studio/data";
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
   const projectId = new URL(request.url).searchParams.get("projectId");
   return editsApi(request, null, async ({ user }) => {
     if (!editableProject(projectId)) throw new BadRequest("Unknown job.");
+    await releaseOffline(user.id);
     const [edits, devices, files, folder] = await Promise.all([listEdits(user.id, projectId), listDevices(user.id), listDeviceFiles(user.id), editFolder(user.id, projectId)]);
     return { edits, devices, files, folder };
   });

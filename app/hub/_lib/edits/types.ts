@@ -53,8 +53,10 @@ export type EditCard = {
   pickMode: "files" | "folder";
   draftName: string | null;
   updatedAt: string;
-  /** It has a Claude Code session, so a stopped edit can carry on where it left off. */
+  /** It has a Claude Code session, so a stopped edit can carry on where it left off (on the Mac it was on). */
   canCarryOn?: boolean;
+  /** The Mac it was last sent to. */
+  deviceId?: string | null;
 };
 
 export type EditEvent = { id: number; kind: "status" | "assistant" | "tool" | "user" | "error" | "done"; text: string; at: string };
@@ -72,6 +74,8 @@ export type Device = {
 /** How many edits a Mac runs side by side, unless you choose otherwise on the Mac helper page. */
 export const DEFAULT_MAX_EDITS = 3;
 export const MAX_EDITS_CHOICES = [1, 2, 3, 4];
+/** The helper on the site now (keep in step with VERSION in public/helper/creator-desk-helper.mjs). */
+export const LATEST_HELPER = "0.3.5";
 /** The oldest helper that runs more than one edit at once. */
 export const HELPER_FOR_PARALLEL = "0.3.3";
 

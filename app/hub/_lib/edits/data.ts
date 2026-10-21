@@ -45,6 +45,7 @@ export function toCard(r: EditRow): EditCard {
     draftName: r.draft_name,
     updatedAt: r.updated_at,
     canCarryOn: Boolean(r.session_id),
+    deviceId: r.device_id,
   };
 }
 
@@ -391,6 +392,25 @@ async function releaseDropped(auth: DeviceAuth, runningIds: string[]) {
   await db.from("hub_edits").update({ status: "failed", cancel_requested: false, updated_at: new Date().toISOString() }).eq("user_id", auth.userId).in("id", ids);
   for (const id of ids) {
     await addEvents(id, [{ kind: "status", text: "The helper on your Mac restarted (an update, or its window closed), so this edit stopped partway. Press Carry on to pick up where it left off." }]);
+  }
+}
+
+/** Edits whose Mac went away mid-edit (asleep, closed, its helper stopped, or disconnected) stop showing as editing, so they can be carried on or started again. */
+export async function releaseOffline(userId: string) {
+  const db = adminClient();
+  const { data: editing } = await db.from("hub_edits").select("id, device_id").eq("user_id", userId).eq("status", "editing");
+  if (!editing?.length) return;
+  const { data: devices } = await db.from("hub_devices").select("id, name, last_seen").eq("user_id", userId);
+  const gone = (deviceId: string | null) => {
+    const d = (devices ?? []).find((x) => x.id === deviceId);
+    return !d || !d.last_seen || Date.now() - Date.parse(d.last_seen) > 2 * 60_000;
+  };
+  const stopped = editing.filter((e) => gone(e.device_id as string | null));
+  if (!stopped.length) return;
+  await db.from("hub_edits").update({ status: "failed", cancel_requested: false, updated_at: new Date().toISOString() }).eq("user_id", userId).in("id", stopped.map((e) => e.id as string)).eq("status", "editing");
+  for (const e of stopped) {
+    const name = (devices ?? []).find((x) => x.id === e.device_id)?.name;
+    await addEvents(e.id as string, [{ kind: "status", text: `${name ? `Your Mac (${name})` : "The Mac editing this"} went offline mid-edit (asleep, closed, or its helper stopped), so it stopped partway. Carry on where it stopped once that Mac's helper is running again, or start it again on another Mac.` }]);
   }
 }
 
