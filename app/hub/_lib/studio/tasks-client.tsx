@@ -40,7 +40,7 @@ const POLL_MS = 4000;
 // With nothing going, a slower check picks up edits started elsewhere.
 const IDLE_POLL_MS = 30_000;
 export const EDIT_LABEL: Record<EditJob["status"], string> = { queued: "Waiting for your Mac", editing: "Editing on your Mac", needs_you: "Needs you", ready: "Ready to check in CapCut", failed: "Stopped" };
-export const editHref = (e: EditJob) => (e.projectId === BRAND_ID ? "/hub/studio/brand?tab=edits" : `/hub/projects/${e.projectId}/studio?tab=edits`);
+export const editHref = (e: Pick<EditJob, "id" | "projectId">) => `${e.projectId === BRAND_ID ? "/hub/studio/brand" : `/hub/projects/${e.projectId}/studio`}?tab=edits&edit=${e.id}`;
 export const editName = (e: EditJob) => [e.brand, e.videoCode === "ALL" ? "whole sheet" : e.videoCode, e.title].filter(Boolean).join(" · ");
 const editKey = (e: EditJob) => `${e.id}:${e.status}`;
 const SEEN = "cd-edit-alerts-cleared";

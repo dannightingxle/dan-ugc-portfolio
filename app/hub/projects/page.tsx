@@ -23,6 +23,7 @@ function Board() {
   const ready = useDataReady();
   const params = useSearchParams();
   const studio = useFeature("studio");
+  const editsOn = useFeature("edits");
   // ?new=1 opens the add form; ?new=tech opens it set up for a tech UGC job.
   const [adding, setAdding] = useState(params.get("new") === "1" || params.get("new") === "tech");
   const active = projects.filter((p) => !isArchived(p));
@@ -36,6 +37,11 @@ function Board() {
           <p className="mt-2 text-text-muted">Every brand deal from pitch to paid: the brief, the contact and the money.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {editsOn && (
+            <Link href="/hub/studio/edits" className="rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent">
+              Edits
+            </Link>
+          )}
           {studio && (
             <Link href="/hub/projects/import" className="rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent">
               Import

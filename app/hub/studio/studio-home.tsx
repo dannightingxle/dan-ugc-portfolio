@@ -23,6 +23,11 @@ export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
           </Link>
         )}
         {edits && (
+          <Link href="/hub/studio/edits" className="mt-2 ml-4 inline-block text-sm text-accent hover:underline">
+            All edits →
+          </Link>
+        )}
+        {edits && (
           <Link href="/hub/studio/notes" className="mt-2 ml-4 inline-block text-sm text-accent hover:underline">
             Editing notes - how you want your videos edited →
           </Link>
