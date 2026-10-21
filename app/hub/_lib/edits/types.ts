@@ -53,6 +53,8 @@ export type EditCard = {
   pickMode: "files" | "folder";
   draftName: string | null;
   updatedAt: string;
+  /** It has a Claude Code session, so a stopped edit can carry on where it left off. */
+  canCarryOn?: boolean;
 };
 
 export type EditEvent = { id: number; kind: "status" | "assistant" | "tool" | "user" | "error" | "done"; text: string; at: string };

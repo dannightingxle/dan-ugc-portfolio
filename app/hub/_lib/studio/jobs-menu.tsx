@@ -11,6 +11,7 @@ import { EDIT_LABEL, type EditJob, LABEL, type Task, editHref, editName, taskHre
 
 export function JobsMenu() {
   const on = useFeature("studio");
+  const editsOn = useFeature("edits");
   const { tasks, edits, dismiss } = useTasks();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -55,6 +56,11 @@ export function JobsMenu() {
           <Group title="Going" items={going} onPick={() => setOpen(false)} />
           <Group title="Needs you" items={needsYou} onPick={() => setOpen(false)} onClear={dismiss} />
           <Group title="Ready" items={ready} onPick={() => setOpen(false)} onClear={dismiss} />
+          {editsOn && (
+            <Link href="/hub/studio/edits" onClick={() => setOpen(false)} className="mt-1 block border-t border-border px-1 pt-2 text-xs font-medium text-accent hover:underline">
+              All edits, every job →
+            </Link>
+          )}
         </div>
       )}
     </div>

@@ -44,13 +44,54 @@ export function toCard(r: EditRow): EditCard {
     pickMode: r.pick_mode ?? "files",
     draftName: r.draft_name,
     updatedAt: r.updated_at,
+    canCarryOn: Boolean(r.session_id),
   };
 }
 
 export async function listEdits(userId: string, projectId: string): Promise<EditCard[]> {
-  const { data, error } = await adminClient().from("hub_edits").select(EDIT_COLS).eq("user_id", userId).eq("project_id", projectId).order("created_at");
+  const { data, error } = await adminClient().from("hub_edits").select(`${EDIT_COLS}, created_at`).eq("user_id", userId).eq("project_id", projectId).order("created_at");
   if (error) throw error;
-  return (data as EditRow[]).map(toCard);
+  return newestFirst(data as (EditRow & { created_at: string })[]).map(toCard);
+}
+
+/** Newest first, but a shoot sheet's cards stay together in their own order (whole sheet, V1, V2…). */
+function newestFirst<R extends { sheet_id: string | null; id: string; created_at: string }>(rows: R[]) {
+  const groups = new Map<string, R[]>();
+  for (const r of rows) {
+    const key = r.sheet_id ?? r.id;
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
+  const latest = (g: R[]) => g.reduce((t, r) => (r.created_at > t ? r.created_at : t), "");
+  return [...groups.values()].sort((a, b) => latest(b).localeCompare(latest(a))).flat();
+}
+
+/** Every job's edits that are going, waiting on you, to do, or done lately - for the Edits page. */
+export async function listAllEdits(userId: string) {
+  const db = adminClient();
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const { data, error } = await db
+    .from("hub_edits")
+    .select("id, project_id, title, video_code, status, updated_at, created_at, files, draft_name")
+    .eq("user_id", userId)
+    .or(`status.neq.done,updated_at.gt.${since}`)
+    .order("updated_at", { ascending: false })
+    .limit(300);
+  if (error) throw error;
+  const ids = [...new Set((data ?? []).map((e) => e.project_id as string))];
+  const { data: projects } = ids.length ? await db.from("hub_projects").select("id, data").eq("user_id", userId).in("id", ids) : { data: [] };
+  const brands = new Map<string, string>([[BRAND_ID, "Personal brand"], ...(projects ?? []).map((p) => [p.id as string, String((p.data as { brand?: string })?.brand || "Job")] as [string, string])]);
+  return (data ?? []).map((e) => ({
+    id: e.id as string,
+    projectId: e.project_id as string,
+    brand: brands.get(e.project_id) ?? "Job",
+    title: e.title as string,
+    videoCode: e.video_code as string,
+    status: e.status as EditStatus,
+    updatedAt: e.updated_at as string,
+    createdAt: e.created_at as string,
+    clips: ((e.files as EditFile[] | null) ?? []).length,
+    draftName: (e.draft_name as string | null) ?? null,
+  }));
 }
 
 export async function getEdit(userId: string, id: string): Promise<EditRow | null> {
@@ -139,7 +180,21 @@ export async function pairDevice(code: string, name: string, info: Record<string
     .update({ token_hash: hash(token), pair_code_hash: null, pair_expires_at: null, name: name.slice(0, 80) || "Mac", info, last_seen: new Date().toISOString() })
     .eq("id", data.id);
   if (error) throw error;
+  await replaceOldEntries(data.user_id, data.id, name.slice(0, 80) || "Mac");
   return { token, userId: data.user_id, deviceId: data.id };
+}
+
+/** Connecting the same Mac again (same name, old entry offline): its edits and settings move to the new entry and the old one goes. */
+async function replaceOldEntries(userId: string, deviceId: string, name: string) {
+  const db = adminClient();
+  const { data: old } = await db.from("hub_devices").select("id, last_seen, info").eq("user_id", userId).eq("name", name).neq("id", deviceId).not("token_hash", "is", null);
+  const gone = (old ?? []).filter((d) => !d.last_seen || Date.now() - Date.parse(d.last_seen) > ONLINE_MS);
+  if (!gone.length) return;
+  const ids = gone.map((d) => d.id as string);
+  await db.from("hub_edits").update({ device_id: deviceId }).eq("user_id", userId).in("device_id", ids);
+  const maxEdits = gone.map((d) => (d.info as Device["info"] | null)?.maxEdits).find(Boolean);
+  if (maxEdits) await setMaxEdits(userId, deviceId, maxEdits);
+  await db.from("hub_devices").delete().eq("user_id", userId).in("id", ids);
 }
 
 export type DeviceAuth = { deviceId: string; userId: string };
@@ -271,9 +326,11 @@ export async function listDeviceFiles(userId: string): Promise<DeviceFile[]> {
 
 // ---------------------------------------------------------------- the helper's work queue
 
-/** What a Mac should do next: edits to start, clip pickers to open, replies to pass on, edits to stop. */
-export async function workFor(auth: DeviceAuth) {
+/** What a Mac should do next: edits to start, clip pickers to open, replies to pass on, edits to stop.
+    runningIds: the edits its helper is running right now (newer helpers say), so ones it dropped can be let go. */
+export async function workFor(auth: DeviceAuth, runningIds: string[] | null = null) {
   const db = adminClient();
+  if (runningIds) await releaseDropped(auth, runningIds);
   const [queued, picks, running, device] = await Promise.all([
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
     // A picker opens only on the Mac it was asked of (or any Mac, if none was named).
@@ -318,6 +375,30 @@ export async function workFor(auth: DeviceAuth) {
     // How many edits this Mac runs side by side.
     maxEdits: device.data?.info?.maxEdits ?? DEFAULT_MAX_EDITS,
   };
+}
+
+/** Edits this Mac's helper was running when it restarted (an update, or its window closed) stop showing as editing, so they can be carried on. */
+async function releaseDropped(auth: DeviceAuth, runningIds: string[]) {
+  const db = adminClient();
+  // A minute's grace: a reply just sent marks a card editing before the helper picks it up.
+  const before = new Date(Date.now() - 60_000).toISOString();
+  const { data } = await db.from("hub_edits").select("id").eq("user_id", auth.userId).eq("device_id", auth.deviceId).eq("status", "editing").lt("updated_at", before);
+  const dropped = (data ?? []).map((r) => r.id as string).filter((id) => !runningIds.includes(id));
+  if (!dropped.length) return;
+  const { data: waiting } = await db.from("hub_edit_events").select("edit_id").in("edit_id", dropped).eq("kind", "user").eq("delivered", false);
+  const ids = dropped.filter((id) => !(waiting ?? []).some((w) => w.edit_id === id));
+  if (!ids.length) return;
+  await db.from("hub_edits").update({ status: "failed", cancel_requested: false, updated_at: new Date().toISOString() }).eq("user_id", auth.userId).in("id", ids);
+  for (const id of ids) {
+    await addEvents(id, [{ kind: "status", text: "The helper on your Mac restarted (an update, or its window closed), so this edit stopped partway. Press Carry on to pick up where it left off." }]);
+  }
+}
+
+/** Is the Mac with this id connected right now? */
+export async function deviceOnline(deviceId: string | null) {
+  if (!deviceId) return false;
+  const { data } = await adminClient().from("hub_devices").select("last_seen").eq("id", deviceId).maybeSingle<{ last_seen: string | null }>();
+  return Boolean(data?.last_seen && Date.now() - Date.parse(data.last_seen) < ONLINE_MS);
 }
 
 /** The helper claims a queued edit so no other Mac starts it too. */

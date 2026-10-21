@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.4";
+const VERSION = "0.3.5";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -640,6 +640,7 @@ const RESOURCEFUL = [
   "  - download it from links on the card or in the brief (a Google Drive folder: `uvx gdown --folder <link> -O <folder>`; a direct image or video link: curl);",
   "  - make it: a screenshot or screen recording of a web page, App Store listing or the app's website (open it, then `screencapture`), a text or list graphic in CapCut, or a freeze-frame or cut-down from the main clip;",
   "  - only if none of that works, put a clearly labelled placeholder in the draft where it goes.",
+  "- Sounds: if the card names or links a sound or song, add it from my CapCut favourite sounds (the CapCut tool can pull in TikTok and Instagram sounds I've favourited in my linked accounts). If it isn't in my favourites, build the rest and tell me exactly which sound to favourite (name, and the link if there is one) so you can add it next time.",
   "- Build the draft even if a few extras are missing, then list what you made or swapped in and what I still need to add. Only stop to ask if the main clip can't be found or doesn't match the card.",
 ];
 
@@ -787,7 +788,6 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
     if (finished) return;
     finished = true;
     clearInterval(timer);
-    running.delete(editId);
     // One draft, or one per video for a whole shoot sheet.
     // "DRAFT: none (not created yet)" isn't a draft.
     const drafts = [...finalText.matchAll(/^\s*DRAFT:\s*(.+?)\s*$/gm)].map((m) => m[1]).filter((d) => !/^(none|n\/a|no draft|not (yet )?created|-)\b/i.test(d.replace(/[*_`"']/g, "")));
@@ -810,6 +810,8 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
       status = "needs_you";
     }
     await flush({ status, ...(draft ? { draftName: draft } : {}), ...(notes.length ? { notes } : {}) });
+    // Only once its status is saved, so Creator Desk never sees it editing with nothing running.
+    running.delete(editId);
     log(status === "ready" ? `Done: ${draft}` : status === "needs_you" ? "Claude has a question - reply in the card." : "The edit stopped.");
     // Any replies that came in while it was busy go next, in the same session.
     const queued = waitingReplies.get(editId);
@@ -914,7 +916,8 @@ async function loop() {
     // The new helper carries on in this window; this one just waits for it.
     if (await selfUpdate()) return new Promise(() => {});
     try {
-      await handleWork(await api("GET", "/api/hub/helper/poll"));
+      // Say which edits are running here, so ones a restart dropped don't stay stuck on "Editing".
+      await handleWork(await api("GET", `/api/hub/helper/poll?running=${[...running.keys()].join(",")}`));
       await report();
       failures = 0;
     } catch (e) {

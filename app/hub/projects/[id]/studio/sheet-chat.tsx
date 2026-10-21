@@ -5,6 +5,7 @@ import { shortDate } from "../../../_lib/ui";
 import { useConfirm } from "../../../_lib/popups";
 import type { ChatMessage, ChatSummary, SheetChat } from "../../../_lib/studio/chats";
 import { input } from "../../fields";
+import { CHAT_KEYS_HINT, chatKeys } from "../../../_lib/chat-keys";
 
 /* A shoot sheet as a chat, like one in a Claude Project: what you asked for,
    what Claude made or why it couldn't, and your replies - changes to the
@@ -80,8 +81,8 @@ export function ChatView({
   const hasSheet = Boolean(chat?.sheetId);
   const lastSheet = [...messages].reverse().find((m) => m.sheetId);
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
+  async function send(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!reply.trim() || busy) return;
     if (await onReply(reply.trim())) setReply("");
   }
@@ -119,9 +120,7 @@ export function ChatView({
             className={input}
             value={reply}
             onChange={(e) => setReply(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send(e);
-            }}
+            onKeyDown={chatKeys(() => void send(), setReply)}
             aria-label="Reply to Claude"
             placeholder={
               hasSheet
@@ -135,6 +134,7 @@ export function ChatView({
             {hasSheet ? "Change the sheet" : "Send and try again"}
           </button>
           <span className="text-xs text-text-dim">
+            {CHAT_KEYS_HINT}.{" "}
             {busy && !writing ? "Another shoot sheet is being written for this job - reply when it's done." : hasSheet ? "Claude changes this sheet as you ask and keeps the rest." : "Claude makes the sheet again with what you add."}
           </span>
         </div>

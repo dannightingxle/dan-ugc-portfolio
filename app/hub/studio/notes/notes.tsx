@@ -7,6 +7,7 @@ import { ALL_EDITS, type EditNote, type NotesChatMessage } from "../../_lib/edit
 import { BRAND_ID } from "../../_lib/studio/brand-types";
 import { isArchived, useProjects } from "../../_lib/store";
 import { input } from "../../projects/fields";
+import { CHAT_KEYS_HINT, chatKeys } from "../../_lib/chat-keys";
 import { call } from "../../projects/[id]/studio/studio";
 
 /* Editing notes: how you want your videos edited, remembered for every future
@@ -67,8 +68,8 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
     if (pending || data?.chat.length) end.current?.scrollIntoView({ block: "nearest" });
   }, [pending, data?.chat.length]);
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
+  async function send(e?: React.FormEvent) {
+    e?.preventDefault();
     const text = message.trim();
     if (!text || pending) return;
     setPending(text);
@@ -164,15 +165,16 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
             className={input}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send(e);
-            }}
+            onKeyDown={chatKeys(() => void send(), setMessage)}
             placeholder="e.g. The captions are too big and sit too low - keep them smaller, centred, and never over my face"
             aria-label="Feedback for Claude"
           />
-          <button disabled={!message.trim() || Boolean(pending)} className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60">
-            Send
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button disabled={!message.trim() || Boolean(pending)} className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60">
+              Send
+            </button>
+            <span className="text-xs text-text-dim">{CHAT_KEYS_HINT}</span>
+          </div>
         </form>
         {error && <p className="text-sm text-accent">{error}</p>}
       </section>

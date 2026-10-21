@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HELPER_FOR_LIBRARY, LIBRARY_LINE, STATUS_LABEL, WHOLE_SHEET, findsOwnClips, helperOlderThan, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
 import type { SheetSummary } from "../../../_lib/studio/types";
@@ -8,6 +9,7 @@ import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
 import { Tooltip, useConfirm } from "../../../_lib/popups";
 import { EditingNotes } from "../../../studio/notes/notes";
+import { CHAT_KEYS_HINT, chatKeys } from "../../../_lib/chat-keys";
 
 /* Edit cards: one per video. Pick the clips (from your Mac's latest videos or
    its file picker), press Edit in CapCut, and the Creator Desk Helper on your
@@ -28,7 +30,9 @@ const mmss = (s?: number | null) => (s == null ? "" : `${Math.floor(s / 60)}:${S
 export function Edits({ projectId, sheets, onTrials }: { projectId: string; sheets: SheetSummary[]; onTrials?: () => void }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
+  // A link can open one card (?edit=<id>, from the Edits page or a pop-up).
+  const linked = useSearchParams().get("edit");
+  const [open, setOpen] = useState<string | null>(linked);
   // With more than one Mac connected, which one edits (remembered in this browser).
   const [macId, setMacId] = useState<string | null>(() => {
     try {
@@ -59,6 +63,11 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
     const t = setInterval(tick, busy ? 3000 : 15000);
     return () => clearInterval(t);
   }, [projectId, busy]);
+
+  const loaded = Boolean(data);
+  useEffect(() => {
+    if (loaded && linked) document.getElementById(`edit-${linked}`)?.scrollIntoView({ block: "start" });
+  }, [loaded, linked]);
 
   const replace = (card: EditCard) => setData((d) => d && { ...d, edits: d.edits.map((e) => (e.id === card.id ? card : e)) });
 
@@ -414,7 +423,7 @@ function Card({
           : "bg-text/5 text-text-dim";
 
   return (
-    <article className="rounded-2xl border border-border bg-bg-card">
+    <article id={`edit-${card.id}`} className="scroll-mt-24 rounded-2xl border border-border bg-bg-card">
       <button type="button" onClick={onToggle} className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left" aria-expanded={open}>
         {card.videoCode === WHOLE_SHEET ? (
           <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">Whole sheet</span>
@@ -458,6 +467,11 @@ function Card({
                   {card.status !== "todo" ? "Edit again from scratch" : card.videoCode === WHOLE_SHEET ? "Edit all the videos in CapCut" : "Edit in CapCut"}
                 </button>
               </Tooltip>
+            )}
+            {card.status === "failed" && card.canCarryOn && mac && (
+              <button type="button" onClick={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: mac.id }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+                Carry on where it stopped
+              </button>
             )}
             {card.status === "ready" && (
               <button type="button" onClick={() => act(() => call(api, "PATCH", { status: "done" }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-good hover:text-good">
@@ -691,6 +705,7 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
             className={`${input} flex-1`}
             value={reply}
             onChange={(e) => setReply(e.target.value)}
+            onKeyDown={(e) => chatKeys(() => reply.trim() && void send(), setReply)(e)}
             placeholder={card.status === "needs_you" ? "Answer Claude…" : "Ask for a change, e.g. make the hook text bigger"}
             aria-label="Reply to Claude"
           />
@@ -700,7 +715,7 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
         </div>
       )}
       {card.status !== "todo" && (
-        <p className="text-xs text-text-dim">Feedback that should stick for future edits (&ldquo;captions are always too big&rdquo;) is saved to this job&apos;s editing notes.</p>
+        <p className="text-xs text-text-dim">{CHAT_KEYS_HINT}. Feedback that should stick for future edits (&ldquo;captions are always too big&rdquo;) is saved to this job&apos;s editing notes.</p>
       )}
       {error && <p className="text-sm text-accent">{error}</p>}
     </div>
