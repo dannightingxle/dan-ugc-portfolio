@@ -230,7 +230,7 @@ function useJob(api: string, kind: TaskKind, onDone: (t: Task) => void) {
   return { busy, elapsed, task, error: error || (task?.status === "failed" ? task.error : ""), run, clear: () => task && dismiss(task.id) };
 }
 
-function JobButton({ busy, elapsed, label, busyLabel }: { busy: boolean; elapsed: string; label: string; busyLabel: string }) {
+function JobButton({ busy, elapsed, label, busyLabel, step }: { busy: boolean; elapsed: string; label: string; busyLabel: string; step?: string }) {
   return (
     <div className="space-y-1.5">
       <button disabled={busy} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
@@ -238,7 +238,7 @@ function JobButton({ busy, elapsed, label, busyLabel }: { busy: boolean; elapsed
       </button>
       <p className="text-xs text-text-dim">
         {busy
-          ? "Running in the background: you can leave this page, or start something on another job. It'll pop up in the corner when it's done."
+          ? `${step && step !== "Starting" ? `Now: ${step.charAt(0).toLowerCase()}${step.slice(1)}. ` : ""}Running in the background: you can leave this page, or start something on another job. It'll pop up in the corner when it's done.`
           : "Runs in the background, so you can carry on with other jobs while it works."}
       </p>
     </div>
@@ -353,7 +353,7 @@ function WeekTab({
             <textarea rows={2} className={input} value={trending} onChange={(e) => setTrending(e.target.value)} />
           </Field>
           <FilePicker accept="image/png,image/jpeg,image/webp,application/pdf" label="Screenshots or PDFs (optional)" onChange={setUploads} />
-          <JobButton busy={job.busy} elapsed={job.elapsed} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
+          <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
           {job.error && <p className="text-sm text-accent">{job.error}</p>}
         </form>
         {made && (
@@ -436,7 +436,7 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
               <input className={input} value={voice} onChange={(e) => setVoice(e.target.value)} />
             </Field>
           </div>
-          <JobButton busy={job.busy} elapsed={job.elapsed} label={setUp ? "Set up again" : "Set up this job"} busyLabel="Reading everything and setting up… ·" />
+          <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label={setUp ? "Set up again" : "Set up this job"} busyLabel="Reading everything and setting up… ·" />
           {job.error && <p className="text-sm text-accent">{job.error}</p>}
         </form>
       </Section>
@@ -578,7 +578,7 @@ function ReviewTab({ api, ws, onWorkspace }: { api: string; ws: Workspace; onWor
             <textarea rows={6} className={input} value={numbers} onChange={(e) => setNumbers(e.target.value)} placeholder="V1 restaurant mix-up: 42k views, 61% retention, 300 likes…" />
           </Field>
           <FilePicker accept="image/png,image/jpeg,image/webp" label="Analytics screenshots" onChange={setUploads} />
-          <JobButton busy={job.busy} elapsed={job.elapsed} label="Run the review" busyLabel="Reviewing the week… ·" />
+          <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label="Run the review" busyLabel="Reviewing the week… ·" />
           {job.error && <p className="text-sm text-accent">{job.error}</p>}
         </form>
       </Section>

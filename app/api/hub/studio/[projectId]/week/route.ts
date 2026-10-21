@@ -4,13 +4,13 @@ import { startTask } from "../../../../../hub/_lib/studio/tasks";
 
 /* Make this week's shoot sheet (and add its hooks to the script bank). It runs
    in the background: this answers at once, and the page checks on it. */
-export const maxDuration = 300;
+export const maxDuration = 800; // = JOB_SECONDS in studio/tasks.ts
 
 export async function POST(request: Request, ctx: RouteContext<"/api/hub/studio/[projectId]/week">) {
   const { projectId } = await ctx.params;
   return studioAction(request, projectId, WeekBody, ({ user, body }) =>
-    startTask(user, projectId, "week", async () => {
-      const made = await makeShootSheet(user, projectId, body);
+    startTask(user, projectId, "week", async (progress) => {
+      const made = await makeShootSheet(user, projectId, body, progress);
       return { id: made.id, oneLine: made.oneLine, couldntOpen: made.couldntOpen };
     }),
   );

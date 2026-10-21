@@ -19,13 +19,17 @@ export type Task = {
   status: TaskStatus;
   startedAt: string;
   finishedAt: string | null;
+  /** What it's doing right now ("Reading the linked pages"), shown while it runs. */
+  step: string;
   /** What the page shows when it's done (e.g. the new sheet's id and one-line summary). */
   result: unknown;
   error: string;
 };
+export type Progress = (step: string) => void;
 
-// The routes may run for 300s; a job still "running" well after that was cut off.
-const STALE_MS = 330_000;
+// The routes may run for JOB_SECONDS (their maxDuration); a job still "running" well after that was cut off.
+export const JOB_SECONDS = 800;
+const STALE_MS = (JOB_SECONDS + 30) * 1000;
 const KINDS: TaskKind[] = ["intake", "week", "review"];
 const rowId = (projectId: string, kind: TaskKind) => `task:${projectId}:${kind}`;
 
@@ -38,11 +42,13 @@ function fromRow(projectId: string, data: Partial<Task> | null): Task | null {
     status: data.status === "done" || data.status === "failed" ? data.status : "running",
     startedAt: data.startedAt,
     finishedAt: data.finishedAt ?? null,
+    step: data.step ?? "",
     result: data.result ?? null,
     error: data.error ?? "",
   };
   if (task.status === "running" && Date.now() - Date.parse(task.startedAt) > STALE_MS) {
-    return { ...task, status: "failed", error: "It ran out of time (5 minutes). Try again - with fewer links or videos if it keeps happening." };
+    const where = task.step ? ` while ${task.step.charAt(0).toLowerCase()}${task.step.slice(1)}` : "";
+    return { ...task, status: "failed", error: `It ran out of time (${Math.round(JOB_SECONDS / 60)} minutes)${where}. Try again - with fewer links or videos if it keeps happening.` };
   }
   return task;
 }
@@ -54,17 +60,25 @@ async function save(userId: string, task: Task) {
 }
 
 /** Start a job in the background. Refuses a second run of the same job on the same project while one is going. */
-export async function startTask(user: HubUser, projectId: string, kind: TaskKind, work: () => Promise<unknown>): Promise<Task> {
+export async function startTask(user: HubUser, projectId: string, kind: TaskKind, work: (progress: Progress) => Promise<unknown>): Promise<Task> {
   const current = (await listTasks(user.id)).find((t) => t.projectId === projectId && t.kind === kind);
   if (current?.status === "running") throw new StudioError("That's already running for this job - it'll show here when it's done.");
-  const task: Task = { id: rowId(projectId, kind), projectId, kind, status: "running", startedAt: new Date().toISOString(), finishedAt: null, result: null, error: "" };
+  const task: Task = { id: rowId(projectId, kind), projectId, kind, status: "running", startedAt: new Date().toISOString(), finishedAt: null, step: "Starting", result: null, error: "" };
   await save(user.id, task);
   after(async () => {
+    // Each step is saved as it starts, so the page can show it (and say where a slow job got to).
+    let saving: Promise<void> = Promise.resolve();
+    const progress: Progress = (step) => {
+      task.step = step;
+      saving = saving.then(() => save(user.id, { ...task })).catch(() => {});
+    };
     try {
-      const result = await work();
+      const result = await work(progress);
+      await saving;
       await save(user.id, { ...task, status: "done", finishedAt: new Date().toISOString(), result: result ?? null });
     } catch (e) {
       console.error("Creator Desk studio task:", kind, e);
+      await saving;
       await save(user.id, { ...task, status: "failed", finishedAt: new Date().toISOString(), error: studioErrorMessage(e) }).catch(() => {});
     }
   });

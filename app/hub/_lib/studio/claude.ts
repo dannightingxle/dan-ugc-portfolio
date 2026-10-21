@@ -27,6 +27,8 @@ type Ask<S extends z.ZodType> = {
   schema: S;
   /** Let Claude open links in the material (briefs on notion.site, Google Docs…). */
   webFetch?: boolean;
+  /** Told when the answer didn't fit and Claude is asked to fix it (a second write, so it takes a while). */
+  onFixUp?: () => void;
   effort?: "low" | "medium" | "high";
 };
 
@@ -43,7 +45,7 @@ export async function ask<S extends z.ZodType>(req: Ask<S>): Promise<z.infer<S>>
   }
 }
 
-async function askOnce<S extends z.ZodType>({ system, context, content, schema, webFetch, effort = "medium" }: Ask<S>, structured: boolean): Promise<z.infer<S>> {
+async function askOnce<S extends z.ZodType>({ system, context, content, schema, webFetch, effort = "medium", onFixUp }: Ask<S>, structured: boolean): Promise<z.infer<S>> {
   const systemBlocks: Anthropic.Beta.BetaTextBlockParam[] = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
   if (context) systemBlocks.push({ type: "text", text: context, cache_control: { type: "ephemeral" } });
   // Just the JSON schema: the answer is parsed below, once Claude has actually finished
@@ -85,6 +87,7 @@ async function askOnce<S extends z.ZodType>({ system, context, content, schema, 
     console.warn("Creator Desk studio: answer didn't fit the shape:", read.problem, text.slice(0, 500));
     if (fixed) throw new StudioError(`Claude's answer didn't come back in the right shape (${read.problem}). Please try again.`);
     fixed = true;
+    onFixUp?.();
     if (text.trim()) {
       messages.push({ role: "assistant", content: [{ type: "text", text }] });
       messages.push({
