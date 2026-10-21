@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -802,9 +802,10 @@ async function handleWork(work) {
       startClaude(r.editId, r.text, r.sessionId);
     }
   }
-  // One edit at a time: CapCut drafts and your Mac's CPU don't like two at once.
-  if (running.size) return;
+  // A few edits side by side (you choose how many on the Mac helper page); the rest wait their turn.
+  const max = Math.max(1, Math.min(4, Number(work.maxEdits) || 1));
   for (const e of work.edits ?? []) {
+    if (running.size >= max) break;
     const { ok } = await update(e.id, { claim: true });
     if (!ok) continue;
     log(`Editing ${[e.brand, e.videoCode, e.title].filter(Boolean).join(" · ")}`);
@@ -819,7 +820,6 @@ async function handleWork(work) {
       }
     }
     startClaude(e.id, promptFor(e, broll), e.sessionId);
-    break;
   }
 }
 

@@ -64,8 +64,14 @@ export type Device = {
   name: string;
   lastSeen: string | null;
   online: boolean;
-  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[]; osxphotos?: boolean };
+  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[]; osxphotos?: boolean; maxEdits?: number };
 };
+
+/** How many edits a Mac runs side by side, unless you choose otherwise on the Mac helper page. */
+export const DEFAULT_MAX_EDITS = 3;
+export const MAX_EDITS_CHOICES = [1, 2, 3, 4];
+/** The oldest helper that runs more than one edit at once. */
+export const HELPER_FOR_PARALLEL = "0.3.3";
 
 const TYPE: Record<string, string> = { th: "Talking head", ls: "Lip-sync", ac: "Acting", gs: "Green screen" };
 
