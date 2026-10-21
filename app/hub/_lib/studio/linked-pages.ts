@@ -58,8 +58,22 @@ export function readableLinks(text: string) {
 // ---------------------------------------------------------------- Notion
 
 type Rich = [string, ([string, unknown?] | string[])[]?][];
-type Block = { id: string; type: string; properties?: Record<string, Rich>; content?: string[]; format?: Record<string, unknown> };
-type RecordMap = { block?: Record<string, { spaceId?: string; value: { value?: Block } & Partial<Block> }> };
+type Block = {
+  id: string;
+  type: string;
+  properties?: Record<string, Rich>;
+  content?: string[];
+  format?: Record<string, unknown>;
+  collection_id?: string;
+  view_ids?: string[];
+  space_id?: string;
+  last_edited_time?: number;
+  created_time?: number;
+};
+type Collection = { name?: Rich; schema?: Record<string, { name: string; type: string }> };
+type Entry<T> = { spaceId?: string; value: { value?: T } & Partial<T> };
+type RecordMap = { block?: Record<string, Entry<Block>>; collection?: Record<string, Entry<Collection>> };
+const unwrap = <T>(e: Entry<T> | undefined): T | undefined => (e ? ((e.value?.value ?? e.value) as T) : undefined);
 
 /** A lasting public link to a file uploaded into a public Notion page (Notion swaps it for a fresh download link each time). */
 export function notionFileUrl(kind: "image" | "file", source: string, blockId: string, spaceId: string) {
@@ -79,7 +93,10 @@ function richText(rich: Rich | undefined): string {
 }
 
 /** A Notion page's blocks as plain text (headings, lists, tables, toggles, columns, media). */
-export function renderNotion(recordMap: RecordMap, pageId: string) {
+/** A database's rows as text, keyed by the database block's id (filled in by readNotion). */
+type Databases = Record<string, string>;
+
+export function renderNotion(recordMap: RecordMap, pageId: string, databases: Databases = {}) {
   const blocks = recordMap.block ?? {};
   const get = (id: string): Block | undefined => {
     const b = blocks[id]?.value;
@@ -163,7 +180,7 @@ export function renderNotion(recordMap: RecordMap, pageId: string) {
         break;
       case "collection_view":
       case "collection_view_page":
-        lines.push("(a database - open the page to see it)");
+        lines.push(databases[id] ?? "(a database that couldn't be read - open the page to see it)");
         return;
       default:
         if (text) lines.push(`${indent}${text}`);
@@ -182,8 +199,8 @@ export function renderNotion(recordMap: RecordMap, pageId: string) {
   };
 }
 
-async function readNotion(id: string): Promise<{ title: string; text: string; files: PageFile[] }> {
-  const recordMap: RecordMap = { block: {} };
+async function loadNotion(id: string): Promise<RecordMap> {
+  const recordMap: RecordMap = { block: {}, collection: {} };
   let cursor: unknown = { stack: [] };
   for (let chunk = 0; chunk < 10; chunk++) {
     const res = await fetch(`${NOTION_API}/api/v3/loadPageChunk`, {
@@ -196,12 +213,104 @@ async function readNotion(id: string): Promise<{ title: string; text: string; fi
     if (!res.ok) throw new Error(`Notion said ${res.status}`);
     const data = (await res.json()) as { recordMap?: RecordMap; cursor?: { stack?: unknown[] } };
     Object.assign(recordMap.block!, data.recordMap?.block ?? {});
+    Object.assign(recordMap.collection!, data.recordMap?.collection ?? {});
     if (!data.cursor?.stack?.length) break;
     cursor = data.cursor;
   }
-  const page = renderNotion(recordMap, id);
+  return recordMap;
+}
+
+async function readNotion(id: string): Promise<{ title: string; text: string; files: PageFile[] }> {
+  const recordMap = await loadNotion(id);
+  // Databases in the page (a formats table, a content calendar…): their rows, and the pages of the live ones.
+  const databases: Databases = {};
+  const files: PageFile[] = [];
+  const dbBlocks = Object.entries(recordMap.block ?? {})
+    .map(([blockId, e]) => ({ blockId, b: unwrap(e), spaceId: e.spaceId }))
+    .filter((x) => (x.b?.type === "collection_view" || x.b?.type === "collection_view_page") && x.b.collection_id && x.b.view_ids?.length)
+    .slice(0, MAX_DATABASES);
+  await Promise.all(
+    dbBlocks.map(async ({ blockId, b, spaceId }) => {
+      try {
+        const db = await readDatabase(recordMap, b!, spaceId ?? b!.space_id ?? "");
+        databases[blockId] = db.text;
+        files.push(...db.files);
+      } catch (e) {
+        console.warn("Creator Desk: couldn't read a Notion database", e);
+      }
+    }),
+  );
+  const page = renderNotion(recordMap, id, databases);
+  if (page) page.files.push(...files);
   if (!page || !page.text.replace(/^# .*$/m, "").trim()) throw new Error("the page isn't public, or it's empty");
   return page;
+}
+
+// Databases: how many per page, and how many of their rows are opened for their own page's text.
+const MAX_DATABASES = 3;
+const MAX_ROW_PAGES = 12;
+// Rows whose status says they're done with come after the live ones (and aren't opened).
+const RETIRED = /inactive|archived?|retired|done|complete|old|paused|cancel|rejected/i;
+
+/** One property's value as text. */
+function propText(value: Rich | undefined, type: string): string {
+  if (!value) return "";
+  if (type === "date") {
+    const d = (value[0]?.[1] ?? []).find((m) => m[0] === "d")?.[1] as { start_date?: string } | undefined;
+    return d?.start_date ?? "";
+  }
+  return richText(value).replace(/\|/g, "/").replace(/\s+/g, " ").trim();
+}
+
+async function readDatabase(page: RecordMap, block: Block, spaceId: string): Promise<{ text: string; files: PageFile[] }> {
+  const collection = unwrap(page.collection?.[block.collection_id!]);
+  const res = await fetch(`${NOTION_API}/api/v3/queryCollection`, {
+    method: "POST",
+    headers: { ...HEADERS, "content-type": "application/json" },
+    body: JSON.stringify({
+      collection: { id: block.collection_id, spaceId },
+      collectionView: { id: block.view_ids![0], spaceId },
+      loader: { type: "reducer", reducers: { collection_group_results: { type: "results", limit: 100 } }, searchQuery: "", userTimeZone: "Europe/London" },
+    }),
+    signal: AbortSignal.timeout(TIMEOUT),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Notion said ${res.status}`);
+  const data = (await res.json()) as { result?: { reducerResults?: { collection_group_results?: { blockIds?: string[] } } }; recordMap?: RecordMap };
+  const ids = data.result?.reducerResults?.collection_group_results?.blockIds ?? [];
+  const schema = Object.entries(collection?.schema ?? {});
+  const title = schema.find(([, p]) => p.type === "title")?.[0] ?? "title";
+  const columns = schema.filter(([k, p]) => k !== title && !["person", "created_by", "last_edited_by", "file", "relation", "rollup", "formula", "button"].includes(p.type));
+  const status = columns.find(([, p]) => /status/i.test(p.name) || p.type === "status")?.[0];
+  const rows = ids
+    .map((rid) => ({ id: rid, b: unwrap(data.recordMap?.block?.[rid]) }))
+    .filter((r): r is { id: string; b: Block } => Boolean(r.b))
+    .map((r) => ({ ...r, retired: Boolean(status && RETIRED.test(propText(r.b.properties?.[status], "select"))) }))
+    // Live rows first, the most recently changed at the top.
+    .sort((a, b) => Number(a.retired) - Number(b.retired) || (b.b.last_edited_time ?? 0) - (a.b.last_edited_time ?? 0));
+  const day = (t?: number) => (t ? new Date(t).toISOString().slice(0, 10) : "");
+  const name = richText(collection?.name) || "Database";
+  const lines = [
+    `### Database: ${name} (${rows.length} rows${status ? ", live ones first" : ""})`,
+    `| ${[schema.find(([k]) => k === title)?.[1].name ?? "Name", ...columns.map(([, p]) => p.name), "Added", "Last changed"].join(" | ")} |`,
+    ...rows.map((r) => `| ${[propText(r.b.properties?.[title], "title") || "(untitled)", ...columns.map(([k, p]) => propText(r.b.properties?.[k], p.type)), day(r.b.created_time), day(r.b.last_edited_time)].join(" | ")} |`),
+  ];
+  // Each live row's own page: the full format, script, notes.
+  const files: PageFile[] = [];
+  const opened = rows.filter((r) => !r.retired && r.b.content?.length).slice(0, MAX_ROW_PAGES);
+  const pages = await Promise.all(
+    opened.map(async (r) => {
+      try {
+        const rendered = renderNotion(await loadNotion(r.id), r.id);
+        if (!rendered) return "";
+        files.push(...rendered.files);
+        return `#### ${name} row: ${propText(r.b.properties?.[title], "title") || "(untitled)"}\n${rendered.text.replace(/^# .*\n?/, "").trim()}`;
+      } catch {
+        return "";
+      }
+    }),
+  );
+  return { text: [...lines, ...pages.filter(Boolean)].join("\n\n").replace(/\n\n(?=\|)/g, "\n"), files };
 }
 
 // ---------------------------------------------------------------- Google Docs
