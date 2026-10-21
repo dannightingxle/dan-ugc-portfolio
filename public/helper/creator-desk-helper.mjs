@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.6";
+const VERSION = "0.3.7";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -60,6 +60,8 @@ function save(cfg) {
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2), { mode: 0o600 });
 }
+// Web search and fetch let an edit find and fetch a sound, a logo or a screenshot like in a normal chat.
+const TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "WebFetch", "WebSearch", "mcp__capcut"];
 function defaults(cfg) {
   const home = os.homedir();
   const shortform = path.join(home, "Movies", "shortform");
@@ -67,9 +69,9 @@ function defaults(cfg) {
     folders: [path.join(home, "Downloads"), path.join(home, "Desktop"), path.join(home, "Movies")],
     workdir: fs.existsSync(shortform) ? shortform : home,
     claude: "claude",
-    // What Claude Code may do without asking (it runs without a window to approve things in).
-    allowedTools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "mcp__capcut"],
     ...cfg,
+    // What Claude Code may do without asking (it runs without a window to approve things in); configs saved by older helpers get the newer tools too.
+    allowedTools: [...new Set([...(cfg?.allowedTools ?? []), ...TOOLS])],
     // Overrides (handy for testing): CDH_FOLDERS=a:b, CDH_WORKDIR, CDH_CLAUDE
     ...(process.env.CDH_FOLDERS ? { folders: process.env.CDH_FOLDERS.split(":") } : {}),
     ...(process.env.CDH_WORKDIR ? { workdir: process.env.CDH_WORKDIR } : {}),
@@ -369,7 +371,7 @@ function osxphotos() {
 const BROWSER = process.env.CDH_BROWSER || "Google Chrome";
 const READ_JS =
   "JSON.stringify({title: document.title, url: location.href, text: document.body ? document.body.innerText : '', links: Array.from(document.links).slice(0, 300).map(a => [a.innerText.trim().slice(0, 120), a.href])})";
-const readScript = () => [
+const readScript = (js = READ_JS) => [
   "on run argv",
   "set theURL to item 1 of argv",
   `tell application "${BROWSER.replace(/"/g, "")}"`,
@@ -382,7 +384,7 @@ const readScript = () => [
   "set waited to waited + 0.5",
   "end repeat",
   "delay 2",
-  `set js to ${JSON.stringify(READ_JS)}`,
+  `set js to ${JSON.stringify(js)}`,
   "set out to execute t javascript js",
   // Pages that load their content after the page itself: wait until the text stops changing.
   'set prev to ""',
@@ -425,6 +427,78 @@ async function readPage(url) {
   } catch {
     return { error: "the page came back empty" };
   }
+}
+
+// ------------------------------------------------------------ sounds from links
+
+// A sound from a link, for an edit: a TikTok sound page (its audio file, or else a video that uses it),
+// an Instagram audio page (a reel that uses it), or any TikTok / Instagram / YouTube video (its audio).
+// Sound pages are read in your own browser, where you're signed in.
+const SOUNDS = path.join(os.homedir(), "Movies", "Creator Desk", "Sounds");
+const SOUND_JS = `(() => {
+  let play = "", title = "";
+  try {
+    const d = JSON.parse(document.getElementById("__UNIVERSAL_DATA_FOR_REHYDRATION__").textContent);
+    const m = d.__DEFAULT_SCOPE__["webapp.music-detail"].musicInfo.music;
+    play = m.playUrl || ""; title = [m.title, m.authorName].filter(Boolean).join(" - ");
+  } catch (e) {}
+  const videos = Array.from(document.querySelectorAll('a[href*="/video/"], a[href*="/reel/"]')).map((a) => a.href).filter((h, i, all) => all.indexOf(h) === i).slice(0, 5);
+  return JSON.stringify({ play, title: title || document.title, videos });
+})()`.replace(/\n\s*/g, " ");
+
+function ytdlp() {
+  const uv = [run("/usr/bin/which", ["uvx"]), path.join(os.homedir(), ".local", "bin", "uvx"), "/opt/homebrew/bin/uvx"].find((p) => p && fs.existsSync(p));
+  const direct = [process.env.CDH_YTDLP, run("/usr/bin/which", ["yt-dlp"]), "/opt/homebrew/bin/yt-dlp", path.join(os.homedir(), ".local", "bin", "yt-dlp")].find((p) => p && fs.existsSync(p));
+  return direct ? [direct] : uv ? [uv, "yt-dlp"] : null;
+}
+
+async function soundFromVideo(url, out) {
+  const tool = ytdlp();
+  if (!tool) return { error: "yt-dlp isn't on this Mac. Install it once in Terminal: curl -LsSf https://astral.sh/uv/install.sh | sh (then it runs through uvx)" };
+  const base = out.replace(/\.[a-z0-9]+$/i, "");
+  // Instagram needs you signed in, so it uses Chrome's login; TikTok usually doesn't.
+  const tries = /instagram\.com/i.test(url) ? [["--cookies-from-browser", "chrome"]] : [[], ["--cookies-from-browser", "chrome"]];
+  let why = "";
+  for (const extra of tries) {
+    const [bin, ...pre] = tool;
+    const r = await runAsync(bin, [...pre, "-x", "--audio-format", "m4a", "--no-playlist", "-o", `${base}.%(ext)s`, ...extra, url], 300_000);
+    if (!r.err && fs.existsSync(`${base}.m4a`)) return { file: `${base}.m4a`, from: url };
+    why = (r.stderr || r.err?.message || "").trim().split("\n").pop() ?? "";
+  }
+  return { error: `couldn't get the audio from ${url}${why ? ` (${why.slice(0, 200)})` : ""}` };
+}
+
+async function grabSound(url, out) {
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  const soundPage = /tiktok\.com\/music\/|instagram\.com\/(reels\/)?audio\//i.test(url);
+  if (!soundPage) return soundFromVideo(url, out);
+  const { err, stdout, stderr } = process.env.CDH_SOUND_PAGE_CMD
+    ? await runAsync("/bin/sh", ["-c", process.env.CDH_SOUND_PAGE_CMD, "sh", url], 120_000)
+    : await runAsync("osascript", [...readScript(SOUND_JS).flatMap((l) => ["-e", l]), url], 120_000);
+  if (err) return { error: `${BROWSER} couldn't open the sound page (${String(stderr || err.message).trim().split("\n").pop()?.slice(0, 200)})` };
+  let page;
+  try {
+    page = JSON.parse(stdout.trim());
+  } catch {
+    return { error: "the sound page came back empty" };
+  }
+  // TikTok: the sound's own audio file.
+  if (page.play) {
+    try {
+      const res = await fetch(page.play, { headers: { referer: "https://www.tiktok.com/", "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36" } });
+      if (res.ok) {
+        const file = out.replace(/\.[a-z0-9]+$/i, "") + ".mp3";
+        fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+        if (fs.statSync(file).size > 10_000) return { file, title: page.title, from: url };
+      }
+    } catch {}
+  }
+  // Else a video that uses it.
+  for (const v of page.videos ?? []) {
+    const got = await soundFromVideo(v, out);
+    if (got.file) return { ...got, title: page.title, via: v };
+  }
+  return { error: `couldn't get "${page.title || "that sound"}" from its page or a video using it - paste a link to a TikTok that uses it` };
 }
 
 const readsSeen = new Set();
@@ -640,7 +714,7 @@ const RESOURCEFUL = [
   "  - download it from links on the card or in the brief (a Google Drive folder: `uvx gdown --folder <link> -O <folder>`; a direct image or video link: curl);",
   "  - make it: a screenshot or screen recording of a web page, App Store listing or the app's website (open it, then `screencapture`), a text or list graphic in CapCut, or a freeze-frame or cut-down from the main clip;",
   "  - only if none of that works, put a clearly labelled placeholder in the draft where it goes.",
-  "- Sounds: if the card names or links a sound or song, add it from my CapCut favourite sounds (the CapCut tool can pull in TikTok and Instagram sounds I've favourited in my linked accounts). If it isn't in my favourites, build the rest and tell me exactly which sound to favourite (name, and the link if there is one) so you can add it next time.",
+  `- Sounds: if the card names or links a sound or song, get it: run \`node "${path.resolve(process.argv[1] || "creator-desk-helper.mjs")}" sound "<link>"\` with a TikTok sound page, a TikTok or Instagram video that uses it, or an Instagram audio page - it saves the audio and prints the file. Only a name? Search for it (WebSearch) to find a TikTok using it, then grab that. Or add it from my CapCut favourite sounds if it's there. If none of that works, build the rest and tell me exactly which sound to send a link for.`,
   "- Build the draft even if a few extras are missing, then list what you made or swapped in and what I still need to add. Only stop to ask if the main clip can't be found or doesn't match the card.",
 ];
 
@@ -1006,7 +1080,18 @@ if (cmd === "connect") {
   cfg = defaults(cfg);
   if (cmd === "autostart") autostart(rest[0] !== "off");
   else if (cmd === "status") console.log(JSON.stringify({ ...info(), clips: recentClips().length }, null, 2));
-  else if (cmd === "find") {
+  else if (cmd === "sound") {
+    // node creator-desk-helper.mjs sound <link> [file]: saves the sound and prints where (used by edits).
+    const [url, file] = rest;
+    if (!url) {
+      console.error("Add a link: node creator-desk-helper.mjs sound https://www.tiktok.com/music/...");
+      process.exit(1);
+    }
+    const out = file ? path.resolve(file) : path.join(SOUNDS, `${slug(url.replace(/^https?:\/\/(www\.)?/, "")).slice(0, 60)}.m4a`);
+    const got = await grabSound(url, out);
+    console.log(JSON.stringify(got, null, 2));
+    process.exit(got.file ? 0 : 1);
+  } else if (cmd === "find") {
     // Try the B-roll search without an edit: node creator-desk-helper.mjs find "laptop"
     const term = rest.join(" ") || "laptop";
     const dir = path.join(BROLL, "_test", slug(term));
