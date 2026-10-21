@@ -10,6 +10,7 @@ import { OPEN_ACCESS } from "./_lib/billing/types";
 import { featuresFor } from "./_lib/features";
 import { Analytics } from "@vercel/analytics/next";
 import { Popups } from "./_lib/popups";
+import { TasksProvider } from "./_lib/studio/tasks-client";
 import "./hub.css";
 
 /* Font used by hub.css. */
@@ -28,10 +29,12 @@ export default async function HubLayout({ children }: { children: React.ReactNod
     <div className={`hub ${jakarta.variable} min-h-screen`}>
       <AccountProvider enabled={accountsEnabled} user={user} billing={billing} features={features}>
         <Popups>
-          <HubNav />
-          <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 sm:px-6 md:pb-24">
-            <AccessGate>{children}</AccessGate>
-          </main>
+          <TasksProvider>
+            <HubNav />
+            <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 sm:px-6 md:pb-24">
+              <AccessGate>{children}</AccessGate>
+            </main>
+          </TasksProvider>
         </Popups>
       </AccountProvider>
       {/* Page views only, no cookies. Switch on under Analytics in the Vercel project. */}

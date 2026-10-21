@@ -11,6 +11,7 @@ import { Edits } from "./edits";
 import { weekDataBlock } from "../../../_lib/studio/custom-template";
 import { cleanHandle } from "../../../_lib/studio/brand-types";
 import { useConfirm } from "../../../_lib/popups";
+import { type Task, type TaskKind, useElapsed, useTask, useTasks } from "../../../_lib/studio/tasks-client";
 
 /* Studio: everything a Claude Project held for this job, plus the weekly
    shoot sheet, the Friday review and the account checklist. Edits save by
@@ -194,6 +195,54 @@ export function ActionButton({ busy, seconds, label, busyLabel }: { busy: boolea
   );
 }
 
+/** A Claude job that runs on the server: you can leave the page, or start another job elsewhere, while it works. */
+function useJob(api: string, kind: TaskKind, onDone: (t: Task) => void) {
+  const projectId = api.split("/").pop() ?? "";
+  const { start, dismiss } = useTasks();
+  const task = useTask(projectId, kind);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
+  const busy = starting || task?.status === "running";
+  const elapsed = useElapsed(task?.startedAt, busy);
+  // Pick up the result when a job this page is showing finishes.
+  const done = useRef(onDone);
+  useEffect(() => {
+    done.current = onDone;
+  });
+  const prev = useRef(task?.status);
+  useEffect(() => {
+    if (prev.current === "running" && task?.status === "done") done.current(task);
+    prev.current = task?.status;
+  }, [task]);
+  async function run(body: unknown) {
+    setStarting(true);
+    setError("");
+    try {
+      await start(`${api}/${kind}`, body);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setStarting(false);
+    }
+  }
+  return { busy, elapsed, task, error: error || (task?.status === "failed" ? task.error : ""), run, clear: () => task && dismiss(task.id) };
+}
+
+function JobButton({ busy, elapsed, label, busyLabel }: { busy: boolean; elapsed: string; label: string; busyLabel: string }) {
+  return (
+    <div className="space-y-1.5">
+      <button disabled={busy} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
+        {busy ? `${busyLabel} ${elapsed}` : label}
+      </button>
+      <p className="text-xs text-text-dim">
+        {busy
+          ? "Running in the background: you can leave this page, or start something on another job. It'll pop up in the corner when it's done."
+          : "Runs in the background, so you can carry on with other jobs while it works."}
+      </p>
+    </div>
+  );
+}
+
 export function FilePicker({ accept, label, onChange }: { accept: string; label: string; onChange: (u: Upload[]) => void }) {
   const [names, setNames] = useState<string[]>([]);
   return (
@@ -255,18 +304,17 @@ function WeekTab({
   const [trending, setTrending] = useState("");
   const [weekBrief, setWeekBrief] = useState("");
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const [made, setMade] = useState<{ id: string; oneLine: string; couldntOpen: string[] } | null>(null);
-  const action = useAction();
+  const job = useJob(api, "week", async () => {
+    const r = await call<{ workspace: Workspace; sheets: SheetSummary[] }>(api, "GET");
+    onWorkspace(r.workspace);
+    setSheets(r.sheets);
+    setWeekBrief("");
+  });
+  const made = job.task?.status === "done" && !job.busy ? (job.task.result as { id: string; oneLine: string; couldntOpen?: string[] } | null) : null;
 
   async function make(e: React.FormEvent) {
     e.preventDefault();
-    await action.run(async () => {
-      const r = await call<{ id: string; oneLine: string; couldntOpen?: string[]; workspace: Workspace }>(`${api}/week`, "POST", { videos, filmingOn, lastWeek, trending, weekBrief, uploads });
-      onWorkspace(r.workspace);
-      setMade({ id: r.id, oneLine: r.oneLine, couldntOpen: r.couldntOpen ?? [] });
-      setSheets((await call<{ sheets: SheetSummary[] }>(api, "GET")).sheets);
-      setWeekBrief("");
-    });
+    await job.run({ videos, filmingOn, lastWeek, trending, weekBrief, uploads });
   }
 
   return (
@@ -303,17 +351,17 @@ function WeekTab({
             <textarea rows={2} className={input} value={trending} onChange={(e) => setTrending(e.target.value)} />
           </Field>
           <FilePicker accept="image/png,image/jpeg,image/webp,application/pdf" label="Screenshots or PDFs (optional)" onChange={setUploads} />
-          <ActionButton busy={action.busy} seconds={action.seconds} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
-          {action.error && <p className="text-sm text-accent">{action.error}</p>}
+          <JobButton busy={job.busy} elapsed={job.elapsed} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
+          {job.error && <p className="text-sm text-accent">{job.error}</p>}
         </form>
         {made && (
           <div className="space-y-2 rounded-xl bg-good-soft px-4 py-3 text-sm text-good">
             <p>{made.oneLine.trim().replace(/([^.!?])$/, "$1.")} Its hooks are now in the script bank.</p>
-            {made.couldntOpen.length > 0 && (
+            {(made.couldntOpen ?? []).length > 0 && (
               <div className="rounded-lg bg-warn-soft px-3 py-2 text-warn">
                 <p className="font-semibold">Claude couldn&apos;t open:</p>
                 <ul className="list-disc pl-5">
-                  {made.couldntOpen.map((c) => (
+                  {(made.couldntOpen ?? []).map((c) => (
                     <li key={c} className="break-words">
                       {c}
                     </li>
@@ -331,6 +379,9 @@ function WeekTab({
                   Edit cards are ready - once you&apos;ve filmed, edit them →
                 </button>
               )}
+              <button type="button" onClick={job.clear} className="ml-auto underline opacity-80">
+                Clear
+              </button>
             </div>
           </div>
         )}
@@ -348,7 +399,7 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
   const [filming, setFilming] = useState("solo, phone on a tripod, at home and around town, second phone filming app screens over my shoulder");
   const [voice, setVoice] = useState("casual, direct, a bit dry");
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const action = useAction();
+  const job = useJob(api, "intake", async () => onWorkspace((await call<{ workspace: Workspace }>(api, "GET")).workspace));
   const setUp = Boolean(ws.instructions);
   const confirm = useConfirm();
 
@@ -359,7 +410,7 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
       !(await confirm({ title: "Set this job up again?", message: "This rewrites the instructions, brief and app notes from the new material. Winners and script bank stay.", confirmLabel: "Set up again" }))
     )
       return;
-    await action.run(async () => onWorkspace(await call<Workspace>(`${api}/intake`, "POST", { material, filming, voice, uploads })));
+    await job.run({ material, filming, voice, uploads });
   }
 
   return (
@@ -383,8 +434,8 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
               <input className={input} value={voice} onChange={(e) => setVoice(e.target.value)} />
             </Field>
           </div>
-          <ActionButton busy={action.busy} seconds={action.seconds} label={setUp ? "Set up again" : "Set up this job"} busyLabel="Reading everything and setting up… ·" />
-          {action.error && <p className="text-sm text-accent">{action.error}</p>}
+          <JobButton busy={job.busy} elapsed={job.elapsed} label={setUp ? "Set up again" : "Set up this job"} busyLabel="Reading everything and setting up… ·" />
+          {job.error && <p className="text-sm text-accent">{job.error}</p>}
         </form>
       </Section>
 
@@ -507,7 +558,7 @@ function TemplateSection({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => 
 function ReviewTab({ api, ws, onWorkspace }: { api: string; ws: Workspace; onWorkspace: (w: Workspace) => void }) {
   const [numbers, setNumbers] = useState("");
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const action = useAction();
+  const job = useJob(api, "review", async () => onWorkspace((await call<{ workspace: Workspace }>(api, "GET")).workspace));
   const review = ws.lastReview;
 
   return (
@@ -517,7 +568,7 @@ function ReviewTab({ api, ws, onWorkspace }: { api: string; ws: Workspace; onWor
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            await action.run(async () => onWorkspace(await call<Workspace>(`${api}/review`, "POST", { numbers, uploads })));
+            await job.run({ numbers, uploads });
           }}
           className="space-y-4"
         >
@@ -525,8 +576,8 @@ function ReviewTab({ api, ws, onWorkspace }: { api: string; ws: Workspace; onWor
             <textarea rows={6} className={input} value={numbers} onChange={(e) => setNumbers(e.target.value)} placeholder="V1 restaurant mix-up: 42k views, 61% retention, 300 likes…" />
           </Field>
           <FilePicker accept="image/png,image/jpeg,image/webp" label="Analytics screenshots" onChange={setUploads} />
-          <ActionButton busy={action.busy} seconds={action.seconds} label="Run the review" busyLabel="Reviewing the week… ·" />
-          {action.error && <p className="text-sm text-accent">{action.error}</p>}
+          <JobButton busy={job.busy} elapsed={job.elapsed} label="Run the review" busyLabel="Reviewing the week… ·" />
+          {job.error && <p className="text-sm text-accent">{job.error}</p>}
         </form>
       </Section>
 
