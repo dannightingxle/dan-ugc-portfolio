@@ -410,7 +410,14 @@ export async function releaseOffline(userId: string) {
   await db.from("hub_edits").update({ status: "failed", cancel_requested: false, updated_at: new Date().toISOString() }).eq("user_id", userId).in("id", stopped.map((e) => e.id as string)).eq("status", "editing");
   for (const e of stopped) {
     const name = (devices ?? []).find((x) => x.id === e.device_id)?.name;
-    await addEvents(e.id as string, [{ kind: "status", text: `${name ? `Your Mac (${name})` : "The Mac editing this"} went offline mid-edit (asleep, closed, or its helper stopped), so it stopped partway. Carry on where it stopped once that Mac's helper is running again, or start it again on another Mac.` }]);
+    await addEvents(e.id as string, [
+      {
+        kind: "status",
+        text: name
+          ? `Your Mac (${name}) went offline mid-edit (asleep, closed, or its helper stopped), so it stopped partway. Carry on where it stopped once that Mac's helper is running again, or start it again on another Mac.`
+          : "The Mac editing this was disconnected or replaced mid-edit, so it stopped partway. Press Carry on where it stopped to pick it up on your Mac.",
+      },
+    ]);
   }
 }
 
