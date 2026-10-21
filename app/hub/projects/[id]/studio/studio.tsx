@@ -209,10 +209,12 @@ function useJob(api: string, kind: TaskKind, onDone: (t: Task) => void) {
   useEffect(() => {
     done.current = onDone;
   });
-  const prev = useRef(task?.status);
+  // Each finished run is picked up once (even one that finished before this page saw it running).
+  const handled = useRef<string | null>(null);
   useEffect(() => {
-    if (prev.current === "running" && task?.status === "done") done.current(task);
-    prev.current = task?.status;
+    if (task?.status !== "done" || !task.finishedAt || handled.current === task.finishedAt) return;
+    handled.current = task.finishedAt;
+    done.current(task);
   }, [task]);
   async function run(body: unknown) {
     setStarting(true);
