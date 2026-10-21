@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HELPER_FOR_LIBRARY, LIBRARY_LINE, STATUS_LABEL, WHOLE_SHEET, findsOwnClips, helperOlderThan, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
+import { HELPER_FOR_LIBRARY, LATEST_HELPER, LIBRARY_LINE, STATUS_LABEL, WHOLE_SHEET, findsOwnClips, helperOlderThan, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
 import type { SheetSummary } from "../../../_lib/studio/types";
 import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
@@ -114,6 +114,7 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
               card={card}
               files={files}
               mac={mac}
+              devices={macs}
               open={open === card.id}
               onToggle={() => setOpen(open === card.id ? null : card.id)}
               onChange={replace}
@@ -167,6 +168,11 @@ function MacBar({ devices, mac, onChoose }: { devices: Device[]; mac: Device | u
       )}
       {mac.info.capcut && <span className="text-text-dim">CapCut {mac.info.capcut}</span>}
       {mac.online && mac.info.capcutRunning && <span className="text-warn">CapCut is open - close it so edits can save</span>}
+      {!helperOlderThan(mac.info.helper, HELPER_FOR_LIBRARY) && helperOlderThan(mac.info.helper, LATEST_HELPER) && (
+        <span className="text-xs text-warn">
+          Helper {mac.info.helper} - {LATEST_HELPER} is out. It updates itself between edits, or close its window and start it again now.
+        </span>
+      )}
       {helperOlderThan(mac.info.helper, HELPER_FOR_LIBRARY) && (
         <Link href="/hub/studio/helper" className="text-warn hover:underline">
           Update the helper to find B-roll and make trial versions →
@@ -371,6 +377,20 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
   );
 }
 
+/** A stopped edit whose Claude Code session is on another Mac: carry on there (when it's on), or start again on this one. */
+function CarryOnElsewhere({ was, on, onCarryOn }: { was: Device | undefined; on: Device; onCarryOn: () => void }) {
+  if (!was) return <span className="text-xs text-text-dim">The Mac it was on isn&apos;t connected any more, so start it again on {on.name}.</span>;
+  return was.online ? (
+    <button type="button" onClick={onCarryOn} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+      Carry on where it stopped, on {was.name}
+    </button>
+  ) : (
+    <span className="text-xs text-text-dim">
+      To carry on where it stopped, start the helper on {was.name} (its Claude Code session is there) - or start it again on {on.name}.
+    </span>
+  );
+}
+
 /** Several video codes (V1, V2, V3…) usually means a whole shoot sheet rather than one card. */
 function looksLikeWholeSheet(text: string) {
   return new Set(text.match(/\bV\d{1,2}\b/g) ?? []).size >= 3;
@@ -380,6 +400,7 @@ function Card({
   card,
   files,
   mac,
+  devices,
   open,
   onToggle,
   onChange,
@@ -390,6 +411,7 @@ function Card({
   card: EditCard;
   files: DeviceFile[];
   mac: Device | undefined;
+  devices: Device[];
   open: boolean;
   onToggle: () => void;
   onChange: (c: EditCard) => void;
@@ -468,10 +490,14 @@ function Card({
                 </button>
               </Tooltip>
             )}
-            {card.status === "failed" && card.canCarryOn && mac && (
+            {card.status === "failed" && card.canCarryOn && mac && card.deviceId === mac.id && (
               <button type="button" onClick={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: mac.id }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
                 Carry on where it stopped
               </button>
+            )}
+            {card.status === "editing" && <span className="text-xs text-text-dim">Stuck (say the helper restarted)? Press Stop - then you can carry on where it left off.</span>}
+            {card.status === "failed" && card.canCarryOn && mac && card.deviceId && card.deviceId !== mac.id && (
+              <CarryOnElsewhere was={devices.find((d) => d.id === card.deviceId)} on={mac} onCarryOn={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: card.deviceId }))} />
             )}
             {card.status === "ready" && (
               <button type="button" onClick={() => act(() => call(api, "PATCH", { status: "done" }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-good hover:text-good">
