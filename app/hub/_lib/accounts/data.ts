@@ -45,7 +45,7 @@ async function trackedAccounts(userId: string): Promise<Tracked[]> {
   const db = adminClient();
   const [brand, workspaces, projects] = await Promise.all([
     getBrand(userId),
-    db.from("hub_workspaces").select("project_id, data").eq("user_id", userId).not("project_id", "in", `(${BRAND_ID},${ACCOUNTS_ID})`),
+    db.from("hub_workspaces").select("project_id, data").eq("user_id", userId).not("project_id", "in", `(${BRAND_ID},${ACCOUNTS_ID})`).not("project_id", "like", "%:%"),
     db.from("hub_projects").select("id, data").eq("user_id", userId),
   ]);
   // Ended and lost jobs drop off (no point paying to refresh them); their history stays in the database.

@@ -3,17 +3,18 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { adminClient } from "../supabase/admin";
 import type { HubUser } from "../supabase/server";
 import { StudioError, ask } from "./claude";
-import { getWorkspace, saveSheet, saveWorkspace } from "./data";
+import { getSheet, getWorkspace, saveSheet, saveWorkspace, updateSheet } from "./data";
 import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
 import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
 import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
-import { imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
+import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
 import { socialVideoKind, videoBlocks, watchVideos } from "./videos";
 import { readOnMac } from "../edits/mac-reads";
 import type { Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
 import { canUse } from "../features";
-import { createEdit } from "../edits/data";
+import { createEdit, deleteEdit, listEdits, updateEdit } from "../edits/data";
+import type { SheetChat, WeekInput } from "./chats";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types";
 
 /* The three things Studio asks Claude to do for a job: set it up from the
@@ -105,93 +106,141 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     files: { ...ws.files, brief: result.brief, appNotes: result.appNotes, references: result.references || ws.files.references },
     clientQuestions: result.clientQuestions,
     needsDan: result.needsDan,
-    couldntOpen: [...new Set([...linked.failed, ...macFailed, ...watched.failed, ...result.couldntOpen])],
+    couldntOpen: couldntOpenOnce(linked.failed, macFailed, watched.failed, result.couldntOpen),
   });
 }
 
 /* ---- This week's shoot sheet ---- */
 
-export async function makeShootSheet(
-  user: HubUser,
-  projectId: string,
-  input: { videos: number; filmingOn: string; lastWeek: string; trending: string; weekBrief: string; uploads: Upload[] },
-  progress: Progress = () => {},
-) {
+/** A brief's links read for Claude: public pages, pages on your Mac, and reference videos. */
+async function readBrief(userId: string, text: string, alsoWatch: string, progress: Progress) {
+  progress("Reading the linked pages");
+  const linked = await readLinkedPages(text);
+  const { rest, failed: macFailed } = await readOtherLinks(userId, text, linked, progress);
+  // Reference videos in the brief (or what's trending), as frames Claude can look at.
+  progress("Watching the reference videos");
+  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages);
+  return { linked, rest, watched, failed: [...linked.failed, ...macFailed, ...watched.failed] };
+}
+
+/** Claude writes the sheet: in the job's own template (from its Claude Project) when it has one, else the Creator Desk sheet. */
+async function writeSheet(brand: string, ws: Workspace, content: Anthropic.Beta.BetaContentBlockParam[], webFetch: boolean, date: string, progress: Progress) {
+  progress("Claude is writing the sheet");
+  const block = ws.template ? weekDataBlock(ws.template) : null;
+  const onFixUp = () => progress("Claude is fixing its answer");
+  if (block) {
+    const result = await ask({
+      system: SYSTEM_SHEET_TEMPLATE,
+      context: workspaceContext(brand, ws),
+      content: [
+        ...content,
+        { type: "text", text: `The template's WEEK DATA block (constants: ${block.names.join(", ")}):\n\n${block.source}\n\nAnd its header, with the text to fill in brackets:\n${headerOf(ws.template)}` },
+      ],
+      schema: CustomSheetResult,
+      webFetch,
+      effort: "medium",
+      onFixUp,
+    });
+    const read = readTemplateData(result.dataJson, block.names);
+    if ("error" in read) throw new StudioError(read.error);
+    const header = { title: result.title, kicker: result.kicker, h1: result.h1, summary: result.summary };
+    const sheet: CustomSheet = { ...read.data, videos: read.data.videos as CustomSheet["videos"], custom: { html: fillTemplate(ws.template, header, read.data), header } };
+    return { sheet, title: `${result.h1} · ${date}`, scriptBankEntry: result.scriptBankEntry, oneLine: result.oneLine, couldntOpen: result.couldntOpen };
+  }
+  const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(brand, ws), content, schema: SheetResult, webFetch, effort: "medium", onFixUp });
+  return { sheet: result.sheet as SheetData | CustomSheet, title: `${result.sheet.h1} · ${date}`, scriptBankEntry: result.scriptBankEntry, oneLine: result.oneLine, couldntOpen: result.couldntOpen };
+}
+
+/** Put a sheet's hooks in the script bank, newest first (so the next sheet sees what's already been made), in place of its old ones. */
+async function bankHooks(userId: string, projectId: string, ws: Workspace, title: string, hooks: string, replacing?: string) {
+  const entry = `## ${title}\n${hooks.trim()}`;
+  const bank = ws.files.scriptBank.trim();
+  const rest = replacing && bank.includes(replacing) ? bank.replace(replacing, "").replace(/\n{3,}/g, "\n\n").trim() : bank;
+  await saveWorkspace(userId, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, rest].filter(Boolean).join("\n\n") } });
+  return entry;
+}
+
+export async function makeShootSheet(user: HubUser, projectId: string, input: WeekInput & { followUps?: string[] }, progress: Progress = () => {}) {
   const job = await projectBasics(user.id, projectId);
-  let ws = await getWorkspace(user.id, projectId);
+  const ws = await getWorkspace(user.id, projectId);
   // This week's brief from the brand is for this sheet only: the project brief (Files tab) never changes here.
   // Public Notion pages and Google Docs in it are read here and sent with it.
-  progress("Reading the linked pages");
-  const linked = await readLinkedPages(input.weekBrief);
-  const { rest, failed: macFailed } = await readOtherLinks(user.id, input.weekBrief, linked, progress);
-  const weekBrief = [input.weekBrief.trim(), linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
-  // Reference videos in the brief or what's trending, as frames Claude can look at.
-  progress("Watching the reference videos");
-  const watched = await watchVideos([input.weekBrief, input.trending].join("\n"), linked.pages);
+  const followUps = (input.followUps ?? []).join("\n\n");
+  const read = await readBrief(user.id, [input.weekBrief, followUps].join("\n"), input.trending, progress);
+  const weekBrief = [input.weekBrief.trim(), linkedPagesText(read.linked.pages)].filter(Boolean).join("\n\n");
 
   const ask_ = weekBrief
-    ? `Here's this week's brief from the brand, for this week's videos (the project brief file still applies)${rest.length ? " - open its links for the full details" : ""}. Pull out the formats, deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.\n\n<this_weeks_brief>\n${weekBrief}\n</this_weeks_brief>`
+    ? `Here's this week's brief from the brand, for this week's videos (the project brief file still applies)${read.rest.length ? " - open its links for the full details" : ""}. Pull out the formats, deliverables, deadlines and must-haves, flag anything unclear in prep, then give me the shoot sheet with ${input.videos} videos.\n\n<this_weeks_brief>\n${weekBrief}\n</this_weeks_brief>`
     : `I need this week's content: ${input.videos} videos.`;
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
     ...uploadsToBlocks(input.uploads),
     // Images from the linked pages (market cards, photos) so Claude can see them, not just their names.
-    ...imageBlocks(linked.images),
-    ...videoBlocks(watched),
+    ...imageBlocks(read.linked.images),
+    ...videoBlocks(read.watched),
     {
       type: "text",
       text: [
         ask_,
         // Web fetch opens links that are in the request itself.
-        rest.length > 0 && `Links in this week's brief: ${rest.join(" ")}`,
+        read.rest.length > 0 && `Links in this week's brief: ${read.rest.join(" ")}`,
         `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
         input.lastWeek && `How last week went: ${input.lastWeek}`,
         input.trending && `Doing well in the niche right now - adapt these for the app:\n${input.trending}`,
+        // Added in the chat after the first try didn't work out.
+        followUps && `Since I first asked, I've added:\n${followUps}`,
       ]
         .filter(Boolean)
         .join("\n\n"),
     },
   ];
   const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-
-  progress("Claude is writing the sheet");
-  // The job's own template (from its Claude Project) when it has one, else the Creator Desk sheet.
-  const block = ws.template ? weekDataBlock(ws.template) : null;
-  let sheet: SheetData | CustomSheet;
-  let title: string, scriptBankEntry: string, oneLine: string, couldntOpen: string[];
-  if (block) {
-    const result = await ask({
-      system: SYSTEM_SHEET_TEMPLATE,
-      context: workspaceContext(job.brand, ws),
-      content: [
-        ...content,
-        { type: "text", text: `The template's WEEK DATA block (constants: ${block.names.join(", ")}):\n\n${block.source}\n\nAnd its header, with the text to fill in brackets:\n${headerOf(ws.template)}` },
-      ],
-      schema: CustomSheetResult,
-      webFetch: rest.length > 0,
-      effort: "medium",
-      onFixUp: () => progress("Claude is fixing its answer"),
-    });
-    const read = readTemplateData(result.dataJson, block.names);
-    if ("error" in read) throw new StudioError(read.error);
-    const header = { title: result.title, kicker: result.kicker, h1: result.h1, summary: result.summary };
-    sheet = { ...read.data, videos: read.data.videos as CustomSheet["videos"], custom: { html: fillTemplate(ws.template, header, read.data), header } };
-    ({ scriptBankEntry, oneLine, couldntOpen } = result);
-    title = `${result.h1} · ${date}`;
-  } else {
-    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, webFetch: rest.length > 0, effort: "medium", onFixUp: () => progress("Claude is fixing its answer") });
-    sheet = result.sheet;
-    ({ scriptBankEntry, oneLine, couldntOpen } = result);
-    title = `${result.sheet.h1} · ${date}`;
-  }
+  const made = await writeSheet(job.brand, ws, content, read.rest.length > 0, date, progress);
 
   // This week's brief is kept with the sheet it was for.
   progress("Saving the sheet and its edit cards");
-  const id = await saveSheet(user.id, projectId, title, weekBrief ? { ...sheet, weekBrief } : sheet);
-  // Newest first, so the next sheet sees what's already been made.
-  const entry = `## ${title}\n${scriptBankEntry.trim()}`;
-  ws = await saveWorkspace(user.id, projectId, { ...ws, files: { ...ws.files, scriptBank: [entry, ws.files.scriptBank.trim()].filter(Boolean).join("\n\n") } });
-  await makeEditCards(user, projectId, id, title, sheet);
-  return { id, oneLine, couldntOpen: [...new Set([...linked.failed, ...macFailed, ...watched.failed, ...couldntOpen])], workspace: ws };
+  const id = await saveSheet(user.id, projectId, made.title, weekBrief ? { ...made.sheet, weekBrief } : made.sheet);
+  const bankEntry = await bankHooks(user.id, projectId, ws, made.title, made.scriptBankEntry);
+  await makeEditCards(user, projectId, id, made.title, made.sheet);
+  return { id, title: made.title, oneLine: made.oneLine, couldntOpen: couldntOpenOnce(read.failed, made.couldntOpen), bankEntry };
+}
+
+/** A reply in the sheet's chat: Claude changes the sheet as asked, keeping the rest. */
+export async function reviseShootSheet(user: HubUser, projectId: string, chat: SheetChat, reply: string, progress: Progress = () => {}) {
+  const row = chat.sheetId ? await getSheet(user.id, chat.sheetId) : null;
+  if (!row || row.project_id !== projectId) throw new StudioError("That shoot sheet has been deleted - start a new one.");
+  const job = await projectBasics(user.id, projectId);
+  const ws = await getWorkspace(user.id, projectId);
+  const read = await readBrief(user.id, reply, "", progress);
+  const { weekBrief, custom, ...data } = row.data as CustomSheet & { weekBrief?: string };
+  const current = custom ? { header: custom.header, ...data } : data;
+  const conversation = chat.messages.map((m) => `${m.role === "you" ? "Me" : "You"}: ${m.text}`).join("\n\n");
+  const content: Anthropic.Beta.BetaContentBlockParam[] = [
+    ...imageBlocks(read.linked.images),
+    ...videoBlocks(read.watched),
+    {
+      type: "text",
+      text: [
+        weekBrief && `This week's brief from the brand:\n<this_weeks_brief>\n${weekBrief}\n</this_weeks_brief>`,
+        `Our conversation about this week's shoot sheet so far:\n<conversation>\n${conversation}\n</conversation>`,
+        `The shoot sheet as it stands:\n<current_sheet>\n${JSON.stringify(current)}\n</current_sheet>`,
+        `My reply:\n<reply>\n${reply}\n</reply>`,
+        read.linked.pages.length > 0 && `Pages linked in my reply:\n${linkedPagesText(read.linked.pages)}`,
+        read.rest.length > 0 && `Links in my reply: ${read.rest.join(" ")}`,
+        `Today is ${today()}. Make the changes I'm asking for and give me the whole sheet back, with everything I haven't asked to change kept as it is. If I've just added context, use it where it fits. oneLine: one sentence on what you changed. scriptBankEntry: the hooks for the sheet as it now stands.`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    },
+  ];
+  // The sheet keeps the date it was made for.
+  const date = row.title.split(" · ").at(-1) ?? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const made = await writeSheet(job.brand, ws, content, read.rest.length > 0, date, progress);
+
+  progress("Saving the sheet and its edit cards");
+  await updateSheet(user.id, row.id, made.title, weekBrief ? { ...made.sheet, weekBrief } : made.sheet);
+  const bankEntry = await bankHooks(user.id, projectId, ws, made.title, made.scriptBankEntry, chat.bankEntry);
+  await refreshEditCards(user, projectId, row.id, made.title, made.sheet);
+  return { id: row.id, title: made.title, oneLine: made.oneLine, couldntOpen: couldntOpenOnce(read.failed, made.couldntOpen), bankEntry };
 }
 
 /** The template's header markup, so Claude can see the bracketed text to fill. */
@@ -220,6 +269,26 @@ export async function fridayReview(user: HubUser, projectId: string, input: { nu
     files: { ...ws.files, winners: result.winners },
     lastReview: { at: new Date().toISOString(), moreOf: result.moreOf, lessOf: result.lessOf, nextWeek: result.nextWeek },
   });
+}
+
+/** A changed sheet's edit cards follow it: ones not started yet get the new brief, new videos get cards, dropped ones go. Started ones are left alone. */
+async function refreshEditCards(user: HubUser, projectId: string, sheetId: string, title: string, sheet: SheetData | CustomSheet) {
+  if (!(await canUse(user, "edits"))) return;
+  try {
+    const cards = (await listEdits(user.id, projectId)).filter((c) => c.sheetId === sheetId);
+    const wanted = [
+      { videoCode: WHOLE_SHEET, title: `${title} - all ${sheet.videos.length} videos`, brief: briefForWholeSheet(sheet) },
+      ...sheet.videos.map((v) => ({ videoCode: String(v.code), title: String(v.title ?? ""), brief: briefFromSheet(sheet, String(v.code)) })),
+    ];
+    for (const w of wanted) {
+      const card = cards.find((c) => c.videoCode === w.videoCode);
+      if (!card) await createEdit(user.id, { projectId, sheetId, ...w });
+      else if (card.status === "todo") await updateEdit(user.id, card.id, { title: w.title, brief: w.brief });
+    }
+    for (const c of cards) if (c.status === "todo" && !wanted.some((w) => w.videoCode === c.videoCode)) await deleteEdit(user.id, c.id);
+  } catch (e) {
+    console.error("Creator Desk: couldn't update edit cards", e);
+  }
 }
 
 /** With Edits on, a new shoot sheet comes with its edit cards ready: one for the whole week, then one per video. */

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjects } from "../../../_lib/store";
 import { shortDate } from "../../../_lib/ui";
@@ -8,6 +9,8 @@ import { ACCOUNT_CHECKS, FILES, type Profile, type SheetSummary, type Workspace 
 import { Field, Section, input } from "../../fields";
 import { useFeature } from "../../../account-provider";
 import { Edits } from "./edits";
+import { ChatList, ChatView, CouldntOpen, type OpenChat } from "./sheet-chat";
+import type { ChatSummary } from "../../../_lib/studio/chats";
 import { weekDataBlock } from "../../../_lib/studio/custom-template";
 import { cleanHandle } from "../../../_lib/studio/brand-types";
 import { useConfirm } from "../../../_lib/popups";
@@ -218,19 +221,22 @@ function useJob(api: string, kind: TaskKind, onDone: (t: Task) => void) {
     handled.current = task.finishedAt;
     done.current(task);
   }, [task]);
-  async function run(body: unknown) {
+  /** Start it (at a sub-path, e.g. "week/reply"); false if it didn't start. */
+  async function run(body: unknown, path: string = kind) {
     setStarting(true);
     setStartedAt(new Date().toISOString());
     setError("");
     try {
-      await start(`${api}/${kind}`, body);
+      await start(`${api}/${path}`, body);
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setStarting(false);
     }
   }
-  return { busy, elapsed, task, error: error || (task?.status === "failed" ? task.error : ""), run, clear: () => task && dismiss(task.id) };
+  return { busy, elapsed, task, error: error || (task?.status === "failed" ? task.error : ""), startError: error, run, clear: () => task && dismiss(task.id) };
 }
 
 function JobButton({ busy, elapsed, label, busyLabel, step }: { busy: boolean; elapsed: string; label: string; busyLabel: string; step?: string }) {
@@ -315,12 +321,46 @@ function WeekTab({
     setSheets(r.sheets);
     setWeekBrief("");
   });
-  const made = job.task?.status === "done" && !job.busy ? (job.task.result as { id: string; oneLine: string; couldntOpen?: string[] } | null) : null;
+  // Each shoot sheet is a chat. The one open here: the one you picked (or a link opened), else the one being written; null shows the form for a new one.
+  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const linked = useSearchParams().get("chat");
+  const [picked, setPicked] = useState<string | null | undefined>(linked ?? undefined);
+  const [seenLink, setSeenLink] = useState(linked);
+  if (linked !== seenLink) {
+    setSeenLink(linked);
+    if (linked) setPicked(linked);
+  }
+  const [chat, setChat] = useState<OpenChat | null>(null);
+  const running = job.task?.status === "running" ? job.task.ref : undefined;
+  // A sheet being written stays open here once it's done.
+  if (running && picked === undefined) setPicked(running);
+  const openId = picked ?? null;
+  const task = job.task;
+  useEffect(() => {
+    let live = true;
+    const t = setTimeout(async () => {
+      const list = await call<{ chats: ChatSummary[] }>(`${api}/chats`, "GET").catch(() => null);
+      if (live && list) setChats(list.chats);
+      if (!openId) return live ? setChat(null) : undefined;
+      const res = await fetch(`${api}/chats?id=${openId}`, { cache: "no-store" }).catch(() => null);
+      const json = res?.ok ? ((await res.json()) as { chat: OpenChat }) : null;
+      if (live) setChat(json?.chat ?? null);
+    }, 0);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [api, openId, task?.status, task?.step, task?.finishedAt]);
 
   async function make(e: React.FormEvent) {
     e.preventDefault();
-    await job.run({ videos, filmingOn, lastWeek, trending, weekBrief, uploads });
+    const chatId = crypto.randomUUID();
+    setPicked(chatId);
+    setChat(null);
+    if (!(await job.run({ videos, filmingOn, lastWeek, trending, weekBrief, uploads, chatId }))) setPicked(null);
   }
+  const writing = running && running === openId ? `${task?.step && task.step !== "Starting" ? task.step : "Starting"}… ${job.elapsed}` : null;
+  const stopped = task?.ref === openId && task?.status === "failed" ? task.error : "";
 
   return (
     <div className="space-y-5">
@@ -334,63 +374,65 @@ function WeekTab({
       )}
 
       <Section title="This week's shoot sheet">
-        <form onSubmit={make} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
-            <Field label="Videos">
-              <input type="number" min={1} max={21} className={input} value={videos} onChange={(e) => setVideos(Math.max(1, Math.min(21, Number(e.target.value) || 1)))} />
-            </Field>
-            <Field label="Filming">
-              <input className={input} value={filmingOn} onChange={(e) => setFilmingOn(e.target.value)} />
-            </Field>
-          </div>
-          <Field
-            label="This week's brief"
-            hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full, and reference videos (uploaded to the page, or TikTok and Instagram links) are watched frame by frame. Pages that need you logged in are read in Chrome on your Mac while the Creator Desk Helper is running. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
-          >
-            <textarea rows={5} className={input} value={weekBrief} onChange={(e) => setWeekBrief(e.target.value)} placeholder="Paste what the brand sent, or the link to it…" />
-          </Field>
-          <Field label="How last week went" hint="What did best, what flopped. Or leave it for the Friday review to cover.">
-            <textarea rows={2} className={input} value={lastWeek} onChange={(e) => setLastWeek(e.target.value)} placeholder="The 'Pingo Laughs' restaurant one hit 40k, the SAY IT!!! ones stalled under 1k…" />
-          </Field>
-          <Field label="Trending in the niche (optional)" hint="Describe 2-3 videos doing well (hook, format, length) and they'll be adapted for the app.">
-            <textarea rows={2} className={input} value={trending} onChange={(e) => setTrending(e.target.value)} />
-          </Field>
-          <FilePicker accept="image/png,image/jpeg,image/webp,application/pdf" label="Screenshots or PDFs (optional)" onChange={setUploads} />
-          <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
-          {job.error && <p className="text-sm text-accent">{job.error}</p>}
-        </form>
-        {made && (
-          <div className="space-y-2 rounded-xl bg-good-soft px-4 py-3 text-sm text-good">
-            <p>{made.oneLine.trim().replace(/([^.!?])$/, "$1.")} Its hooks are now in the script bank.</p>
-            {(made.couldntOpen ?? []).length > 0 && (
-              <div className="rounded-lg bg-warn-soft px-3 py-2 text-warn">
-                <p className="font-semibold">Claude couldn&apos;t open:</p>
-                <ul className="list-disc pl-5">
-                  {(made.couldntOpen ?? []).map((c) => (
-                    <li key={c} className="break-words">
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-1">If any of these matter for this week, paste their text or a working link into this week&apos;s brief and make the sheet again.</p>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-4">
-              <a href={`/hub/studio/sheets/${made.id}`} target="_blank" rel="noopener" className="inline-block font-semibold underline">
-                Open the shoot sheet →
-              </a>
-              {goEdits && (
-                <button type="button" onClick={goEdits} className="font-semibold underline">
-                  Edit cards are ready - once you&apos;ve filmed, edit them →
-                </button>
-              )}
-              <button type="button" onClick={job.clear} className="ml-auto underline opacity-80">
-                Clear
-              </button>
+        {openId ? (
+          <ChatView
+            key={openId}
+            chat={chat}
+            busy={job.busy}
+            writing={writing ?? (job.busy && !running ? `Starting… ${job.elapsed}` : null)}
+            stopped={stopped}
+            error={job.startError}
+            onReply={(message) => job.run({ chatId: openId, message }, "week/reply")}
+            onNew={() => setPicked(null)}
+            goEdits={goEdits}
+          />
+        ) : (
+          <form onSubmit={make} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
+              <Field label="Videos">
+                <input type="number" min={1} max={21} className={input} value={videos} onChange={(e) => setVideos(Math.max(1, Math.min(21, Number(e.target.value) || 1)))} />
+              </Field>
+              <Field label="Filming">
+                <input className={input} value={filmingOn} onChange={(e) => setFilmingOn(e.target.value)} />
+              </Field>
             </div>
-          </div>
+            <Field
+              label="This week's brief"
+              hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full, and reference videos (uploaded to the page, or TikTok and Instagram links) are watched frame by frame. Pages that need you logged in are read in Chrome on your Mac while the Creator Desk Helper is running. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
+            >
+              <textarea rows={5} className={input} value={weekBrief} onChange={(e) => setWeekBrief(e.target.value)} placeholder="Paste what the brand sent, or the link to it…" />
+            </Field>
+            <Field label="How last week went" hint="What did best, what flopped. Or leave it for the Friday review to cover.">
+              <textarea rows={2} className={input} value={lastWeek} onChange={(e) => setLastWeek(e.target.value)} placeholder="The 'Pingo Laughs' restaurant one hit 40k, the SAY IT!!! ones stalled under 1k…" />
+            </Field>
+            <Field label="Trending in the niche (optional)" hint="Describe 2-3 videos doing well (hook, format, length) and they'll be adapted for the app.">
+              <textarea rows={2} className={input} value={trending} onChange={(e) => setTrending(e.target.value)} />
+            </Field>
+            <FilePicker accept="image/png,image/jpeg,image/webp,application/pdf" label="Screenshots or PDFs (optional)" onChange={setUploads} />
+            <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
+            {job.error && <p className="text-sm text-accent">{job.error}</p>}
+          </form>
         )}
       </Section>
+
+      {chats.length > 0 && (
+        <Section title="Shoot sheet chats">
+          <ChatList
+            chats={chats}
+            openId={openId}
+            runningId={running}
+            onOpen={(id) => {
+              setPicked(id);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onDelete={async (id) => {
+              await call(`${api}/chats?id=${id}`, "DELETE").catch(() => {});
+              setChats((cs) => cs.filter((c) => c.id !== id));
+              if (id === openId) setPicked(null);
+            }}
+          />
+        </Section>
+      )}
 
       <SheetList sheets={sheets} setSheets={setSheets} />
     </div>
@@ -470,16 +512,7 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
               </ul>
             </div>
           )}
-          {ws.couldntOpen.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold">Couldn&apos;t open</h3>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-text-muted">
-                {ws.couldntOpen.map((q) => (
-                  <li key={q}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {ws.couldntOpen.length > 0 && <CouldntOpen items={ws.couldntOpen} />}
           <button type="button" onClick={() => edit({ ...ws, clientQuestions: [], needsDan: [], couldntOpen: [] })} className="text-xs text-text-dim hover:text-text">
             Clear this list
           </button>

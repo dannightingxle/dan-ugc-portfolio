@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -680,8 +680,17 @@ function startClaude(editId, prompt, sessionId) {
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--allowedTools", ...cfg.allowedTools];
   if (sessionId) args.push("--resume", sessionId);
   log(`${sessionId ? "Carrying on" : "Starting"} the edit with Claude Code…`);
+  try {
+    fs.mkdirSync(cfg.workdir, { recursive: true });
+  } catch {}
   const child = spawn(cfg.claude, args, { cwd: cfg.workdir, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
   running.set(editId, child);
+  // If Claude Code can't start at all, say so on the card instead of the helper falling over.
+  child.on("error", (e) => {
+    stderr = `Couldn't start Claude Code (${cfg.claude}): ${e.code === "ENOENT" ? "it isn't installed, or isn't where the helper looks. In Terminal, run: claude --version" : e.message}`;
+    finish(-1, null);
+  });
+  child.stdin.on("error", () => {});
   child.stdin.end(prompt);
 
   let buffer = "";
@@ -732,7 +741,11 @@ function startClaude(editId, prompt, sessionId) {
     stderr = (stderr + c).slice(-4000);
   });
 
-  child.on("close", async (code, signal) => {
+  child.on("close", (code, signal) => finish(code, signal));
+  let finished = false;
+  async function finish(code, signal) {
+    if (finished) return;
+    finished = true;
     clearInterval(timer);
     running.delete(editId);
     // One draft, or one per video for a whole shoot sheet.
@@ -763,7 +776,7 @@ function startClaude(editId, prompt, sessionId) {
       await update(editId, { status: "editing", delivered: queued.map((r) => r.eventId) });
       startClaude(editId, queued.map((r) => r.text).join("\n\n"), session);
     }
-  });
+  }
 }
 
 async function handleWork(work) {

@@ -22,6 +22,8 @@ export type Task = {
   finishedAt: string | null;
   /** What it's doing right now. */
   step?: string;
+  /** What it's for (a shoot sheet's chat). */
+  ref?: string;
   result: unknown;
   error: string;
 };
@@ -31,6 +33,8 @@ export type EditJob = { id: string; projectId: string; brand: string; title: str
 
 export const LABEL: Record<TaskKind, string> = { intake: "Setting up the job", week: "Shoot sheet", review: "Friday review" };
 export const TAB: Record<TaskKind, string> = { intake: "setup", week: "week", review: "review" };
+/** The job's page for a task (a shoot sheet opens at its chat). */
+export const taskHref = (t: Task) => `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}${t.ref ? `&chat=${t.ref}` : ""}`;
 const POLL_MS = 4000;
 // With nothing going, a slower check picks up edits started elsewhere.
 const IDLE_POLL_MS = 30_000;
@@ -178,7 +182,7 @@ function TaskTray() {
 
 function TaskRow({ task: t, onDismiss }: { task: Task; onDismiss: () => void }) {
   const elapsed = useElapsed(t.startedAt, t.status === "running");
-  const href = `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}`;
+  const href = taskHref(t);
   const tone = t.status === "done" ? "border-good/40" : t.status === "failed" ? "border-warn/40" : "border-border";
   return (
     <div className={`flex items-start gap-3 rounded-xl border ${tone} bg-bg-card px-3 py-2.5 text-sm shadow-lg`}>

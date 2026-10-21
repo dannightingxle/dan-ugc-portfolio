@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useFeature } from "../../account-provider";
-import { EDIT_LABEL, type EditJob, LABEL, TAB, type Task, editHref, editName, useElapsed, useTasks } from "./tasks-client";
+import { EDIT_LABEL, type EditJob, LABEL, type Task, editHref, editName, taskHref, useElapsed, useTasks } from "./tasks-client";
 
 /* The Jobs button in the top bar: everything going on across your jobs - shoot
    sheets, set-ups and reviews being written, and edits on your Mac - and
@@ -78,7 +78,7 @@ function TaskItem({ t, onPick, onClear }: { t: Task; onPick: () => void; onClear
   const what = t.status === "running" ? `${t.step && t.step !== "Starting" ? t.step : "Working"}… ${elapsed}` : t.status === "done" ? "Ready - open it" : t.error;
   return (
     <li className="flex items-start gap-2 rounded-xl px-2 py-1.5 hover:bg-bg-elevated">
-      <Link href={`/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}`} onClick={onPick} className="min-w-0 flex-1">
+      <Link href={taskHref(t)} onClick={onPick} className="min-w-0 flex-1">
         <span className="block truncate font-medium">
           {t.brand} · {LABEL[t.kind]}
         </span>

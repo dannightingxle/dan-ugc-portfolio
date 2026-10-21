@@ -23,6 +23,8 @@ export type Task = {
   step: string;
   /** Last sign of life from the server running it (every 30s while it runs). */
   aliveAt?: string;
+  /** What it's for, when there's more than one (a shoot sheet's chat). */
+  ref?: string;
   /** What the page shows when it's done (e.g. the new sheet's id and one-line summary). */
   result: unknown;
   error: string;
@@ -49,6 +51,7 @@ function fromRow(projectId: string, data: Partial<Task> | null): Task | null {
     finishedAt: data.finishedAt ?? null,
     step: data.step ?? "",
     aliveAt: data.aliveAt,
+    ref: data.ref,
     result: data.result ?? null,
     error: data.error ?? "",
   };
@@ -70,11 +73,11 @@ async function save(userId: string, task: Task) {
 }
 
 /** Start a job in the background. Refuses a second run of the same job on the same project while one is going. */
-export async function startTask(user: HubUser, projectId: string, kind: TaskKind, work: (progress: Progress) => Promise<unknown>): Promise<Task> {
+export async function startTask(user: HubUser, projectId: string, kind: TaskKind, work: (progress: Progress) => Promise<unknown>, ref?: string): Promise<Task> {
   const current = (await listTasks(user.id)).find((t) => t.projectId === projectId && t.kind === kind);
   if (current?.status === "running") throw new StudioError("That's already running for this job - it'll show here when it's done.");
   const now = new Date().toISOString();
-  const task: Task = { id: rowId(projectId, kind), projectId, kind, status: "running", startedAt: now, aliveAt: now, finishedAt: null, step: "Starting", result: null, error: "" };
+  const task: Task = { id: rowId(projectId, kind), projectId, kind, status: "running", startedAt: now, aliveAt: now, ref, finishedAt: null, step: "Starting", result: null, error: "" };
   await save(user.id, task);
   after(async () => {
     // Each step is saved as it starts, so the page can show it (and say where a slow job got to).
