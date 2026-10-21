@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useFeature } from "../../account-provider";
+import { BRAND_ID } from "./brand-types";
 
 /* Studio's background jobs and the edits on your Mac, on every page: which
    are going, and which are ready or need you, checked every few seconds
@@ -39,7 +40,7 @@ const POLL_MS = 4000;
 // With nothing going, a slower check picks up edits started elsewhere.
 const IDLE_POLL_MS = 30_000;
 export const EDIT_LABEL: Record<EditJob["status"], string> = { queued: "Waiting for your Mac", editing: "Editing on your Mac", needs_you: "Needs you", ready: "Ready to check in CapCut", failed: "Stopped" };
-export const editHref = (e: EditJob) => `/hub/projects/${e.projectId}/studio?tab=edits`;
+export const editHref = (e: EditJob) => (e.projectId === BRAND_ID ? "/hub/studio/brand?tab=edits" : `/hub/projects/${e.projectId}/studio?tab=edits`);
 export const editName = (e: EditJob) => [e.brand, e.videoCode === "ALL" ? "whole sheet" : e.videoCode, e.title].filter(Boolean).join(" · ");
 const editKey = (e: EditJob) => `${e.id}:${e.status}`;
 const SEEN = "cd-edit-alerts-cleared";
@@ -159,7 +160,7 @@ function TaskTray() {
   const { tasks, edits, cleared, clearEdit, dismiss } = useTasks();
   const path = usePathname();
   // The job's own page shows its result, so the tray leaves that one out.
-  const here = /^\/hub\/projects\/([^/]+)\/studio/.exec(path)?.[1];
+  const here = path.startsWith("/hub/studio/brand") ? BRAND_ID : /^\/hub\/projects\/([^/]+)\/studio/.exec(path)?.[1];
   const shown = tasks.filter((t) => t.status === "running" || t.projectId !== here);
   const alerts = edits.filter((e) => editNeedsLook(e) && !cleared.has(editKey(e)) && e.projectId !== here);
   if (!shown.length && !alerts.length) return null;

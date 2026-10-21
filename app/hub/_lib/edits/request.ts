@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { crossSite } from "../same-origin";
 import { BRAND_ID, studioApiUser, validProjectId } from "../studio/data";
+import { ALL_EDITS } from "./types";
 import type { HubUser } from "../supabase/server";
 
 /* Shared plumbing for the Edits API routes the web app calls (the helper's own routes use a device token instead). */
@@ -21,7 +22,11 @@ export async function editsApi<S extends z.ZodType>(
   let body: unknown = {};
   if (schema) {
     const parsed = schema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return Response.json({ error: "That request didn't look right." }, { status: 400 });
+    if (!parsed.success) {
+      // Our own checks ("Start the folder with ~/…") say what's wrong; anything else is a malformed request.
+      const own = parsed.error.issues.find((i) => i.code === "custom");
+      return Response.json({ error: own?.message ?? "That request didn't look right." }, { status: 400 });
+    }
     body = parsed.data;
   }
   try {
@@ -38,3 +43,5 @@ export class NotFound extends Error {}
 export class BadRequest extends Error {}
 /** A job, or the personal brand: both can have edit cards. */
 export const editableProject = (id: unknown): id is string => validProjectId(id) || id === BRAND_ID;
+/** Whose editing notes: a job, the personal brand, or all edits. */
+export const validScope = (scope: unknown): scope is string => scope === ALL_EDITS || editableProject(scope);

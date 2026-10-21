@@ -35,7 +35,10 @@ export function BrandStudio() {
         setBrand(r.brand);
         setSheets(r.sheets);
         setFlags({ claude: r.claude, apify: r.apify });
-        if (!r.brand.accounts.length && !r.brand.tracked.length && !r.brand.ideaAccounts.length) setTab("setup");
+        // A link can open a tab directly (e.g. ?tab=edits from the Jobs list).
+        const asked = new URLSearchParams(window.location.search).get("tab");
+        if (asked && ["ideas", "week", "trials", "edits", "setup", "files"].includes(asked)) setTab(asked as Tab);
+        else if (!r.brand.accounts.length && !r.brand.tracked.length && !r.brand.ideaAccounts.length) setTab("setup");
       })
       .catch((e: Error) => setLoadError(e.message));
   }, []);

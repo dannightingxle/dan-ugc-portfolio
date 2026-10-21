@@ -7,13 +7,14 @@ import type { SheetSummary } from "../../../_lib/studio/types";
 import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
 import { Tooltip, useConfirm } from "../../../_lib/popups";
+import { EditingNotes } from "../../../studio/notes/notes";
 
 /* Edit cards: one per video. Pick the clips (from your Mac's latest videos or
    its file picker), press Edit in CapCut, and the Creator Desk Helper on your
    Mac hands it to your Claude Code and CapCut. The conversation shows here and
    you can reply to it. */
 
-type Data = { edits: EditCard[]; devices: Device[]; files: DeviceFile[] };
+type Data = { edits: EditCard[]; devices: Device[]; files: DeviceFile[]; folder?: string };
 const BUSY = new Set(["queued", "editing"]);
 /** Claude Code on the Mac needs signing in again (expired or missing login). */
 const signedOut = (text: string) => /OAuth|401|authenticat|\/login|not logged in|invalid api key/i.test(text);
@@ -71,10 +72,30 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
   return (
     <div className="space-y-5">
       <MacBar devices={macs} mac={mac} onChoose={chooseMac} />
-      <AddCards projectId={projectId} sheets={sheets} onAdded={(cards) => setData((d) => d && { ...d, edits: [...d.edits.filter((e) => !cards.some((c) => c.id === e.id)), ...cards] })} />
+      {mac && <FolderSetting projectId={projectId} folder={data.folder ?? ""} usual={mac.info.workdir} onSaved={(folder) => setData((d) => d && { ...d, folder })} />}
+      <details className="group rounded-xl border border-border bg-bg-card px-4 py-3 text-sm">
+        <summary className="cursor-pointer font-medium">
+          Editing notes for this job <span className="font-normal text-text-dim">- how you want these edited, remembered for every edit</span>
+        </summary>
+        <div className="mt-3">
+          <EditingNotes scope={projectId} compact />
+          <Link href="/hub/studio/notes" className="mt-3 inline-block text-xs text-accent hover:underline">
+            Notes for all your edits →
+          </Link>
+        </div>
+      </details>
+      <AddCards
+        projectId={projectId}
+        sheets={sheets}
+        onAdded={(cards) => {
+          setData((d) => d && { ...d, edits: [...d.edits.filter((e) => !cards.some((c) => c.id === e.id)), ...cards] });
+          // One new card: open it, ready to pick the clips.
+          if (cards.length === 1) setOpen(cards[0].id);
+        }}
+      />
       {data.edits.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border-strong bg-bg-card p-4 text-sm text-text-muted">
-          No edit cards yet. Make them from a shoot sheet above, or paste a video card from one of your Claude Projects.
+          No edit cards yet. Start a new edit in your own words, make them from a shoot sheet above, or paste a video card from one of your Claude Projects.
         </p>
       ) : (
         <div className="space-y-3">
@@ -149,9 +170,70 @@ function MacBar({ devices, mac, onChoose }: { devices: Device[]; mac: Device | u
   );
 }
 
+/** The folder on your Mac this job's edits start in, so Claude Code picks up that folder's CLAUDE.md, notes and skills. */
+function FolderSetting({ projectId, folder, usual, onSaved }: { projectId: string; folder: string; usual?: string; onSaved: (folder: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(folder);
+  const [error, setError] = useState("");
+  const home = (p?: string) => (p ?? "").replace(/^\/Users\/[^/]+/, "~");
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      const r = await call<{ folder: string }>("/api/hub/edits", "PATCH", { projectId, folder: value });
+      onSaved(r.folder);
+      setValue(r.folder);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+  if (!editing) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-text-muted">
+        <span>
+          Claude Code works in <code className="text-text">{folder || home(usual) || "your usual folder"}</code>
+          {folder ? " for this job" : " (the helper's usual folder)"}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setValue(folder);
+            setEditing(true);
+          }}
+          className="font-medium text-accent hover:underline"
+        >
+          Change
+        </button>
+      </p>
+    );
+  }
+  return (
+    <form onSubmit={save} className="space-y-2 rounded-xl border border-border bg-bg-card p-3 text-sm">
+      <label className="block space-y-1">
+        <span className="font-medium">Folder on your Mac for this job&apos;s edits</span>
+        <input className={input} value={value} onChange={(e) => setValue(e.target.value)} placeholder={home(usual) || "~/Movies/shortform"} aria-label="Folder on your Mac for this job's edits" />
+        <span className="block text-xs text-text-dim">
+          Claude Code starts here, so this folder&apos;s CLAUDE.md, notes and skills apply - use the folder you edit this kind of video in now. In Finder, right-click the folder, hold Option and
+          choose &ldquo;Copy as Pathname&rdquo;. Leave it empty for the usual one{usual ? ` (${home(usual)})` : ""}.
+        </span>
+      </label>
+      <div className="flex items-center gap-3">
+        <button className="rounded-lg bg-accent px-3 py-1.5 font-medium text-on-accent hover:bg-accent-hover">Save</button>
+        <button type="button" onClick={() => setEditing(false)} className="text-text-muted hover:text-text">
+          Cancel
+        </button>
+      </div>
+      {error && <p className="text-accent">{error}</p>}
+    </form>
+  );
+}
+
 function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: SheetSummary[]; onAdded: (cards: EditCard[]) => void }) {
   const [sheetId, setSheetId] = useState(sheets[0]?.id ?? "");
   const [pasting, setPasting] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [whole, setWhole] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -163,7 +245,9 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
       const r = await call<{ edits: EditCard[] }>("/api/hub/edits", "POST", { projectId, ...body });
       onAdded(r.edits);
       setBrief("");
+      setTitle("");
       setPasting(false);
+      setWriting(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -190,10 +274,50 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
             </button>
           </>
         )}
-        <button type="button" onClick={() => setPasting(!pasting)} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+        <button
+          type="button"
+          onClick={() => {
+            setWriting(!writing);
+            setPasting(false);
+          }}
+          className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent"
+        >
+          {writing ? "Cancel" : "+ New edit"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setPasting(!pasting);
+            setWriting(false);
+          }}
+          className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent"
+        >
           {pasting ? "Cancel" : "Paste a card or shoot sheet"}
         </button>
       </div>
+      {writing && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void add({ title: title.trim(), brief });
+          }}
+          className="space-y-2"
+        >
+          <input className={input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's the video? e.g. Morning routine talking head" aria-label="What's the video?" maxLength={300} />
+          <textarea
+            rows={5}
+            className={input}
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder="How should it be edited? Say it the way you would in Claude Code: cut the pauses, captions in my usual style, hook text on screen, 30-40 seconds, B-roll of the gym from my Photos…"
+            aria-label="How should it be edited?"
+          />
+          <p className="text-xs text-text-dim">Next, pick its clips on the card, then press Edit in CapCut.</p>
+          <button disabled={busy || !brief.trim()} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+            Add edit
+          </button>
+        </form>
+      )}
       {pasting && (
         <div className="space-y-2">
           <textarea
@@ -574,6 +698,9 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
             Send
           </button>
         </div>
+      )}
+      {card.status !== "todo" && (
+        <p className="text-xs text-text-dim">Feedback that should stick for future edits (&ldquo;captions are always too big&rdquo;) is saved to this job&apos;s editing notes.</p>
       )}
       {error && <p className="text-sm text-accent">{error}</p>}
     </div>

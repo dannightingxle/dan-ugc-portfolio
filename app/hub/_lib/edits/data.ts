@@ -2,7 +2,8 @@ import "server-only";
 import { readsFor } from "./mac-reads";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
-import { DEFAULT_MAX_EDITS, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
+import { BRAND_ID } from "../studio/brand-types";
+import { ALL_EDITS, DEFAULT_MAX_EDITS, type EditNote, type NotesChatMessage, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
 
 /* Edit cards, their conversations, and the Macs that run them. Every query is
    scoped to one user here; the tables themselves are server-only. */
@@ -165,6 +166,53 @@ export async function touchDevice(deviceId: string, info?: Record<string, unknow
     .eq("id", deviceId);
 }
 
+// How a job's edits are done, one row per job (and one for every edit, ALL_EDITS): the folder on your Mac
+// Claude Code works in (so that folder's CLAUDE.md, notes and skills apply), and your editing notes -
+// feedback Claude remembers for next time - with the chat you gave it in.
+const folderRow = (scope: string) => `editcfg:${scope}`;
+export type EditCfg = { folder?: string; notes?: EditNote[]; chat?: NotesChatMessage[] };
+
+async function getCfg(userId: string, scope: string): Promise<EditCfg> {
+  const { data } = await adminClient().from("hub_workspaces").select("data").eq("user_id", userId).eq("project_id", folderRow(scope)).maybeSingle<{ data: EditCfg }>();
+  return data?.data ?? {};
+}
+
+async function saveCfg(userId: string, scope: string, patch: EditCfg) {
+  const next = { ...(await getCfg(userId, scope)), ...patch };
+  const { error } = await adminClient().from("hub_workspaces").upsert({ user_id: userId, project_id: folderRow(scope), data: next, updated_at: new Date().toISOString() });
+  if (error) throw error;
+  return next;
+}
+
+/** The folder on your Mac a job's edits start in ("" = the helper's usual one). */
+export async function editFolder(userId: string, projectId: string) {
+  return (await getCfg(userId, projectId)).folder ?? "";
+}
+
+export async function setEditFolder(userId: string, projectId: string, folder: string) {
+  await saveCfg(userId, projectId, { folder });
+}
+
+/** A job's editing notes and their chat (or every edit's, for ALL_EDITS). */
+export async function editNotes(userId: string, scope: string) {
+  const cfg = await getCfg(userId, scope);
+  return { notes: cfg.notes ?? [], chat: cfg.chat ?? [] };
+}
+
+/** Add notes, skipping ones already there; the newest 60 are kept. */
+export async function addNotes(userId: string, scope: string, texts: string[], from: EditNote["from"]) {
+  const { notes } = await editNotes(userId, scope);
+  const have = new Set(notes.map((n) => n.text.trim().toLowerCase()));
+  const added = [...new Set(texts.map((t) => t.trim()).filter(Boolean))].filter((t) => !have.has(t.toLowerCase())).map((text) => ({ id: randomBytes(6).toString("hex"), text: text.slice(0, 500), at: new Date().toISOString(), from }));
+  if (added.length) await saveCfg(userId, scope, { notes: [...notes, ...added].slice(-60) });
+  return added;
+}
+
+export async function saveNotes(userId: string, scope: string, patch: { notes?: EditNote[]; chat?: NotesChatMessage[] }) {
+  const next = await saveCfg(userId, scope, { ...patch, ...(patch.notes ? { notes: patch.notes.slice(-60) } : {}), ...(patch.chat ? { chat: patch.chat.slice(-40) } : {}) });
+  return { notes: next.notes ?? [], chat: next.chat ?? [] };
+}
+
 /** How many edits one of your Macs runs at once. */
 export async function setMaxEdits(userId: string, deviceId: string, maxEdits: number) {
   const db = adminClient();
@@ -230,24 +278,41 @@ export async function workFor(auth: DeviceAuth) {
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
     // A picker opens only on the Mac it was asked of (or any Mac, if none was named).
     db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).or(`device_id.is.null,device_id.eq.${auth.deviceId}`).limit(5),
-    db.from("hub_edits").select("id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
+    db.from("hub_edits").select("id, project_id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
     db.from("hub_devices").select("info").eq("id", auth.deviceId).maybeSingle<{ info: Device["info"] | null }>(),
   ]);
   const runIds = (running.data ?? []).map((r) => r.id);
   // The brand name for each queued edit, so the prompt can say whose video it is.
   const projectIds = [...new Set(((queued.data ?? []) as EditRow[]).map((r) => r.project_id))];
-  const brands = new Map<string, string>();
+  const brands = new Map<string, string>([[BRAND_ID, "Personal brand"]]);
   if (projectIds.length) {
     const { data: projects } = await db.from("hub_projects").select("id, data").eq("user_id", auth.userId).in("id", projectIds);
     for (const p of projects ?? []) brands.set(p.id, String((p.data as { brand?: string })?.brand ?? ""));
+  }
+  // Each job's folder on the Mac (a carried-on edit needs the same one, as Claude Code keeps its sessions per folder).
+  // And the editing notes for every edit and for each job, so new edits follow them.
+  const folderIds = [...new Set([...projectIds, ...(running.data ?? []).map((r) => r.project_id as string)])];
+  const folders = new Map<string, string>();
+  const notes = new Map<string, string[]>();
+  {
+    const { data: rows } = await db.from("hub_workspaces").select("project_id, data").eq("user_id", auth.userId).in("project_id", [...folderIds, ALL_EDITS].map(folderRow));
+    for (const r of rows ?? []) {
+      const scope = String(r.project_id).slice("editcfg:".length);
+      const cfg = (r.data ?? {}) as EditCfg;
+      folders.set(scope, String(cfg.folder ?? ""));
+      notes.set(scope, (cfg.notes ?? []).map((n) => n.text));
+    }
   }
   const replies = runIds.length
     ? ((await db.from("hub_edit_events").select("id, edit_id, text").in("edit_id", runIds).eq("kind", "user").eq("delivered", false).order("id")).data ?? [])
     : [];
   return {
-    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", files: r.files ?? [], sessionId: r.session_id })),
+    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", notes: [...(notes.get(ALL_EDITS) ?? []), ...(notes.get(r.project_id) ?? [])], files: r.files ?? [], sessionId: r.session_id })),
     picks: (picks.data ?? []).map((p) => ({ id: p.id, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
-    replies: replies.map((r) => ({ eventId: r.id, editId: r.edit_id, text: r.text, sessionId: running.data?.find((x) => x.id === r.edit_id)?.session_id ?? null })),
+    replies: replies.map((r) => {
+      const run = running.data?.find((x) => x.id === r.edit_id);
+      return { eventId: r.id, editId: r.edit_id, text: r.text, sessionId: run?.session_id ?? null, folder: folders.get(run?.project_id ?? "") ?? "" };
+    }),
     cancels: (running.data ?? []).filter((r) => r.cancel_requested).map((r) => r.id),
     reads: await readsFor(auth),
     // How many edits this Mac runs side by side.

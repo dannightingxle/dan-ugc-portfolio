@@ -1,18 +1,19 @@
 import { z } from "zod";
-import { createEdit, listDevices, listDeviceFiles, listEdits } from "../../../hub/_lib/edits/data";
+import { createEdit, editFolder, listDevices, listDeviceFiles, listEdits, setEditFolder } from "../../../hub/_lib/edits/data";
 import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../../../hub/_lib/edits/types";
 import { BadRequest, NotFound, editableProject, editsApi, text } from "../../../hub/_lib/edits/request";
 import { getSheet } from "../../../hub/_lib/studio/data";
 
 /* A job's (or the personal brand's) edit cards (with the connected Macs and their recent clips), and adding cards:
-   from a shoot sheet (one card per video) or from pasted "Copy everything" text. */
+   from a shoot sheet (one card per video), from pasted "Copy everything" text, or written in your own words.
+   PATCH sets the folder on your Mac the job's edits start in. */
 
 export async function GET(request: Request) {
   const projectId = new URL(request.url).searchParams.get("projectId");
   return editsApi(request, null, async ({ user }) => {
     if (!editableProject(projectId)) throw new BadRequest("Unknown job.");
-    const [edits, devices, files] = await Promise.all([listEdits(user.id, projectId), listDevices(user.id), listDeviceFiles(user.id)]);
-    return { edits, devices, files };
+    const [edits, devices, files, folder] = await Promise.all([listEdits(user.id, projectId), listDevices(user.id), listDeviceFiles(user.id), editFolder(user.id, projectId)]);
+    return { edits, devices, files, folder };
   });
 }
 
@@ -61,5 +62,22 @@ export async function POST(request: Request) {
       brief: body.brief.trim(),
     });
     return { edits: [edit] };
+  });
+}
+
+const FolderBody = z.object({
+  projectId: z.string(),
+  folder: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((f) => f === "" || /^(~\/|\/)/.test(f), "Start the folder with ~/ (your home folder) or /."),
+});
+
+export async function PATCH(request: Request) {
+  return editsApi(request, FolderBody, async ({ user, body }) => {
+    if (!editableProject(body.projectId)) throw new BadRequest("Unknown job.");
+    await setEditFolder(user.id, body.projectId, body.folder.replace(/\/+$/, ""));
+    return { folder: body.folder.replace(/\/+$/, "") };
   });
 }
