@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { crossSite } from "../same-origin";
 import { BRAND_ID, studioApiUser, validProjectId } from "../studio/data";
+import { ALL_EDITS } from "./types";
 import type { HubUser } from "../supabase/server";
 
 /* Shared plumbing for the Edits API routes the web app calls (the helper's own routes use a device token instead). */
@@ -42,3 +43,5 @@ export class NotFound extends Error {}
 export class BadRequest extends Error {}
 /** A job, or the personal brand: both can have edit cards. */
 export const editableProject = (id: unknown): id is string => validProjectId(id) || id === BRAND_ID;
+/** Whose editing notes: a job, the personal brand, or all edits. */
+export const validScope = (scope: unknown): scope is string => scope === ALL_EDITS || editableProject(scope);

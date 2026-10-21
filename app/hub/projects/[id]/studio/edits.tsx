@@ -7,6 +7,7 @@ import type { SheetSummary } from "../../../_lib/studio/types";
 import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
 import { Tooltip, useConfirm } from "../../../_lib/popups";
+import { EditingNotes } from "../../../studio/notes/notes";
 
 /* Edit cards: one per video. Pick the clips (from your Mac's latest videos or
    its file picker), press Edit in CapCut, and the Creator Desk Helper on your
@@ -72,6 +73,17 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
     <div className="space-y-5">
       <MacBar devices={macs} mac={mac} onChoose={chooseMac} />
       {mac && <FolderSetting projectId={projectId} folder={data.folder ?? ""} usual={mac.info.workdir} onSaved={(folder) => setData((d) => d && { ...d, folder })} />}
+      <details className="group rounded-xl border border-border bg-bg-card px-4 py-3 text-sm">
+        <summary className="cursor-pointer font-medium">
+          Editing notes for this job <span className="font-normal text-text-dim">- how you want these edited, remembered for every edit</span>
+        </summary>
+        <div className="mt-3">
+          <EditingNotes scope={projectId} compact />
+          <Link href="/hub/studio/notes" className="mt-3 inline-block text-xs text-accent hover:underline">
+            Notes for all your edits →
+          </Link>
+        </div>
+      </details>
       <AddCards
         projectId={projectId}
         sheets={sheets}
@@ -686,6 +698,9 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
             Send
           </button>
         </div>
+      )}
+      {card.status !== "todo" && (
+        <p className="text-xs text-text-dim">Feedback that should stick for future edits (&ldquo;captions are always too big&rdquo;) is saved to this job&apos;s editing notes.</p>
       )}
       {error && <p className="text-sm text-accent">{error}</p>}
     </div>

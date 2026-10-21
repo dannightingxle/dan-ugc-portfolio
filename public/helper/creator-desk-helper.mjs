@@ -585,6 +585,7 @@ function promptFor(edit, broll = "") {
   return [
     `Edit this video in CapCut for me, the same way as when I paste a video card and the clip names into this chat.${whose(edit)}`,
     ...folderLines(edit),
+    ...notesLines(edit),
     "",
     ...(broll ? [broll, ""] : []),
     ...(clips ? [broll ? "Clips I picked myself, on this Mac:" : "Clips, on this Mac:", clips, ""] : []),
@@ -595,6 +596,7 @@ function promptFor(edit, broll = "") {
     `- Make a new CapCut draft (never overwrite one) named "${name}", adding v2, v3 if that name is taken.`,
     "- If CapCut being open stops the draft saving, say so and stop. I'll close it and reply.",
     ...RESOURCEFUL,
+    REMEMBER,
     "- If you need something from me, ask one clear question and stop.",
     "- Finish with a short summary of what you did and, on its own line, DRAFT: <the draft name>.",
   ].join("\n");
@@ -610,6 +612,16 @@ function whose(edit) {
 function folderLines(edit) {
   return edit.cwdUsed ? [`You're working in ${edit.folder}, my folder for these edits: follow its CLAUDE.md, notes and skills for how I edit them.`] : [];
 }
+
+/** Your editing notes (feedback saved from earlier edits and the notes chat in Creator Desk). */
+function notesLines(edit) {
+  if (!edit.notes?.length) return [];
+  return ["", "My editing notes - follow these on every edit unless the card says otherwise (where two clash, the later one wins):", ...edit.notes.map((n) => `- ${n}`)];
+}
+
+// Lasting feedback gets saved to the editing notes, the way you'd tell Claude Code to remember something.
+const REMEMBER =
+  "- When I give you feedback on how you edit in general, not just a change to this one video (how captions should look, pacing, text style), apply it, then add a line `NOTE: <the rule, in one line>` so it's saved to my editing notes for this job, or `NOTE FOR ALL: <the rule>` if it's for all my edits. Only for lasting feedback.";
 
 /** Where Claude Code starts for a job: its own folder if it's on this Mac, else the usual one. */
 function whereFor(folder) {
@@ -665,6 +677,7 @@ function wholeSheetPrompt(edit, clips) {
   return [
     `Edit every video on this shoot sheet in CapCut for me, the same way as when I paste a shoot sheet and a screenshot of my clips into this chat.${whose(edit)}`,
     ...folderLines(edit),
+    ...notesLines(edit),
     "",
     `All the clips I filmed for it, on this Mac (${edit.files.length}):`,
     clips,
@@ -678,6 +691,7 @@ function wholeSheetPrompt(edit, clips) {
     `- Make a new CapCut draft for each video (never overwrite one), named "${prefix}V1", "${prefix}V2" and so on, adding v2, v3 if a name is taken.`,
     "- If CapCut being open stops a draft saving, say so and stop. I'll close it and reply.",
     ...RESOURCEFUL,
+    REMEMBER,
     "- Finish with a short summary, then one line per draft you made: DRAFT: <the draft name>.",
   ].join("\n");
 }
@@ -778,6 +792,8 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
     // "DRAFT: none (not created yet)" isn't a draft.
     const drafts = [...finalText.matchAll(/^\s*DRAFT:\s*(.+?)\s*$/gm)].map((m) => m[1]).filter((d) => !/^(none|n\/a|no draft|not (yet )?created|-)\b/i.test(d.replace(/[*_`"']/g, "")));
     const draft = drafts.join(", ");
+    // Feedback Claude was asked to remember, for this job or all edits.
+    const notes = [...finalText.matchAll(/^\s*NOTE( FOR ALL)?:\s*(.+?)\s*$/gm)].map((m) => ({ text: m[2].replace(/^[`"']|[`"']$/g, "").slice(0, 500), all: Boolean(m[1]) })).slice(0, 10);
     let status;
     if (cancelled.has(editId)) {
       cancelled.delete(editId);
@@ -793,7 +809,7 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
       // No draft: Claude stopped to ask something (or CapCut was open).
       status = "needs_you";
     }
-    await flush({ status, ...(draft ? { draftName: draft } : {}) });
+    await flush({ status, ...(draft ? { draftName: draft } : {}), ...(notes.length ? { notes } : {}) });
     log(status === "ready" ? `Done: ${draft}` : status === "needs_you" ? "Claude has a question - reply in the card." : "The edit stopped.");
     // Any replies that came in while it was busy go next, in the same session.
     const queued = waitingReplies.get(editId);

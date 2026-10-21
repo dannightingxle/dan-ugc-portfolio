@@ -118,3 +118,9 @@ export function briefFromSheet(sheet: SheetData | CustomSheet, code: string): st
   add(v.hashtags);
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+
+/** Editing notes for every edit (rather than one job's). */
+export const ALL_EDITS = "_all";
+/** Feedback Claude remembers for future edits: from an edit's chat, the notes chat, or typed in. */
+export type EditNote = { id: string; text: string; at: string; from: "edit" | "chat" | "you" };
+export type NotesChatMessage = { role: "you" | "claude"; text: string; at: string };

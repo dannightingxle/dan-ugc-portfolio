@@ -3,7 +3,7 @@ import { readsFor } from "./mac-reads";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
 import { BRAND_ID } from "../studio/brand-types";
-import { DEFAULT_MAX_EDITS, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
+import { ALL_EDITS, DEFAULT_MAX_EDITS, type EditNote, type NotesChatMessage, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
 
 /* Edit cards, their conversations, and the Macs that run them. Every query is
    scoped to one user here; the tables themselves are server-only. */
@@ -166,18 +166,51 @@ export async function touchDevice(deviceId: string, info?: Record<string, unknow
     .eq("id", deviceId);
 }
 
-// Where Claude Code works on a job's edits (so that folder's CLAUDE.md, notes and skills apply). One row per job.
-const folderRow = (projectId: string) => `editcfg:${projectId}`;
+// How a job's edits are done, one row per job (and one for every edit, ALL_EDITS): the folder on your Mac
+// Claude Code works in (so that folder's CLAUDE.md, notes and skills apply), and your editing notes -
+// feedback Claude remembers for next time - with the chat you gave it in.
+const folderRow = (scope: string) => `editcfg:${scope}`;
+export type EditCfg = { folder?: string; notes?: EditNote[]; chat?: NotesChatMessage[] };
+
+async function getCfg(userId: string, scope: string): Promise<EditCfg> {
+  const { data } = await adminClient().from("hub_workspaces").select("data").eq("user_id", userId).eq("project_id", folderRow(scope)).maybeSingle<{ data: EditCfg }>();
+  return data?.data ?? {};
+}
+
+async function saveCfg(userId: string, scope: string, patch: EditCfg) {
+  const next = { ...(await getCfg(userId, scope)), ...patch };
+  const { error } = await adminClient().from("hub_workspaces").upsert({ user_id: userId, project_id: folderRow(scope), data: next, updated_at: new Date().toISOString() });
+  if (error) throw error;
+  return next;
+}
 
 /** The folder on your Mac a job's edits start in ("" = the helper's usual one). */
 export async function editFolder(userId: string, projectId: string) {
-  const { data } = await adminClient().from("hub_workspaces").select("data").eq("user_id", userId).eq("project_id", folderRow(projectId)).maybeSingle<{ data: { folder?: string } }>();
-  return data?.data?.folder ?? "";
+  return (await getCfg(userId, projectId)).folder ?? "";
 }
 
 export async function setEditFolder(userId: string, projectId: string, folder: string) {
-  const { error } = await adminClient().from("hub_workspaces").upsert({ user_id: userId, project_id: folderRow(projectId), data: { folder }, updated_at: new Date().toISOString() });
-  if (error) throw error;
+  await saveCfg(userId, projectId, { folder });
+}
+
+/** A job's editing notes and their chat (or every edit's, for ALL_EDITS). */
+export async function editNotes(userId: string, scope: string) {
+  const cfg = await getCfg(userId, scope);
+  return { notes: cfg.notes ?? [], chat: cfg.chat ?? [] };
+}
+
+/** Add notes, skipping ones already there; the newest 60 are kept. */
+export async function addNotes(userId: string, scope: string, texts: string[], from: EditNote["from"]) {
+  const { notes } = await editNotes(userId, scope);
+  const have = new Set(notes.map((n) => n.text.trim().toLowerCase()));
+  const added = [...new Set(texts.map((t) => t.trim()).filter(Boolean))].filter((t) => !have.has(t.toLowerCase())).map((text) => ({ id: randomBytes(6).toString("hex"), text: text.slice(0, 500), at: new Date().toISOString(), from }));
+  if (added.length) await saveCfg(userId, scope, { notes: [...notes, ...added].slice(-60) });
+  return added;
+}
+
+export async function saveNotes(userId: string, scope: string, patch: { notes?: EditNote[]; chat?: NotesChatMessage[] }) {
+  const next = await saveCfg(userId, scope, { ...patch, ...(patch.notes ? { notes: patch.notes.slice(-60) } : {}), ...(patch.chat ? { chat: patch.chat.slice(-40) } : {}) });
+  return { notes: next.notes ?? [], chat: next.chat ?? [] };
 }
 
 /** How many edits one of your Macs runs at once. */
@@ -257,17 +290,24 @@ export async function workFor(auth: DeviceAuth) {
     for (const p of projects ?? []) brands.set(p.id, String((p.data as { brand?: string })?.brand ?? ""));
   }
   // Each job's folder on the Mac (a carried-on edit needs the same one, as Claude Code keeps its sessions per folder).
+  // And the editing notes for every edit and for each job, so new edits follow them.
   const folderIds = [...new Set([...projectIds, ...(running.data ?? []).map((r) => r.project_id as string)])];
   const folders = new Map<string, string>();
-  if (folderIds.length) {
-    const { data: rows } = await db.from("hub_workspaces").select("project_id, data").eq("user_id", auth.userId).in("project_id", folderIds.map(folderRow));
-    for (const r of rows ?? []) folders.set(String(r.project_id).slice("editcfg:".length), String((r.data as { folder?: string })?.folder ?? ""));
+  const notes = new Map<string, string[]>();
+  {
+    const { data: rows } = await db.from("hub_workspaces").select("project_id, data").eq("user_id", auth.userId).in("project_id", [...folderIds, ALL_EDITS].map(folderRow));
+    for (const r of rows ?? []) {
+      const scope = String(r.project_id).slice("editcfg:".length);
+      const cfg = (r.data ?? {}) as EditCfg;
+      folders.set(scope, String(cfg.folder ?? ""));
+      notes.set(scope, (cfg.notes ?? []).map((n) => n.text));
+    }
   }
   const replies = runIds.length
     ? ((await db.from("hub_edit_events").select("id, edit_id, text").in("edit_id", runIds).eq("kind", "user").eq("delivered", false).order("id")).data ?? [])
     : [];
   return {
-    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", files: r.files ?? [], sessionId: r.session_id })),
+    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", notes: [...(notes.get(ALL_EDITS) ?? []), ...(notes.get(r.project_id) ?? [])], files: r.files ?? [], sessionId: r.session_id })),
     picks: (picks.data ?? []).map((p) => ({ id: p.id, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
     replies: replies.map((r) => {
       const run = running.data?.find((x) => x.id === r.edit_id);
