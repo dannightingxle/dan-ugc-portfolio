@@ -64,7 +64,7 @@ export type Device = {
   name: string;
   lastSeen: string | null;
   online: boolean;
-  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[]; osxphotos?: boolean; maxEdits?: number };
+  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[]; osxphotos?: boolean; maxEdits?: number; workdir?: string };
 };
 
 /** How many edits a Mac runs side by side, unless you choose otherwise on the Mac helper page. */

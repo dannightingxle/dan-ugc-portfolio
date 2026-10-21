@@ -2,6 +2,7 @@ import "server-only";
 import { readsFor } from "./mac-reads";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
+import { BRAND_ID } from "../studio/brand-types";
 import { DEFAULT_MAX_EDITS, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
 
 /* Edit cards, their conversations, and the Macs that run them. Every query is
@@ -165,6 +166,20 @@ export async function touchDevice(deviceId: string, info?: Record<string, unknow
     .eq("id", deviceId);
 }
 
+// Where Claude Code works on a job's edits (so that folder's CLAUDE.md, notes and skills apply). One row per job.
+const folderRow = (projectId: string) => `editcfg:${projectId}`;
+
+/** The folder on your Mac a job's edits start in ("" = the helper's usual one). */
+export async function editFolder(userId: string, projectId: string) {
+  const { data } = await adminClient().from("hub_workspaces").select("data").eq("user_id", userId).eq("project_id", folderRow(projectId)).maybeSingle<{ data: { folder?: string } }>();
+  return data?.data?.folder ?? "";
+}
+
+export async function setEditFolder(userId: string, projectId: string, folder: string) {
+  const { error } = await adminClient().from("hub_workspaces").upsert({ user_id: userId, project_id: folderRow(projectId), data: { folder }, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
 /** How many edits one of your Macs runs at once. */
 export async function setMaxEdits(userId: string, deviceId: string, maxEdits: number) {
   const db = adminClient();
@@ -230,24 +245,34 @@ export async function workFor(auth: DeviceAuth) {
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
     // A picker opens only on the Mac it was asked of (or any Mac, if none was named).
     db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).or(`device_id.is.null,device_id.eq.${auth.deviceId}`).limit(5),
-    db.from("hub_edits").select("id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
+    db.from("hub_edits").select("id, project_id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
     db.from("hub_devices").select("info").eq("id", auth.deviceId).maybeSingle<{ info: Device["info"] | null }>(),
   ]);
   const runIds = (running.data ?? []).map((r) => r.id);
   // The brand name for each queued edit, so the prompt can say whose video it is.
   const projectIds = [...new Set(((queued.data ?? []) as EditRow[]).map((r) => r.project_id))];
-  const brands = new Map<string, string>();
+  const brands = new Map<string, string>([[BRAND_ID, "Personal brand"]]);
   if (projectIds.length) {
     const { data: projects } = await db.from("hub_projects").select("id, data").eq("user_id", auth.userId).in("id", projectIds);
     for (const p of projects ?? []) brands.set(p.id, String((p.data as { brand?: string })?.brand ?? ""));
+  }
+  // Each job's folder on the Mac (a carried-on edit needs the same one, as Claude Code keeps its sessions per folder).
+  const folderIds = [...new Set([...projectIds, ...(running.data ?? []).map((r) => r.project_id as string)])];
+  const folders = new Map<string, string>();
+  if (folderIds.length) {
+    const { data: rows } = await db.from("hub_workspaces").select("project_id, data").eq("user_id", auth.userId).in("project_id", folderIds.map(folderRow));
+    for (const r of rows ?? []) folders.set(String(r.project_id).slice("editcfg:".length), String((r.data as { folder?: string })?.folder ?? ""));
   }
   const replies = runIds.length
     ? ((await db.from("hub_edit_events").select("id, edit_id, text").in("edit_id", runIds).eq("kind", "user").eq("delivered", false).order("id")).data ?? [])
     : [];
   return {
-    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", files: r.files ?? [], sessionId: r.session_id })),
+    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", files: r.files ?? [], sessionId: r.session_id })),
     picks: (picks.data ?? []).map((p) => ({ id: p.id, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
-    replies: replies.map((r) => ({ eventId: r.id, editId: r.edit_id, text: r.text, sessionId: running.data?.find((x) => x.id === r.edit_id)?.session_id ?? null })),
+    replies: replies.map((r) => {
+      const run = running.data?.find((x) => x.id === r.edit_id);
+      return { eventId: r.id, editId: r.edit_id, text: r.text, sessionId: run?.session_id ?? null, folder: folders.get(run?.project_id ?? "") ?? "" };
+    }),
     cancels: (running.data ?? []).filter((r) => r.cancel_requested).map((r) => r.id),
     reads: await readsFor(auth),
     // How many edits this Mac runs side by side.

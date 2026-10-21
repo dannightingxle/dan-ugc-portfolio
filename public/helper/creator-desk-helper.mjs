@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.3";
+const VERSION = "0.3.4";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -581,9 +581,10 @@ function promptFor(edit, broll = "") {
   const clips = edit.files.map((f) => `- ${f.path}${f.duration ? ` (${mmss(f.duration)})` : ""}`).join("\n");
   if (edit.videoCode === "ALL") return wholeSheetPrompt(edit, clips);
   if (TRIAL_LINE.test(edit.brief)) return trialPrompt(edit, clips);
-  const name = [edit.brand, edit.videoCode].filter(Boolean).join(" ") || edit.title.slice(0, 50) || "Creator Desk edit";
+  const name = (edit.personal ? ["Personal", edit.videoCode || edit.title.slice(0, 40)] : [edit.brand, edit.videoCode]).filter(Boolean).join(" ") || edit.title.slice(0, 50) || "Creator Desk edit";
   return [
-    `Edit this video in CapCut for me, the same way as when I paste a video card and the clip names into this chat.${edit.brand ? ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.` : ""}`,
+    `Edit this video in CapCut for me, the same way as when I paste a video card and the clip names into this chat.${whose(edit)}`,
+    ...folderLines(edit),
     "",
     ...(broll ? [broll, ""] : []),
     ...(clips ? [broll ? "Clips I picked myself, on this Mac:" : "Clips, on this Mac:", clips, ""] : []),
@@ -597,6 +598,27 @@ function promptFor(edit, broll = "") {
     "- If you need something from me, ask one clear question and stop.",
     "- Finish with a short summary of what you did and, on its own line, DRAFT: <the draft name>.",
   ].join("\n");
+}
+
+/** Whose video it is, so Claude uses the right style. */
+function whose(edit) {
+  if (edit.personal) return " It's for my own personal brand, not a client: use my editing skills and my personal-brand style and notes.";
+  return edit.brand ? ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.` : "";
+}
+
+/** The job's own folder on this Mac, when it has one: Claude Code starts there, so its CLAUDE.md, notes and skills apply. */
+function folderLines(edit) {
+  return edit.cwdUsed ? [`You're working in ${edit.folder}, my folder for these edits: follow its CLAUDE.md, notes and skills for how I edit them.`] : [];
+}
+
+/** Where Claude Code starts for a job: its own folder if it's on this Mac, else the usual one. */
+function whereFor(folder) {
+  if (!folder) return { cwd: cfg.workdir, used: false, missing: "" };
+  const full = folder.startsWith("~/") ? path.join(os.homedir(), folder.slice(2)) : folder;
+  try {
+    if (fs.statSync(full).isDirectory()) return { cwd: full, used: true, missing: "" };
+  } catch {}
+  return { cwd: cfg.workdir, used: false, missing: folder };
 }
 
 // Missing extras (B-roll, a screenshot, images): get or make them, as in a normal Claude Code chat, rather than stopping.
@@ -641,7 +663,8 @@ function trialPrompt(edit, clips) {
 function wholeSheetPrompt(edit, clips) {
   const prefix = edit.brand ? `${edit.brand} ` : "";
   return [
-    `Edit every video on this shoot sheet in CapCut for me, the same way as when I paste a shoot sheet and a screenshot of my clips into this chat.${edit.brand ? ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.` : ""}`,
+    `Edit every video on this shoot sheet in CapCut for me, the same way as when I paste a shoot sheet and a screenshot of my clips into this chat.${whose(edit)}`,
+    ...folderLines(edit),
     "",
     `All the clips I filmed for it, on this Mac (${edit.files.length}):`,
     clips,
@@ -676,14 +699,17 @@ const running = new Map(); // edit id -> child process
 const waitingReplies = new Map(); // edit id -> [{ eventId, text, sessionId }]
 const cancelled = new Set(); // edit ids stopped from Creator Desk
 
-function startClaude(editId, prompt, sessionId) {
+const cwdFor = new Map(); // edit id -> the folder its Claude Code session lives in
+
+function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.workdir) {
+  cwdFor.set(editId, cwd);
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--allowedTools", ...cfg.allowedTools];
   if (sessionId) args.push("--resume", sessionId);
   log(`${sessionId ? "Carrying on" : "Starting"} the edit with Claude Code…`);
   try {
-    fs.mkdirSync(cfg.workdir, { recursive: true });
+    fs.mkdirSync(cwd, { recursive: true });
   } catch {}
-  const child = spawn(cfg.claude, args, { cwd: cfg.workdir, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn(cfg.claude, args, { cwd, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
   running.set(editId, child);
   // If Claude Code can't start at all, say so on the card instead of the helper falling over.
   child.on("error", (e) => {
@@ -799,7 +825,8 @@ async function handleWork(work) {
       waitingReplies.set(r.editId, list);
     } else if (r.sessionId) {
       await update(r.editId, { status: "editing", delivered: [r.eventId] });
-      startClaude(r.editId, r.text, r.sessionId);
+      // Back in the folder its session started in (Claude Code keeps sessions per folder).
+      startClaude(r.editId, r.text, r.sessionId, cwdFor.get(r.editId) || whereFor(r.folder).cwd);
     }
   }
   // A few edits side by side (you choose how many on the Mac helper page); the rest wait their turn.
@@ -809,7 +836,14 @@ async function handleWork(work) {
     const { ok } = await update(e.id, { claim: true });
     if (!ok) continue;
     log(`Editing ${[e.brand, e.videoCode, e.title].filter(Boolean).join(" · ")}`);
-    await update(e.id, { events: [{ kind: "status", text: `Your Mac (${macName()}) has started the edit.` }] });
+    const where = whereFor(e.folder);
+    e.cwdUsed = where.used;
+    await update(e.id, {
+      events: [
+        { kind: "status", text: `Your Mac (${macName()}) has started the edit${where.used ? ` in ${e.folder}` : ""}.` },
+        ...(where.missing ? [{ kind: "status", text: `Couldn't find ${where.missing} on this Mac, so it's working in ${where.cwd.replace(os.homedir(), "~")} instead.` }] : []),
+      ],
+    });
     const terms = !e.sessionId && LIBRARY_LINE.exec(e.brief)?.[1].split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6);
     let broll = "";
     if (terms?.length) {
@@ -819,7 +853,7 @@ async function handleWork(work) {
         log("Couldn't look for B-roll:", err.message);
       }
     }
-    startClaude(e.id, promptFor(e, broll), e.sessionId);
+    startClaude(e.id, promptFor(e, broll), e.sessionId, where.cwd);
   }
 }
 

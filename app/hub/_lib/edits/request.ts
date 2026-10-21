@@ -21,7 +21,11 @@ export async function editsApi<S extends z.ZodType>(
   let body: unknown = {};
   if (schema) {
     const parsed = schema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return Response.json({ error: "That request didn't look right." }, { status: 400 });
+    if (!parsed.success) {
+      // Our own checks ("Start the folder with ~/…") say what's wrong; anything else is a malformed request.
+      const own = parsed.error.issues.find((i) => i.code === "custom");
+      return Response.json({ error: own?.message ?? "That request didn't look right." }, { status: 400 });
+    }
     body = parsed.data;
   }
   try {

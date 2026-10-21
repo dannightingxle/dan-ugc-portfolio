@@ -1,6 +1,6 @@
 import { crossSite } from "../../../../hub/_lib/same-origin";
 import { adminClient } from "../../../../hub/_lib/supabase/admin";
-import { studioApiUser } from "../../../../hub/_lib/studio/data";
+import { BRAND_ID, studioApiUser } from "../../../../hub/_lib/studio/data";
 import { dismissTask, listTasks } from "../../../../hub/_lib/studio/tasks";
 import { canUse } from "../../../../hub/_lib/features";
 
@@ -33,6 +33,7 @@ export async function GET() {
     const ids = [...new Set([...tasks.map((t) => t.projectId), ...edits.map((e) => e.project_id as string)])];
     const { data } = ids.length ? await db.from("hub_projects").select("id, data").eq("user_id", auth.user.id).in("id", ids) : { data: [] };
     const brands = new Map((data ?? []).map((p) => [p.id as string, String((p.data as { brand?: string })?.brand || "Job")]));
+    brands.set(BRAND_ID, "Personal brand");
     return Response.json({
       tasks: tasks.map((t) => ({ ...t, brand: brands.get(t.projectId) ?? "Job" })),
       edits: edits.map((e) => ({
