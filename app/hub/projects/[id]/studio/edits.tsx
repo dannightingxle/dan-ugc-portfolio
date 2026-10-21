@@ -17,6 +17,10 @@ type Data = { edits: EditCard[]; devices: Device[]; files: DeviceFile[] };
 const BUSY = new Set(["queued", "editing"]);
 /** Claude Code on the Mac needs signing in again (expired or missing login). */
 const signedOut = (text: string) => /OAuth|401|authenticat|\/login|not logged in|invalid api key/i.test(text);
+const MAC_KEY = "cd-edit-mac";
+/** Connected Macs first, then the newest helper (the likeliest to be the one you're on). */
+const sortMacs = (devices: Device[]) =>
+  [...devices].sort((a, b) => Number(b.online) - Number(a.online) || (helperOlderThan(a.info.helper, b.info.helper ?? "0.0.0") ? 1 : helperOlderThan(b.info.helper, a.info.helper ?? "0.0.0") ? -1 : 0));
 const mmss = (s?: number | null) => (s == null ? "" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
 
 /** onTrials: set on the personal brand, where finished edits can become trial reels. */
@@ -24,6 +28,20 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  // With more than one Mac connected, which one edits (remembered in this browser).
+  const [macId, setMacId] = useState<string | null>(() => {
+    try {
+      return typeof window === "undefined" ? null : localStorage.getItem(MAC_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const chooseMac = (id: string) => {
+    setMacId(id);
+    try {
+      localStorage.setItem(MAC_KEY, id);
+    } catch {}
+  };
 
   // Check often while something's happening on the Mac, gently otherwise.
   const busy = Boolean(data?.edits.some((e) => BUSY.has(e.status) || e.pickRequested));
@@ -45,11 +63,14 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
 
   if (error && !data) return <p className="text-accent">{error}</p>;
   if (!data) return <p className="text-text-muted">Loading edit cards…</p>;
-  const mac = data.devices.find((d) => d.online) ?? data.devices[0];
+  const macs = sortMacs(data.devices);
+  const mac = macs.find((d) => d.id === macId && d.online) ?? macs[0];
+  // Your latest clips, from the Mac doing the editing.
+  const files = data.files.filter((f) => !mac || !f.deviceId || f.deviceId === mac.id);
 
   return (
     <div className="space-y-5">
-      <MacBar devices={data.devices} />
+      <MacBar devices={macs} mac={mac} onChoose={chooseMac} />
       <AddCards projectId={projectId} sheets={sheets} onAdded={(cards) => setData((d) => d && { ...d, edits: [...d.edits.filter((e) => !cards.some((c) => c.id === e.id)), ...cards] })} />
       {data.edits.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border-strong bg-bg-card p-4 text-sm text-text-muted">
@@ -61,7 +82,7 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
             <Card
               key={card.id}
               card={card}
-              files={data.files}
+              files={files}
               mac={mac}
               open={open === card.id}
               onToggle={() => setOpen(open === card.id ? null : card.id)}
@@ -77,8 +98,7 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
   );
 }
 
-function MacBar({ devices }: { devices: Device[] }) {
-  const mac = devices.find((d) => d.online) ?? devices[0];
+function MacBar({ devices, mac, onChoose }: { devices: Device[]; mac: Device | undefined; onChoose: (id: string) => void }) {
   if (!mac) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm">
@@ -89,12 +109,32 @@ function MacBar({ devices }: { devices: Device[] }) {
       </div>
     );
   }
+  const online = devices.filter((d) => d.online);
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm">
-      <span className="flex items-center gap-2 font-medium">
-        <span className={`h-2 w-2 rounded-full ${mac.online ? "bg-good" : "bg-text-dim"}`} />
-        {mac.name} {mac.online ? "is connected" : "is offline - start the helper on it"}
-      </span>
+      {online.length > 1 ? (
+        <span className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Edit on which Mac">
+          <span className="font-medium">Edit on:</span>
+          {online.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              role="radio"
+              aria-checked={d.id === mac.id}
+              onClick={() => onChoose(d.id)}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition ${d.id === mac.id ? "border-accent bg-accent text-on-accent" : "border-border text-text-muted hover:border-accent hover:text-accent"}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${d.id === mac.id ? "bg-on-accent" : "bg-good"}`} />
+              {d.name}
+            </button>
+          ))}
+        </span>
+      ) : (
+        <span className="flex items-center gap-2 font-medium">
+          <span className={`h-2 w-2 rounded-full ${mac.online ? "bg-good" : "bg-text-dim"}`} />
+          {mac.name} {mac.online ? "is connected" : "is offline - start the helper on it"}
+        </span>
+      )}
       {mac.info.capcut && <span className="text-text-dim">CapCut {mac.info.capcut}</span>}
       {mac.online && mac.info.capcutRunning && <span className="text-warn">CapCut is open - close it so edits can save</span>}
       {helperOlderThan(mac.info.helper, HELPER_FOR_LIBRARY) && (
@@ -274,7 +314,7 @@ function Card({
             files={files}
             mac={mac}
             setFiles={setFiles}
-            onPick={(mode) => act(() => call(`${api}/pick`, "POST", { mode }))}
+            onPick={(mode) => act(() => call(`${api}/pick`, "POST", { mode, deviceId: mac?.id }))}
             onCancelPick={() => act(() => call(`${api}/pick`, "DELETE"))}
           />
 
@@ -288,7 +328,7 @@ function Card({
                 <button
                   type="button"
                   disabled={(!card.files.length && !ownClips) || !mac}
-                  onClick={() => act(() => call(`${api}/run`, "POST", { fresh: card.status === "ready" || card.status === "done" || card.status === "failed" }))}
+                  onClick={() => act(() => call(`${api}/run`, "POST", { fresh: card.status === "ready" || card.status === "done" || card.status === "failed", deviceId: mac?.id }))}
                   className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
                 >
                   {card.status !== "todo" ? "Edit again from scratch" : card.videoCode === WHOLE_SHEET ? "Edit all the videos in CapCut" : "Edit in CapCut"}

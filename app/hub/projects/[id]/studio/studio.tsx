@@ -201,9 +201,11 @@ function useJob(api: string, kind: TaskKind, onDone: (t: Task) => void) {
   const { start, dismiss } = useTasks();
   const task = useTask(projectId, kind);
   const [starting, setStarting] = useState(false);
+  const [startedAt, setStartedAt] = useState<string | undefined>();
   const [error, setError] = useState("");
   const busy = starting || task?.status === "running";
-  const elapsed = useElapsed(task?.startedAt, busy);
+  // While a new run is starting, count from now, not from the last run's start.
+  const elapsed = useElapsed(task?.status === "running" ? task.startedAt : startedAt, busy);
   // Pick up the result when a job this page is showing finishes.
   const done = useRef(onDone);
   useEffect(() => {
@@ -218,6 +220,7 @@ function useJob(api: string, kind: TaskKind, onDone: (t: Task) => void) {
   }, [task]);
   async function run(body: unknown) {
     setStarting(true);
+    setStartedAt(new Date().toISOString());
     setError("");
     try {
       await start(`${api}/${kind}`, body);

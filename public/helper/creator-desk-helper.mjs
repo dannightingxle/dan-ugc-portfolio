@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -80,6 +80,8 @@ function defaults(cfg) {
 
 // ------------------------------------------------------------ small helpers
 
+// The Mac's own name (as in System Settings), e.g. "Dan's MacBook Air".
+const macName = () => process.env.CDH_NAME || run("scutil", ["--get", "ComputerName"]) || os.hostname().replace(/\.local$/, "");
 const log = (...a) => console.log(new Date().toLocaleTimeString("en-GB"), ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function run(cmd, args, opts = {}) {
@@ -591,10 +593,21 @@ function promptFor(edit, broll = "") {
     "For this run:",
     `- Make a new CapCut draft (never overwrite one) named "${name}", adding v2, v3 if that name is taken.`,
     "- If CapCut being open stops the draft saving, say so and stop. I'll close it and reply.",
+    ...RESOURCEFUL,
     "- If you need something from me, ask one clear question and stop.",
     "- Finish with a short summary of what you did and, on its own line, DRAFT: <the draft name>.",
   ].join("\n");
 }
+
+// Missing extras (B-roll, a screenshot, images): get or make them, as in a normal Claude Code chat, rather than stopping.
+const RESOURCEFUL = [
+  "- If the card needs something that isn't in the clips (B-roll, an app screenshot, images, a screen recording), get or make it yourself before asking, the way you would in a normal chat with me:",
+  "  - look on this Mac: Apple Photos, Downloads, Desktop, Movies and any connected drives;",
+  "  - download it from links on the card or in the brief (a Google Drive folder: `uvx gdown --folder <link> -O <folder>`; a direct image or video link: curl);",
+  "  - make it: a screenshot or screen recording of a web page, App Store listing or the app's website (open it, then `screencapture`), a text or list graphic in CapCut, or a freeze-frame or cut-down from the main clip;",
+  "  - only if none of that works, put a clearly labelled placeholder in the draft where it goes.",
+  "- Build the draft even if a few extras are missing, then list what you made or swapped in and what I still need to add. Only stop to ask if the main clip can't be found or doesn't match the card.",
+];
 
 // Trial versions of one reel: a draft per version, each changing only what its version says.
 const TRIAL_LINE = /^TRIAL VERSIONS:/m;
@@ -641,6 +654,7 @@ function wholeSheetPrompt(edit, clips) {
     "- Before editing, list the match as one line per video (e.g. V1: IMG_2001.MOV, IMG_2002.MOV). If you're unsure about a match, ask me and stop.",
     `- Make a new CapCut draft for each video (never overwrite one), named "${prefix}V1", "${prefix}V2" and so on, adding v2, v3 if a name is taken.`,
     "- If CapCut being open stops a draft saving, say so and stop. I'll close it and reply.",
+    ...RESOURCEFUL,
     "- Finish with a short summary, then one line per draft you made: DRAFT: <the draft name>.",
   ].join("\n");
 }
@@ -722,7 +736,8 @@ function startClaude(editId, prompt, sessionId) {
     clearInterval(timer);
     running.delete(editId);
     // One draft, or one per video for a whole shoot sheet.
-    const drafts = [...finalText.matchAll(/^\s*DRAFT:\s*(.+?)\s*$/gm)].map((m) => m[1]);
+    // "DRAFT: none (not created yet)" isn't a draft.
+    const drafts = [...finalText.matchAll(/^\s*DRAFT:\s*(.+?)\s*$/gm)].map((m) => m[1]).filter((d) => !/^(none|n\/a|no draft|not (yet )?created|-)\b/i.test(d.replace(/[*_`"']/g, "")));
     const draft = drafts.join(", ");
     let status;
     if (cancelled.has(editId)) {
@@ -780,7 +795,7 @@ async function handleWork(work) {
     const { ok } = await update(e.id, { claim: true });
     if (!ok) continue;
     log(`Editing ${[e.brand, e.videoCode, e.title].filter(Boolean).join(" · ")}`);
-    await update(e.id, { events: [{ kind: "status", text: `Your Mac (${os.hostname().replace(/\.local$/, "")}) has started the edit.` }] });
+    await update(e.id, { events: [{ kind: "status", text: `Your Mac (${macName()}) has started the edit.` }] });
     const terms = !e.sessionId && LIBRARY_LINE.exec(e.brief)?.[1].split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6);
     let broll = "";
     if (terms?.length) {
@@ -850,7 +865,7 @@ async function loop() {
 // ------------------------------------------------------------ commands
 
 async function connect(code, server) {
-  const name = run("scutil", ["--get", "ComputerName"]) || os.hostname().replace(/\.local$/, "");
+  const name = macName();
   const res = await fetch(server.replace(/\/$/, "") + "/api/hub/helper/pair", {
     method: "POST",
     headers: { "content-type": "application/json" },
