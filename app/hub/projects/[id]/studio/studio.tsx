@@ -342,7 +342,7 @@ function WeekTab({
           </div>
           <Field
             label="This week's brief"
-            hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full, and reference videos (uploaded to the page, or TikTok and Instagram links) are watched frame by frame. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
+            hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full, and reference videos (uploaded to the page, or TikTok and Instagram links) are watched frame by frame. Pages that need you logged in are read in Chrome on your Mac while the Creator Desk Helper is running. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
           >
             <textarea rows={5} className={input} value={weekBrief} onChange={(e) => setWeekBrief(e.target.value)} placeholder="Paste what the brand sent, or the link to it…" />
           </Field>

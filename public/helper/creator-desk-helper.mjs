@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.2.1";
+const VERSION = "0.3.0";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -160,6 +160,9 @@ function info() {
     libraries: libraries(),
     osxphotos: Boolean(osxphotos()),
     workdir: cfg.workdir,
+    // Pages you're logged in to (a brand's portal, a Google-login brief) can be read through your browser.
+    reads: true,
+    browser: BROWSER,
   };
 }
 
@@ -355,6 +358,85 @@ const filesIn = (dir) => {
 function osxphotos() {
   const found = [cfg.osxphotos, process.env.CDH_OSXPHOTOS, run("/usr/bin/which", ["osxphotos"]), path.join(os.homedir(), ".local", "bin", "osxphotos"), "/opt/homebrew/bin/osxphotos", "/usr/local/bin/osxphotos"];
   return found.find((p) => p && fs.existsSync(p)) || "";
+}
+
+// ------------------------------------------------------------ reading pages you're logged in to
+
+// Creator Desk can't use your logins, but your browser can: a link that needs you signed in is
+// opened in a new tab of your own browser, its text copied, and the tab closed again.
+const BROWSER = process.env.CDH_BROWSER || "Google Chrome";
+const READ_JS =
+  "JSON.stringify({title: document.title, url: location.href, text: document.body ? document.body.innerText : '', links: Array.from(document.links).slice(0, 300).map(a => [a.innerText.trim().slice(0, 120), a.href])})";
+const readScript = () => [
+  "on run argv",
+  "set theURL to item 1 of argv",
+  `tell application "${BROWSER.replace(/"/g, "")}"`,
+  "if (count of windows) = 0 then make new window",
+  "set t to make new tab at end of tabs of window 1 with properties {URL:theURL}",
+  "try",
+  "set waited to 0",
+  "repeat while (loading of t) and waited < 40",
+  "delay 0.5",
+  "set waited to waited + 0.5",
+  "end repeat",
+  "delay 2",
+  `set js to ${JSON.stringify(READ_JS)}`,
+  "set out to execute t javascript js",
+  // Pages that load their content after the page itself: wait until the text stops changing.
+  'set prev to ""',
+  "repeat 6 times",
+  "if out is equal to prev then exit repeat",
+  "set prev to out",
+  "delay 1.5",
+  "set out to execute t javascript js",
+  "end repeat",
+  "close t",
+  "return out",
+  "on error msg",
+  "try",
+  "close t",
+  "end try",
+  "error msg",
+  "end try",
+  "end tell",
+  "end run",
+];
+
+async function readPage(url) {
+  if (!/^https?:\/\//i.test(url)) return { error: "not a web link" };
+  const { err, stdout, stderr } = process.env.CDH_READ_CMD
+    ? await runAsync("/bin/sh", ["-c", process.env.CDH_READ_CMD, "sh", url], 120_000)
+    : await runAsync("osascript", [...readScript().flatMap((l) => ["-e", l]), url], 120_000);
+  const why = String(stderr || err?.message || "");
+  if (err) {
+    if (/turned off|Allow JavaScript from Apple Events/i.test(why)) {
+      return { error: `${BROWSER} won't let the helper read pages yet: in ${BROWSER}, open the View menu → Developer → tick "Allow JavaScript from Apple Events"` };
+    }
+    if (/-1743|not authori[sz]ed|not allowed/i.test(why)) {
+      return { error: `macOS hasn't let the helper control ${BROWSER}: System Settings → Privacy & Security → Automation → let Terminal (or node) control ${BROWSER}` };
+    }
+    return { error: `${BROWSER} couldn't open it (${why.trim().split("\n").pop()?.slice(0, 200) || "no reason given"})` };
+  }
+  try {
+    const page = JSON.parse(stdout.trim());
+    return { title: String(page.title || "").slice(0, 300), url: String(page.url || url), text: String(page.text || "").slice(0, 60_000), links: Array.isArray(page.links) ? page.links.slice(0, 300) : [] };
+  } catch {
+    return { error: "the page came back empty" };
+  }
+}
+
+const readsSeen = new Set();
+async function handleReads(reads) {
+  for (const r of reads ?? []) {
+    if (readsSeen.has(r.id)) continue;
+    readsSeen.add(r.id);
+    const { ok } = await api("POST", "/api/hub/helper/reads", { id: r.id, claim: true }).catch(() => ({ ok: false }));
+    if (!ok) continue;
+    log(`Reading ${r.url} in ${BROWSER} for a shoot sheet…`);
+    const result = await readPage(r.url);
+    if (result.error) log("Couldn't read it:", result.error);
+    await api("POST", "/api/hub/helper/reads", { id: r.id, ...result }).catch((e) => log("Couldn't send the page back:", e.message));
+  }
 }
 
 const photosDenied = (text) => /not allowed|-1743|not authori[sz]ed/i.test(text);
@@ -670,6 +752,8 @@ function startClaude(editId, prompt, sessionId) {
 }
 
 async function handleWork(work) {
+  // A shoot sheet is waiting on these, so they go first.
+  await handleReads(work.reads);
   for (const p of work.picks ?? []) await handlePick(p);
   for (const id of work.cancels ?? []) {
     const child = running.get(id);
