@@ -17,6 +17,21 @@ type Item = Record<string, unknown>;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
+/** Apify's refusal in plain words. Its own message says which: a bad token, or the account's monthly spending limit. */
+export function apifyProblem(status: number, body: string) {
+  let message = "";
+  try {
+    message = String((JSON.parse(body) as { error?: { message?: unknown } }).error?.message ?? "");
+  } catch {
+    message = body.slice(0, 200);
+  }
+  if (status === 402 || /usage|limit|exceed|credit|billing|plan|upgrade/i.test(message)) {
+    return "Your Apify account has used up its monthly allowance (the free plan is $5 a month), so Apify is refusing new runs until it resets. Raise the limit or upgrade in Apify → Billing, or wait for the new month";
+  }
+  if (status === 401) return "Apify didn't accept the token - check APIFY_TOKEN in Vercel";
+  return `Apify had a problem (${status})${message ? `: ${message.slice(0, 200)}` : ""}`;
+}
+
 async function run(actor: string, input: object, seconds = 240): Promise<Item[]> {
   const url = `${BASE}/v2/acts/${actor.replace("/", "~")}/run-sync-get-dataset-items?timeout=${seconds}&clean=true`;
   const res = await fetch(url, {
@@ -26,9 +41,7 @@ async function run(actor: string, input: object, seconds = 240): Promise<Item[]>
     signal: AbortSignal.timeout((seconds + 30) * 1000),
     cache: "no-store",
   });
-  if (res.status === 401 || res.status === 403) throw new Error("Apify didn't accept the token - check APIFY_TOKEN.");
-  if (res.status === 402) throw new Error("Your Apify account is out of credit.");
-  if (!res.ok) throw new Error(`Apify had a problem (${res.status}).`);
+  if (!res.ok) throw new Error(apifyProblem(res.status, await res.text().catch(() => "")));
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 }
@@ -159,7 +172,9 @@ export async function pullAccounts(accounts: { platform: Handle["platform"]; han
   const posts = [...tiktok(ttItems, mine), ...instagram(igPosts, mine)];
   for (const [platform, list] of [["tiktok", tt], ["instagram", ig]] as const) {
     for (const h of list) {
-      if (!posts.some((p) => p.platform === platform && p.handle === h) && followers[`${platform}:${h}`] == null) {
+      // When Apify itself refused (e.g. the monthly limit), that's the reason, not the handle.
+      const refused = problems.some((p) => p.startsWith(platform === "tiktok" ? "TikTok" : "Instagram"));
+      if (!refused && !posts.some((p) => p.platform === platform && p.handle === h) && followers[`${platform}:${h}`] == null) {
         problems.push(`Nothing found for @${h} on ${platform === "tiktok" ? "TikTok" : "Instagram"} - check the handle (private accounts can't be read).`);
       }
     }
