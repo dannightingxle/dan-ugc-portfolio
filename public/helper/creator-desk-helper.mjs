@@ -36,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.5";
+const VERSION = "0.3.6";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -716,7 +716,8 @@ const cancelled = new Set(); // edit ids stopped from Creator Desk
 
 const cwdFor = new Map(); // edit id -> the folder its Claude Code session lives in
 
-function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.workdir) {
+// fresh: the edit's full instructions, to start over with if this Mac can't carry on the session (it began on another Mac).
+function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.workdir, fresh = null) {
   cwdFor.set(editId, cwd);
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--allowedTools", ...cfg.allowedTools];
   if (sessionId) args.push("--resume", sessionId);
@@ -799,6 +800,12 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
       cancelled.delete(editId);
       pending.push({ kind: "status", text: "Stopped." });
       status = "failed";
+    } else if (sessionId && fresh && (errored || code !== 0) && /no conversation found|(conversation|session)[^\n]*not found/i.test(`${finalText}\n${stderr}`)) {
+      // The session lives on another Mac: start the edit again here from the card.
+      pending.push({ kind: "status", text: `This Mac (${macName()}) doesn't have where the edit left off - it was started on another Mac - so it's starting the edit again from the card.` });
+      await flush({ status: "editing" });
+      startClaude(editId, fresh, null, cwd);
+      return;
     } else if (errored || (code !== 0 && !finalText)) {
       pending.push({ kind: "error", text: (finalText || stderr.trim().split("\n").slice(-3).join("\n") || `Claude Code stopped (${signal || code}).`).slice(0, 2000) });
       status = "failed";
@@ -871,7 +878,8 @@ async function handleWork(work) {
         log("Couldn't look for B-roll:", err.message);
       }
     }
-    startClaude(e.id, promptFor(e, broll), e.sessionId, where.cwd);
+    const prompt = promptFor(e, broll);
+    startClaude(e.id, prompt, e.sessionId, where.cwd, e.sessionId ? prompt : null);
   }
 }
 

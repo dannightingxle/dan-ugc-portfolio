@@ -490,13 +490,18 @@ function Card({
                 </button>
               </Tooltip>
             )}
-            {card.status === "failed" && card.canCarryOn && mac && card.deviceId === mac.id && (
-              <button type="button" onClick={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: mac.id }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+            {/* On the Mac it was on - or this one, if that Mac isn't connected any more (disconnected or replaced). */}
+            {card.status === "failed" && card.canCarryOn && mac && (card.deviceId === mac.id || !devices.some((d) => d.id === card.deviceId)) && (
+              <button
+                type="button"
+                onClick={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: mac.id }))}
+                className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent"
+              >
                 Carry on where it stopped
               </button>
             )}
             {card.status === "editing" && <span className="text-xs text-text-dim">Stuck (say the helper restarted)? Press Stop - then you can carry on where it left off.</span>}
-            {card.status === "failed" && card.canCarryOn && mac && card.deviceId && card.deviceId !== mac.id && (
+            {card.status === "failed" && card.canCarryOn && mac && card.deviceId && card.deviceId !== mac.id && devices.some((d) => d.id === card.deviceId) && (
               <CarryOnElsewhere was={devices.find((d) => d.id === card.deviceId)} on={mac} onCarryOn={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: card.deviceId }))} />
             )}
             {card.status === "ready" && (
