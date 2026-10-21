@@ -10,6 +10,7 @@ import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from 
 import { imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
 import { socialVideoKind, videoBlocks, watchVideos } from "./videos";
 import { readOnMac } from "../edits/mac-reads";
+import type { Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
 import { canUse } from "../features";
 import { createEdit } from "../edits/data";
@@ -48,9 +49,11 @@ function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockPara
 }
 
 /** Other links (a brand's portal, a page behind a login): read in your own browser through your Mac's helper when it's running, else left for Claude's web fetch. */
-async function readOtherLinks(userId: string, text: string, linked: LinkedPages) {
+async function readOtherLinks(userId: string, text: string, linked: LinkedPages, progress: Progress) {
   const rest = otherLinks(text, linked.pages);
-  const mac = await readOnMac(userId, rest.filter((u) => !socialVideoKind(u))).catch(() => null);
+  const forMac = rest.filter((u) => !socialVideoKind(u));
+  if (forMac.length) progress("Checking for pages to read on your Mac");
+  const mac = await readOnMac(userId, forMac).catch(() => null);
   if (!mac) return { rest, failed: [] as string[] };
   linked.pages.push(...mac.pages);
   return { rest: rest.filter((u) => !mac.read.has(u)), failed: mac.failed };
@@ -60,14 +63,17 @@ const today = () => new Date().toLocaleDateString("en-GB", { weekday: "long", da
 
 /* ---- Set up a job ---- */
 
-export async function setUpJob(user: HubUser, projectId: string, input: { material: string; filming: string; voice: string; uploads: Upload[] }) {
+export async function setUpJob(user: HubUser, projectId: string, input: { material: string; filming: string; voice: string; uploads: Upload[] }, progress: Progress = () => {}) {
   const job = await projectBasics(user.id, projectId);
   // Public Notion pages and Google Docs are read here (Claude's web fetch only sees their loading screen).
+  progress("Reading the linked pages");
   const linked = await readLinkedPages(input.material);
-  const { rest, failed: macFailed } = await readOtherLinks(user.id, input.material, linked);
+  const { rest, failed: macFailed } = await readOtherLinks(user.id, input.material, linked, progress);
+  progress("Watching the reference videos");
   // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at.
   const watched = await watchVideos(input.material, linked.pages);
   const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
+  progress("Claude is setting up the job");
   const result = await ask({
     system: SYSTEM_INTAKE,
     content: [
@@ -90,6 +96,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     schema: IntakeResult,
     webFetch: rest.length > 0,
     effort: "high",
+    onFixUp: () => progress("Claude is fixing its answer"),
   });
   const ws = await getWorkspace(user.id, projectId);
   return saveWorkspace(user.id, projectId, {
@@ -108,15 +115,18 @@ export async function makeShootSheet(
   user: HubUser,
   projectId: string,
   input: { videos: number; filmingOn: string; lastWeek: string; trending: string; weekBrief: string; uploads: Upload[] },
+  progress: Progress = () => {},
 ) {
   const job = await projectBasics(user.id, projectId);
   let ws = await getWorkspace(user.id, projectId);
   // This week's brief from the brand is for this sheet only: the project brief (Files tab) never changes here.
   // Public Notion pages and Google Docs in it are read here and sent with it.
+  progress("Reading the linked pages");
   const linked = await readLinkedPages(input.weekBrief);
-  const { rest, failed: macFailed } = await readOtherLinks(user.id, input.weekBrief, linked);
+  const { rest, failed: macFailed } = await readOtherLinks(user.id, input.weekBrief, linked, progress);
   const weekBrief = [input.weekBrief.trim(), linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
   // Reference videos in the brief or what's trending, as frames Claude can look at.
+  progress("Watching the reference videos");
   const watched = await watchVideos([input.weekBrief, input.trending].join("\n"), linked.pages);
 
   const ask_ = weekBrief
@@ -143,6 +153,7 @@ export async function makeShootSheet(
   ];
   const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
+  progress("Claude is writing the sheet");
   // The job's own template (from its Claude Project) when it has one, else the Creator Desk sheet.
   const block = ws.template ? weekDataBlock(ws.template) : null;
   let sheet: SheetData | CustomSheet;
@@ -158,6 +169,7 @@ export async function makeShootSheet(
       schema: CustomSheetResult,
       webFetch: rest.length > 0,
       effort: "medium",
+      onFixUp: () => progress("Claude is fixing its answer"),
     });
     const read = readTemplateData(result.dataJson, block.names);
     if ("error" in read) throw new StudioError(read.error);
@@ -166,13 +178,14 @@ export async function makeShootSheet(
     ({ scriptBankEntry, oneLine, couldntOpen } = result);
     title = `${result.h1} · ${date}`;
   } else {
-    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, webFetch: rest.length > 0, effort: "medium" });
+    const result = await ask({ system: SYSTEM_SHEET, context: workspaceContext(job.brand, ws), content, schema: SheetResult, webFetch: rest.length > 0, effort: "medium", onFixUp: () => progress("Claude is fixing its answer") });
     sheet = result.sheet;
     ({ scriptBankEntry, oneLine, couldntOpen } = result);
     title = `${result.sheet.h1} · ${date}`;
   }
 
   // This week's brief is kept with the sheet it was for.
+  progress("Saving the sheet and its edit cards");
   const id = await saveSheet(user.id, projectId, title, weekBrief ? { ...sheet, weekBrief } : sheet);
   // Newest first, so the next sheet sees what's already been made.
   const entry = `## ${title}\n${scriptBankEntry.trim()}`;
@@ -188,7 +201,8 @@ function headerOf(html: string) {
 
 /* ---- Friday review ---- */
 
-export async function fridayReview(user: HubUser, projectId: string, input: { numbers: string; uploads: Upload[] }) {
+export async function fridayReview(user: HubUser, projectId: string, input: { numbers: string; uploads: Upload[] }, progress: Progress = () => {}) {
+  progress("Claude is reviewing the week");
   const job = await projectBasics(user.id, projectId);
   const ws = await getWorkspace(user.id, projectId);
   const result = await ask({

@@ -19,6 +19,8 @@ export type Task = {
   status: "running" | "done" | "failed";
   startedAt: string;
   finishedAt: string | null;
+  /** What it's doing right now. */
+  step?: string;
   result: unknown;
   error: string;
 };
@@ -149,7 +151,11 @@ function TaskRow({ task: t, onDismiss }: { task: Task; onDismiss: () => void }) 
         <p className="truncate font-medium">
           {t.brand} · {LABEL[t.kind]}
         </p>
-        {t.status === "running" && <p className="text-xs text-text-muted">Working… {elapsed} · you can keep using Creator Desk</p>}
+        {t.status === "running" && (
+          <p className="text-xs text-text-muted">
+            {t.step && t.step !== "Starting" ? `${t.step}…` : "Working…"} {elapsed} · you can keep using Creator Desk
+          </p>
+        )}
         {t.status === "done" && (
           <Link href={href} className="text-xs font-semibold text-good underline">
             Ready - open it →
