@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { HELPER_FOR_LIBRARY, helperOlderThan, type Device } from "../../_lib/edits/types";
+import { DEFAULT_MAX_EDITS, HELPER_FOR_LIBRARY, HELPER_FOR_PARALLEL, MAX_EDITS_CHOICES, helperOlderThan, type Device } from "../../_lib/edits/types";
 import { call, CopyButton } from "../../projects/[id]/studio/studio";
 import { useConfirm } from "../../_lib/popups";
 
@@ -57,6 +57,11 @@ export function Helper() {
     setDevices((list) => list?.filter((x) => x.id !== d.id) ?? null);
   }
 
+  async function setMaxEdits(d: Device, maxEdits: number) {
+    setDevices((list) => list?.map((x) => (x.id === d.id ? { ...x, info: { ...x.info, maxEdits } } : x)) ?? null);
+    await call("/api/hub/edits/devices", "PATCH", { id: d.id, maxEdits }).catch((e: Error) => setError(e.message));
+  }
+
   const command = code ? `curl -fsSL ${code.origin}/helper/install.sh | bash -s -- ${code.code}` : "";
   const update = `curl -fsSL ${origin}/helper/creator-desk-helper.mjs -o ~/.creator-desk/creator-desk-helper.mjs`;
 
@@ -97,6 +102,32 @@ export function Helper() {
                   {d.online && d.info.capcutRunning && <p className="text-xs text-warn">CapCut is open. Close it before an edit saves, or Claude will wait for you.</p>}
                   {d.info.folders?.length ? <p className="text-xs text-text-dim">Looks for clips in {d.info.folders.map((f) => f.replace(/^\/Users\/[^/]+/, "~")).join(", ")}</p> : null}
                   {d.info.libraries?.length ? <p className="text-xs text-text-dim">Finds B-roll in Apple Photos and {d.info.libraries.join(", ")}</p> : null}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                    <span id={`at-once-${d.id}`}>Edits at once</span>
+                    <div role="radiogroup" aria-labelledby={`at-once-${d.id}`} className="flex overflow-hidden rounded-lg border border-border">
+                      {MAX_EDITS_CHOICES.map((n) => {
+                        const on = (d.info.maxEdits ?? DEFAULT_MAX_EDITS) === n;
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            aria-label={`${n} at once on ${d.name}`}
+                            onClick={() => setMaxEdits(d, n)}
+                            className={`px-2.5 py-1 font-medium ${on ? "bg-accent text-on-accent" : "hover:bg-bg-elevated"}`}
+                          >
+                            {n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-text-dim">
+                      {helperOlderThan(d.info.helper, HELPER_FOR_PARALLEL)
+                        ? "This helper does one at a time until it updates itself (or you start it again)."
+                        : "More at once is quicker overall; each one goes a bit slower and the Mac works harder."}
+                    </span>
+                  </div>
                   {!helperOlderThan(d.info.helper, "0.2.1") && d.info.osxphotos === false && (
                     <div className="mt-2 space-y-1 rounded-lg bg-bg-elevated px-3 py-2 text-xs text-text-muted">
                       <p>

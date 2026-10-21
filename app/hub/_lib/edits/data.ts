@@ -2,7 +2,7 @@ import "server-only";
 import { readsFor } from "./mac-reads";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
-import type { Device, DeviceFile, EditCard, EditEvent, EditFile, EditStatus } from "./types";
+import { DEFAULT_MAX_EDITS, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
 
 /* Edit cards, their conversations, and the Macs that run them. Every query is
    scoped to one user here; the tables themselves are server-only. */
@@ -152,10 +152,26 @@ export async function deviceFromRequest(request: Request): Promise<DeviceAuth | 
 }
 
 export async function touchDevice(deviceId: string, info?: Record<string, unknown>) {
+  // What the helper reports replaces what it reported before; your settings for that Mac stay.
+  let next = info;
+  if (info) {
+    const { data } = await adminClient().from("hub_devices").select("info").eq("id", deviceId).maybeSingle<{ info: Device["info"] | null }>();
+    const maxEdits = data?.info?.maxEdits;
+    next = { ...info, ...(maxEdits ? { maxEdits } : {}) };
+  }
   await adminClient()
     .from("hub_devices")
-    .update({ last_seen: new Date().toISOString(), ...(info ? { info } : {}) })
+    .update({ last_seen: new Date().toISOString(), ...(next ? { info: next } : {}) })
     .eq("id", deviceId);
+}
+
+/** How many edits one of your Macs runs at once. */
+export async function setMaxEdits(userId: string, deviceId: string, maxEdits: number) {
+  const db = adminClient();
+  const { data } = await db.from("hub_devices").select("info").eq("user_id", userId).eq("id", deviceId).maybeSingle<{ info: Device["info"] | null }>();
+  if (!data) return;
+  const { error } = await db.from("hub_devices").update({ info: { ...(data.info ?? {}), maxEdits } }).eq("user_id", userId).eq("id", deviceId);
+  if (error) throw error;
 }
 
 export async function listDevices(userId: string): Promise<Device[]> {
@@ -210,11 +226,12 @@ export async function listDeviceFiles(userId: string): Promise<DeviceFile[]> {
 /** What a Mac should do next: edits to start, clip pickers to open, replies to pass on, edits to stop. */
 export async function workFor(auth: DeviceAuth) {
   const db = adminClient();
-  const [queued, picks, running] = await Promise.all([
+  const [queued, picks, running, device] = await Promise.all([
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
     // A picker opens only on the Mac it was asked of (or any Mac, if none was named).
     db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).or(`device_id.is.null,device_id.eq.${auth.deviceId}`).limit(5),
     db.from("hub_edits").select("id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
+    db.from("hub_devices").select("info").eq("id", auth.deviceId).maybeSingle<{ info: Device["info"] | null }>(),
   ]);
   const runIds = (running.data ?? []).map((r) => r.id);
   // The brand name for each queued edit, so the prompt can say whose video it is.
@@ -233,6 +250,8 @@ export async function workFor(auth: DeviceAuth) {
     replies: replies.map((r) => ({ eventId: r.id, editId: r.edit_id, text: r.text, sessionId: running.data?.find((x) => x.id === r.edit_id)?.session_id ?? null })),
     cancels: (running.data ?? []).filter((r) => r.cancel_requested).map((r) => r.id),
     reads: await readsFor(auth),
+    // How many edits this Mac runs side by side.
+    maxEdits: device.data?.info?.maxEdits ?? DEFAULT_MAX_EDITS,
   };
 }
 
