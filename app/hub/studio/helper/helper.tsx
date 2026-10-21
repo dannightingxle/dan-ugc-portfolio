@@ -185,6 +185,22 @@ export function Helper() {
           </p>
         </div>
       </section>
+
+      <section className="space-y-3 rounded-2xl border border-border bg-bg-card p-5">
+        <h2 className="font-serif text-2xl">Pages you&apos;re logged in to</h2>
+        <p className="text-sm text-text-muted">
+          Some brief links only open when you&apos;re signed in (a brand&apos;s portal, a page behind &quot;Sign in with Google&quot;). Creator Desk can&apos;t use your logins, so
+          while the helper is running, those links are opened in a new tab of <strong>Google Chrome on your Mac</strong>, where you&apos;re already signed in. The page&apos;s
+          text is copied for the shoot sheet and the tab closes again.
+        </p>
+        <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <li>
+            In Chrome, open the <strong>View</strong> menu → <strong>Developer</strong> → tick <strong>Allow JavaScript from Apple Events</strong>. (Once.)
+          </li>
+          <li>The first time, your Mac asks to let Terminal (or Node) control Google Chrome: say OK.</li>
+          <li>Leave the helper running and stay signed in to the sites in Chrome. If your Mac is off, Claude tries the links itself as before.</li>
+        </ol>
+      </section>
     </div>
   );
 }

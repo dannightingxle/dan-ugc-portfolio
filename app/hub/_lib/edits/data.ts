@@ -1,4 +1,5 @@
 import "server-only";
+import { readsFor } from "./mac-reads";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
 import type { Device, DeviceFile, EditCard, EditEvent, EditFile, EditStatus } from "./types";
@@ -223,6 +224,7 @@ export async function workFor(auth: DeviceAuth) {
     picks: (picks.data ?? []).map((p) => ({ id: p.id, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
     replies: replies.map((r) => ({ eventId: r.id, editId: r.edit_id, text: r.text, sessionId: running.data?.find((x) => x.id === r.edit_id)?.session_id ?? null })),
     cancels: (running.data ?? []).filter((r) => r.cancel_requested).map((r) => r.id),
+    reads: await readsFor(auth),
   };
 }
 
