@@ -87,6 +87,11 @@ export async function saveSheet(userId: string, projectId: string, title: string
   return data.id;
 }
 
+export async function updateSheet(userId: string, id: string, title: string, sheet: SheetData | CustomSheet) {
+  const { error } = await adminClient().from("hub_shoot_sheets").update({ title, data: sheet }).eq("user_id", userId).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteSheet(userId: string, id: string) {
   const { error } = await adminClient().from("hub_shoot_sheets").delete().eq("user_id", userId).eq("id", id);
   if (error) throw error;

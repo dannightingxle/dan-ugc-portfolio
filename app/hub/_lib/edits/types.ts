@@ -57,7 +57,8 @@ export type EditCard = {
 
 export type EditEvent = { id: number; kind: "status" | "assistant" | "tool" | "user" | "error" | "done"; text: string; at: string };
 
-export type DeviceFile = { path: string; name: string; folder: string; modifiedAt: string | null; duration: number | null; thumb: string | null };
+/** A recent clip on one of your Macs (deviceId says which). */
+export type DeviceFile = { deviceId: string; path: string; name: string; folder: string; modifiedAt: string | null; duration: number | null; thumb: string | null };
 export type Device = {
   id: string;
   name: string;

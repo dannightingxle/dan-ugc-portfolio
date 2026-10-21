@@ -9,6 +9,7 @@ import { isPublicPath, useAccount } from "./account-provider";
 import { BRAND } from "./_lib/brand";
 import { FeedbackButton } from "./feedback";
 import { Tooltip } from "./_lib/popups";
+import { JobsMenu } from "./_lib/studio/jobs-menu";
 
 const LINKS = [
   { href: "/hub", label: "Home", icon: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
@@ -65,6 +66,7 @@ export function HubNav() {
           )}
           <div className="ml-auto flex items-center gap-3">
             <TrialBadge />
+            {appVisible && <JobsMenu />}
             {appVisible && (
               <span className="hidden lg:block">
                 <SourceBadge source={data?.source} />

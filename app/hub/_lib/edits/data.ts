@@ -70,6 +70,13 @@ export async function createEdit(userId: string, e: { projectId: string; sheetId
   return toCard(data);
 }
 
+/** One of the user's Macs, or null if that id isn't theirs. */
+export async function ownDevice(userId: string, deviceId: string | undefined) {
+  if (!deviceId) return null;
+  const { data } = await adminClient().from("hub_devices").select("id").eq("user_id", userId).eq("id", deviceId).not("token_hash", "is", null).maybeSingle<{ id: string }>();
+  return data?.id ?? null;
+}
+
 export async function updateEdit(userId: string, id: string, patch: Record<string, unknown>) {
   const { data, error } = await adminClient()
     .from("hub_edits")
@@ -168,7 +175,7 @@ export async function removeDevice(userId: string, id: string) {
 }
 
 /** Replace the list of recent clips a Mac can see. */
-export async function saveDeviceFiles(deviceId: string, files: DeviceFile[]) {
+export async function saveDeviceFiles(deviceId: string, files: Omit<DeviceFile, "deviceId">[]) {
   const db = adminClient();
   await db.from("hub_device_files").delete().eq("device_id", deviceId);
   if (!files.length) return;
@@ -190,12 +197,12 @@ export async function listDeviceFiles(userId: string): Promise<DeviceFile[]> {
   if (!devices.length) return [];
   const { data, error } = await adminClient()
     .from("hub_device_files")
-    .select("path, name, folder, modified_at, duration, thumb")
+    .select("device_id, path, name, folder, modified_at, duration, thumb")
     .in("device_id", devices.map((d) => d.id))
     .order("modified_at", { ascending: false })
     .limit(80);
   if (error) throw error;
-  return (data ?? []).map((f) => ({ path: f.path, name: f.name, folder: f.folder, modifiedAt: f.modified_at, duration: f.duration, thumb: f.thumb }));
+  return (data ?? []).map((f) => ({ deviceId: f.device_id, path: f.path, name: f.name, folder: f.folder, modifiedAt: f.modified_at, duration: f.duration, thumb: f.thumb }));
 }
 
 // ---------------------------------------------------------------- the helper's work queue
@@ -205,7 +212,8 @@ export async function workFor(auth: DeviceAuth) {
   const db = adminClient();
   const [queued, picks, running] = await Promise.all([
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
-    db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).limit(5),
+    // A picker opens only on the Mac it was asked of (or any Mac, if none was named).
+    db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).or(`device_id.is.null,device_id.eq.${auth.deviceId}`).limit(5),
     db.from("hub_edits").select("id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
   ]);
   const runIds = (running.data ?? []).map((r) => r.id);

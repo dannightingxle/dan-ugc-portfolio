@@ -424,6 +424,17 @@ export function imageBlocks(images: PageImage[]) {
   ]);
 }
 
+/** Links that couldn't be opened, each once: the first reason given for a link wins (ours come before Claude's). */
+export function couldntOpenOnce(...lists: string[][]) {
+  const seen = new Set<string>();
+  return lists.flat().filter((line) => {
+    const key = /^(https?:\/\/\S+)/.exec(line.trim())?.[1]?.replace(/[.,;:)]+$/, "") ?? line.trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Links in the text that weren't opened here (left for Claude's web fetch). */
 export function otherLinks(text: string, pages: LinkedPage[]) {
   const done = new Set(readableLinks(text).map((l) => l.url));
