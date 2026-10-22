@@ -61,6 +61,20 @@ export function YourTodos() {
       )
       .finally(() => pending.current--);
   }
+  // Adding one waits its turn in the same queue: a tick still on its way could otherwise answer after it
+  // with the list from before, and the new to-do would vanish from the screen (it's saved either way).
+  function addTodo(body: unknown) {
+    pending.current++;
+    setError("");
+    const added = queue.current.then(() => call<{ todos: Todo[] }>(API, "POST", body));
+    queue.current = added
+      .then((r) => {
+        if (pending.current === 1) setTodos(r.todos);
+      })
+      .catch(() => {})
+      .finally(() => pending.current--);
+    return added.then(() => undefined);
+  }
   function patch(t: Todo, changes: Partial<Todo>) {
     setTodos((list) => list && list.map((x) => (x.id === t.id ? { ...x, ...changes } : x)));
     send(API, "PATCH", { id: t.id, ...changes });
@@ -104,7 +118,7 @@ export function YourTodos() {
         {todos && <span className="text-sm text-text-dim">{count === 0 ? "All clear" : `${count} to do`}</span>}
       </div>
 
-      <AddTodo jobs={live} onAdded={setTodos} />
+      <AddTodo jobs={live} add={addTodo} />
       {error && <p className="text-sm text-accent">{error}</p>}
 
       {!todos ? (
@@ -283,7 +297,7 @@ function TodoRow({ t, job, today, onTick, onSubmit, onEdit, onDelete }: { t: Tod
   );
 }
 
-function AddTodo({ jobs, onAdded }: { jobs: Project[]; onAdded: (todos: Todo[]) => void }) {
+function AddTodo({ jobs, add: addTodo }: { jobs: Project[]; add: (body: unknown) => Promise<void> }) {
   const [text, setText] = useState("");
   const [more, setMore] = useState(false);
   const [projectId, setProjectId] = useState("");
@@ -300,8 +314,7 @@ function AddTodo({ jobs, onAdded }: { jobs: Project[]; onAdded: (todos: Todo[]) 
     setError("");
     try {
       const n = parseInt(count, 10);
-      const r = await call<{ todos: Todo[] }>(API, "POST", { text, projectId, repeat, due, count: n > 0 ? Math.min(n, 99) : null });
-      onAdded(r.todos);
+      await addTodo({ text, projectId, repeat, due, count: n > 0 ? Math.min(n, 99) : null });
       setText("");
       setProjectId("");
       setRepeat("");
