@@ -236,3 +236,41 @@ export function ReachChart({ points }: { points: ReachPoint[] }) {
     </div>
   );
 }
+
+/* ---- Showing that something's happening ---- */
+
+/** A small spinning circle, in the text colour, for anything that takes a moment. */
+export function Spinner({ className = "" }: { className?: string }) {
+  return <span aria-hidden className={`inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent align-[-2px] ${className}`} />;
+}
+
+/** A button's label while its action runs: a spinner and what it's doing ("Saving…"). */
+export function Busy({ busy, label, children }: { busy: boolean; label: string; children: React.ReactNode }) {
+  return busy ? (
+    <span className="inline-flex items-center gap-2">
+      <Spinner />
+      {label}
+    </span>
+  ) : (
+    <>{children}</>
+  );
+}
+
+/** Runs one async action at a time and says when it's running: const [saving, save] = useBusy(); onClick={() => save(async () => …)}.
+    Pressing again while it runs does nothing, so a double click never sends it twice. */
+export function useBusy() {
+  const [busy, setBusy] = useState(false);
+  const running = useRef(false);
+  const run = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+    if (running.current) return undefined;
+    running.current = true;
+    setBusy(true);
+    try {
+      return await fn();
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  };
+  return [busy, run] as const;
+}

@@ -347,6 +347,38 @@ export async function listDeviceFiles(userId: string): Promise<DeviceFile[]> {
 const wantsBackground = (info: Device["info"] | null | undefined) =>
   info?.backgroundWanted === undefined || info.backgroundWanted === Boolean(info.background) ? null : info.backgroundWanted;
 
+// A picker request goes to one helper only, once - even with two helpers running on a Mac (an older one
+// left running, say), which would otherwise both open it. Handing it out moves its time back 100 years:
+// still "waiting for your pick" on the card, but not handed out again. One left unanswered for 11 minutes
+// (the picker gives up after 10) is cleared.
+const CLAIMED_BEFORE = "1950-01-01T00:00:00Z";
+const yearsBack = (iso: string, years: number) => {
+  const d = new Date(iso);
+  d.setUTCFullYear(d.getUTCFullYear() - years);
+  return d.toISOString();
+};
+type PickRow = { id: string; video_code: string; title: string; pick_mode: string; pick_requested_at: string };
+async function claimPicks(userId: string, rows: PickRow[]) {
+  const db = adminClient();
+  const claimed: PickRow[] = [];
+  for (const r of rows) {
+    if (Date.parse(r.pick_requested_at) < Date.parse(CLAIMED_BEFORE)) {
+      if (Date.parse(yearsBack(r.pick_requested_at, -100)) < Date.now() - 11 * 60_000)
+        await db.from("hub_edits").update({ pick_requested_at: null }).eq("user_id", userId).eq("id", r.id).eq("pick_requested_at", r.pick_requested_at);
+      continue;
+    }
+    const { data } = await db
+      .from("hub_edits")
+      .update({ pick_requested_at: yearsBack(r.pick_requested_at, 100) })
+      .eq("user_id", userId)
+      .eq("id", r.id)
+      .eq("pick_requested_at", r.pick_requested_at)
+      .select("id");
+    if (data?.length) claimed.push(r);
+  }
+  return claimed;
+}
+
 export async function workFor(auth: DeviceAuth, runningIds: string[] | null = null) {
   const db = adminClient();
   if (runningIds) await releaseDropped(auth, runningIds);
@@ -398,7 +430,7 @@ export async function workFor(auth: DeviceAuth, runningIds: string[] | null = nu
   return {
     edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", notes: [...(notes.get(ALL_EDITS) ?? []), ...(notes.get(r.project_id) ?? [])], files: r.files ?? [], sessionId: r.session_id, style: styleOf(r.project_id) })),
     // "at" tells one press of a picker button from the next, so a Mac opens each picker once.
-    picks: (picks.data ?? []).map((p) => ({ id: p.id, at: p.pick_requested_at, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
+    picks: (await claimPicks(auth.userId, (picks.data ?? []) as PickRow[])).map((p) => ({ id: p.id, at: p.pick_requested_at, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
     replies: replies.map((r) => {
       const run = running.data?.find((x) => x.id === r.edit_id);
       return { eventId: r.id, editId: r.edit_id, text: r.text, sessionId: run?.session_id ?? null, folder: folders.get(run?.project_id ?? "") ?? "" };
