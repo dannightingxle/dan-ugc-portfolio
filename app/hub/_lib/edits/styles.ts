@@ -278,7 +278,9 @@ For each style:
 - rules: the concrete editing rules for this style, one line each, starting with what it's about ("Captions:", "Text:", "Fonts:", "B-roll:", "Cuts:", "Music:", "Hook:", "Zooms:", "Length:", "Export:"). Keep the specifics (fonts, sizes, colours, positions, timings). Only rules that are written in the files: never invent, guess or pad one.
 Leave out instructions that aren't about how the videos look and sound (running tools, MCP setup, file housekeeping) and one-offs for a single video. If the files hold no editing rules at all, return no styles.
 
-reply: one or two friendly sentences to the creator saying which styles you found (or that you found none, and why).`;
+Their existing styles are listed first, with their rules. They may come from reading another of their Macs, which can be set up differently, so they add together: when a style in these files is one they already have, return it complete - every existing rule, plus what's new in these files, rewriting a rule only where these files clearly change it. Never drop an existing rule just because these files don't mention it. Styles marked "set by them" were written by the creator: still list them if the files have them, but they won't be changed.
+
+reply: one or two friendly sentences to the creator saying which styles you found (or that you found none, and why) and what was new on this Mac.`;
 
 const Sorted = z.object({
   styles: z.array(z.object({ name: z.string(), kind: z.enum(STYLE_KINDS), summary: z.string(), rules: z.array(z.string()) })),
@@ -291,6 +293,15 @@ export async function failRequest(auth: DeviceAuth, id: string, kind: "scan" | "
   if (!row) return false;
   return patchRequest(auth.userId, row, { status: "failed", error: error.slice(0, 500), finishedAt: new Date().toISOString() });
 }
+
+/** A saved style as Claude sees it before a read: its rules, and where it came from. */
+function existingStyle(s: EditStyle) {
+  const from = s.source === "you" ? ' set-by="them"' : s.macs?.length ? ` read-from="${s.macs.join(", ")}"` : "";
+  return [`<style name="${s.name.replace(/"/g, "'")}" kind="${s.kind}"${from}>`, s.summary && `Summary: ${s.summary}`, ...s.rules.map((r) => `- ${r}`), "</style>"].filter(Boolean).join("\n");
+}
+
+/** The Macs a style has been read from, this one added. */
+const withMac = (macs: string[] | undefined, mac: string) => [...new Set([...(macs ?? []), mac])].slice(0, 10);
 
 /** Your Mac sent its CLAUDE.md, skill and memory files: Claude sorts them into styles, merged into the ones you have by name.
     Styles from an earlier read are updated; ones you've changed yourself are left as they are. */
@@ -315,7 +326,7 @@ export async function sortScan(auth: DeviceAuth, id: string, files: { path: stri
         {
           type: "text",
           text: [
-            current.length ? `Their existing styles:\n${current.map((s) => `- ${s.name} (${s.kind})`).join("\n")}` : "They have no styles saved yet.",
+            current.length ? `Their existing styles:\n${current.map(existingStyle).join("\n")}` : "They have no styles saved yet.",
             `The files from their Mac (${files.length}):`,
             ...files.map((f) => `<file path="${f.path.replace(/"/g, "'")}">\n${f.text}\n</file>`),
           ].join("\n\n"),
@@ -330,8 +341,10 @@ export async function sortScan(auth: DeviceAuth, id: string, files: { path: stri
     return { ok: false, error };
   }
 
-  // Merge by name: update earlier reads, never overwrite one you've changed, add the new ones.
+  // Merge by name: update earlier reads (Claude has added this Mac's rules to theirs), never overwrite one you've changed, add the new ones.
   const now = new Date().toISOString();
+  const { data: device } = await adminClient().from("hub_devices").select("name").eq("id", auth.deviceId).maybeSingle<{ name: string }>();
+  const mac = device?.name || "your Mac";
   const latest = await listStyles(auth.userId);
   const next = [...latest];
   const added: string[] = [], updated: string[] = [], kept: string[] = [];
@@ -345,10 +358,10 @@ export async function sortScan(auth: DeviceAuth, id: string, files: { path: stri
     if (i >= 0 && next[i].source === "you") {
       kept.push(next[i].name);
     } else if (i >= 0) {
-      next[i] = { ...next[i], kind: s.kind, summary: s.summary.trim().slice(0, 1_000), rules, updatedAt: now };
+      next[i] = { ...next[i], kind: s.kind, summary: s.summary.trim().slice(0, 1_000), rules, macs: withMac(next[i].macs, mac), updatedAt: now };
       updated.push(next[i].name);
     } else if (next.length < MAX_STYLES) {
-      next.push({ id: newId(), name, kind: s.kind, summary: s.summary.trim().slice(0, 1_000), rules, source: "mac", updatedAt: now, frameCount: 0 });
+      next.push({ id: newId(), name, kind: s.kind, summary: s.summary.trim().slice(0, 1_000), rules, source: "mac", macs: withMac([], mac), updatedAt: now, frameCount: 0 });
       added.push(name);
     }
   }

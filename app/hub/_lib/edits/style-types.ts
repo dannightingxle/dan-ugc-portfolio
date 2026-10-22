@@ -15,6 +15,8 @@ export type EditStyle = {
   summary: string;
   rules: string[];
   source: "mac" | "you";
+  /** The Macs it was read from (reads from different Macs add together). */
+  macs?: string[];
   updatedAt: string;
 };
 
