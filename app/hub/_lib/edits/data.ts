@@ -353,7 +353,7 @@ export async function workFor(auth: DeviceAuth, runningIds: string[] | null = nu
   const [queued, picks, running, device, styles] = await Promise.all([
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
     // A picker opens only on the Mac it was asked of (or any Mac, if none was named).
-    db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).or(`device_id.is.null,device_id.eq.${auth.deviceId}`).limit(5),
+    db.from("hub_edits").select("id, video_code, title, pick_mode, pick_requested_at").eq("user_id", auth.userId).not("pick_requested_at", "is", null).or(`device_id.is.null,device_id.eq.${auth.deviceId}`).limit(5),
     db.from("hub_edits").select("id, project_id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
     db.from("hub_devices").select("info").eq("id", auth.deviceId).maybeSingle<{ info: Device["info"] | null }>(),
     listStyles(auth.userId),
@@ -397,7 +397,8 @@ export async function workFor(auth: DeviceAuth, runningIds: string[] | null = nu
   };
   return {
     edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", notes: [...(notes.get(ALL_EDITS) ?? []), ...(notes.get(r.project_id) ?? [])], files: r.files ?? [], sessionId: r.session_id, style: styleOf(r.project_id) })),
-    picks: (picks.data ?? []).map((p) => ({ id: p.id, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
+    // "at" tells one press of a picker button from the next, so a Mac opens each picker once.
+    picks: (picks.data ?? []).map((p) => ({ id: p.id, at: p.pick_requested_at, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
     replies: replies.map((r) => {
       const run = running.data?.find((x) => x.id === r.edit_id);
       return { eventId: r.id, editId: r.edit_id, text: r.text, sessionId: run?.session_id ?? null, folder: folders.get(run?.project_id ?? "") ?? "" };

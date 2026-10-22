@@ -689,12 +689,20 @@ async function pickVideo(prompt) {
   return stdout.split("\n").map((l) => l.trim()).find(Boolean) || "";
 }
 
+// Each press of a picker button opens the picker once, even if Creator Desk asks again before it hears back.
+const picksSeen = new Set();
+const MAX_PICKED = 150;
 async function handlePick(p) {
+  const key = `${p.id}:${p.at ?? ""}`;
+  if (picksSeen.has(key)) return;
+  picksSeen.add(key);
   log(`Opening the ${p.mode === "folder" ? "folder" : "file"} picker for ${p.label || "a video"}…`);
   const paths = pickFiles(p.label, p.mode);
-  const picked = paths.map((f) => ({ path: f, name: path.basename(f), duration: duration(f) }));
-  await update(p.id, { pickDone: true, picked });
-  log(picked.length ? `Picked ${picked.length} file(s).` : "Nothing picked.");
+  if (paths.length > MAX_PICKED) log(`That's ${paths.length} files - using the first ${MAX_PICKED}.`);
+  const picked = paths.slice(0, MAX_PICKED).map((f) => ({ path: f, name: path.basename(f), duration: duration(f) }));
+  const r = await update(p.id, { pickDone: true, picked }).catch((e) => ({ ok: false, error: e.message }));
+  if (r?.ok === false) log("Couldn't send what you picked to Creator Desk:", r.error);
+  else log(picked.length ? `Picked ${picked.length} file(s).` : "Nothing picked.");
 }
 
 // ------------------------------------------------------------ edit styles: your editing setup and key frames
@@ -1799,11 +1807,42 @@ async function selfUpdate() {
 // in a Terminal window the new one carries on there (just the helper - never the connect code it may have started with).
 function restart() {
   if (BACKGROUND) process.exit(0);
-  const child = spawn(process.execPath, [path.resolve(process.argv[1])], { stdio: "inherit", env: process.env });
+  const child = spawn(process.execPath, [path.resolve(process.argv[1])], { stdio: "inherit", env: { ...process.env, CDH_PARENT_PID: String(process.pid) } });
   child.on("exit", (c) => process.exit(c ?? 0));
 }
 
+// One helper per Mac: two would both open every picker and both take the same work. A helper started
+// while another is running takes over from it - unless that one runs in the background, which carries on.
+const PIDFILE = path.join(HOME, "helper.pid");
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+function onlyHelper() {
+  let other = null;
+  try {
+    other = JSON.parse(fs.readFileSync(PIDFILE, "utf8"));
+  } catch {}
+  // (A helper restarting after an update starts its new self before it goes: that one's not "another".)
+  if (other?.pid && other.pid !== process.pid && String(other.pid) !== process.env.CDH_PARENT_PID && alive(other.pid)) {
+    if (other.background && !BACKGROUND) {
+      log("The helper is already running in the background on this Mac, so there's nothing to do here. You can close this window.");
+      process.exit(0);
+    }
+    log(`Another helper was running on this Mac - this one takes over from it.`);
+    try {
+      process.kill(other.pid, "SIGTERM");
+    } catch {}
+  }
+  fs.writeFileSync(PIDFILE, JSON.stringify({ pid: process.pid, background: BACKGROUND }));
+}
+
 async function loop() {
+  onlyHelper();
   log(`Creator Desk Helper ${VERSION} is running for ${cfg.server}. Leave this window open.`);
   await report(true).catch((e) => log("Couldn't reach Creator Desk:", e.message));
   let failures = 0;

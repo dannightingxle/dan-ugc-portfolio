@@ -9,7 +9,9 @@ import type { FeatureKey } from "../features-list";
 /* Shared plumbing for the Edits API routes the web app calls (the helper's own routes use a device token instead), and the to-dos'. */
 
 export const text = (max: number) => z.string().max(max).default("");
-export const FileList = z.array(z.object({ path: z.string().min(1).max(1_000), name: z.string().max(300), duration: z.number().nullable().optional() })).max(40);
+/** Files picked for one edit (a folder of clips, images and audio can hold a lot). */
+export const MAX_PICKED = 150;
+export const FileList = z.array(z.object({ path: z.string().min(1).max(1_000), name: z.string().max(300), duration: z.number().nullable().optional() })).max(MAX_PICKED);
 
 export async function editsApi<S extends z.ZodType>(
   request: Request,

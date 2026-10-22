@@ -2,6 +2,7 @@ import { z } from "zod";
 import { addEvents, addNotes, claimEdit, getEdit, markDelivered, updateEdit } from "../../../../../hub/_lib/edits/data";
 import { helperApi } from "../../../../../hub/_lib/edits/helper-auth";
 import { ALL_EDITS, EDIT_STATUSES } from "../../../../../hub/_lib/edits/types";
+import { MAX_PICKED } from "../../../../../hub/_lib/edits/request";
 
 /* The helper's updates on one edit: claim it, report progress and Claude's
    messages, say which replies it passed on, hand back picked clips, and pass
@@ -12,7 +13,7 @@ const Body = z.object({
   status: z.enum(EDIT_STATUSES).optional(),
   sessionId: z.string().max(200).optional(),
   draftName: z.string().max(300).optional(),
-  picked: z.array(z.object({ path: z.string().max(1_000), name: z.string().max(300), duration: z.number().nullable().optional() })).max(40).optional(),
+  picked: z.array(z.object({ path: z.string().max(1_000), name: z.string().max(300), duration: z.number().nullable().optional() })).max(MAX_PICKED).optional(),
   pickDone: z.boolean().optional(),
   events: z.array(z.object({ kind: z.enum(["status", "assistant", "tool", "error", "done"]), text: z.string().max(20_000) })).max(200).default([]),
   delivered: z.array(z.number().int()).max(200).default([]),
@@ -23,8 +24,14 @@ const Body = z.object({
 export async function POST(request: Request, ctx: RouteContext<"/api/hub/helper/edits/[id]">) {
   const { id } = await ctx.params;
   return helperApi(request, async (auth) => {
-    const parsed = Body.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return { ok: false, error: "bad request" };
+    const raw = await request.json().catch(() => null);
+    // The picker has closed: whatever else is wrong with what came back, stop asking for it, or the Mac opens it again and again.
+    if (raw?.pickDone === true && Array.isArray(raw.picked) && raw.picked.length > MAX_PICKED) raw.picked = raw.picked.slice(0, MAX_PICKED);
+    const parsed = Body.safeParse(raw);
+    if (!parsed.success) {
+      if (raw?.pickDone === true) await updateEdit(auth.userId, id, { pick_requested_at: null }).catch(() => {});
+      return { ok: false, error: "bad request" };
+    }
     const b = parsed.data;
     const edit = await getEdit(auth.userId, id);
     if (!edit) return { ok: false, error: "gone" };

@@ -247,7 +247,7 @@ export function Helper() {
               <CopyButton text={command} label="Copy" />
             </div>
             <p className={`text-sm ${connected ? "font-medium text-good" : "text-text-muted"}`}>
-              {connected ? "Connected. To close that Terminal window for good, press Run in the background next to this Mac above." : "Waiting for your Mac…"}
+              {connected ? "Connected. Leave that Terminal window open while you edit - or press Run in the background next to this Mac above, then close it." : "Waiting for your Mac…"}
             </p>
           </div>
         )}
