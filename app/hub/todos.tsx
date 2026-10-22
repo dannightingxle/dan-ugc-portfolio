@@ -299,8 +299,11 @@ function AddTodo({ jobs, onAdded }: { jobs: Project[]; onAdded: (todos: Todo[]) 
       const r = await call<{ todos: Todo[] }>(API, "POST", { text, projectId, repeat, due, count: n > 0 ? Math.min(n, 99) : null });
       onAdded(r.todos);
       setText("");
+      setProjectId("");
+      setRepeat("");
       setCount("");
       setDue("");
+      setMore(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
