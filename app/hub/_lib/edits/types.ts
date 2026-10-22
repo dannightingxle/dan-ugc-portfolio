@@ -62,6 +62,14 @@ export type EditCard = {
 export type EditEvent = { id: number; kind: "status" | "assistant" | "tool" | "user" | "error" | "done"; text: string; at: string };
 
 /** A recent clip on one of your Macs (deviceId says which). */
+/** What a picked file is, from its name: edits can use videos, images and audio. */
+export type MediaKind = "video" | "image" | "audio";
+export function mediaKind(name: string): MediaKind {
+  if (/\.(jpe?g|png|heic|heif|gif|webp|tiff?|bmp|svg|psd)$/i.test(name)) return "image";
+  if (/\.(mp3|wav|m4a|aac|aiff?|flac|ogg|caf|opus)$/i.test(name)) return "audio";
+  return "video";
+}
+
 export type DeviceFile = { deviceId: string; path: string; name: string; folder: string; modifiedAt: string | null; duration: number | null; thumb: string | null };
 export type Device = {
   id: string;
@@ -75,7 +83,7 @@ export type Device = {
 export const DEFAULT_MAX_EDITS = 3;
 export const MAX_EDITS_CHOICES = [1, 2, 3, 4];
 /** The helper on the site now (keep in step with VERSION in public/helper/creator-desk-helper.mjs). */
-export const LATEST_HELPER = "0.3.9";
+export const LATEST_HELPER = "0.3.10";
 /** The oldest helper that runs more than one edit at once. */
 export const HELPER_FOR_PARALLEL = "0.3.3";
 

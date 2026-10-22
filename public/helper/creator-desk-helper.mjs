@@ -28,6 +28,9 @@
   in ~/.creator-desk/backups, it never deletes anything, and it only ever writes CLAUDE.md files, skills
   and Claude Code memory.
 
+  An edit can use any media you pick: videos, images (stills, logos, screenshots) and audio (voiceovers,
+  music). Claude is told which is which.
+
   It keeps itself up to date: when Creator Desk has a newer helper, it downloads it and restarts
   between edits (set CDH_NO_UPDATE=1 to stop that).
 
@@ -49,7 +52,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.9";
+const VERSION = "0.3.10";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -59,6 +62,11 @@ const BROLL = path.join(os.homedir(), "Movies", "Creator Desk", "B-roll");
 const TRIALS = path.join(os.homedir(), "Movies", "Creator Desk", "Trial reels");
 const POLL_MS = Number(process.env.CDH_POLL_MS) || 2000;
 const VIDEO = /\.(mov|mp4|m4v)$/i;
+// Anything CapCut takes: videos, images (stills, logos, screenshots) and audio (voiceovers, music).
+const MEDIA_VIDEO = /\.(mov|mp4|m4v|avi|mkv|webm|mts|m2ts|3gp)$/i;
+const MEDIA_IMAGE = /\.(jpe?g|png|heic|heif|gif|webp|tiff?|bmp|svg|psd)$/i;
+const MEDIA_AUDIO = /\.(mp3|wav|m4a|aac|aiff?|flac|ogg|caf|opus)$/i;
+const mediaKind = (name) => (MEDIA_VIDEO.test(name) ? "video" : MEDIA_IMAGE.test(name) ? "image" : MEDIA_AUDIO.test(name) ? "audio" : null);
 
 // ------------------------------------------------------------ settings
 
@@ -111,6 +119,7 @@ const ffprobe = () => process.env.CDH_FFPROBE || (has("ffprobe") ? "ffprobe" : "
 const ffmpeg = () => process.env.CDH_FFMPEG || (has("ffmpeg") ? "ffmpeg" : "");
 
 function duration(file) {
+  if (mediaKind(file) === "image") return null;
   const bin = ffprobe();
   if (!bin) return null;
   const out = run(bin, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file]);
@@ -127,11 +136,13 @@ try {
 function thumb(file, mtime) {
   const key = `${file}|${mtime}`;
   if (thumbCache[key] !== undefined) return thumbCache[key];
-  const bin = ffmpeg();
+  const bin = mediaKind(file) === "audio" ? null : ffmpeg();
   let data = null;
   if (bin) {
     const out = path.join(os.tmpdir(), `cdh-${process.pid}.jpg`);
-    run(bin, ["-v", "error", "-y", "-ss", "1", "-i", file, "-frames:v", "1", "-vf", "scale=160:-2", "-q:v", "6", out], { timeout: 20_000 });
+    // A picture is its own thumbnail; a video's is a second in.
+    const from = mediaKind(file) === "image" ? ["-i", file] : ["-ss", "1", "-i", file];
+    run(bin, ["-v", "error", "-y", ...from, "-frames:v", "1", "-vf", "scale=160:-2", "-q:v", "6", out], { timeout: 20_000 });
     try {
       data = "data:image/jpeg;base64," + fs.readFileSync(out).toString("base64");
       fs.rmSync(out);
@@ -187,7 +198,8 @@ function info() {
   };
 }
 
-// The newest videos in your folders (two levels deep, last 3 weeks), skipping CapCut's own files.
+// The newest media in your folders (two levels deep, last 3 weeks), skipping CapCut's own files: up to 40 videos,
+// 20 images and 20 audio files, so a pile of screenshots never pushes your clips off the list.
 function recentClips() {
   const since = Date.now() - 21 * 86_400_000;
   const found = [];
@@ -203,18 +215,18 @@ function recentClips() {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
         if (depth < 2 && !/^(CapCut|node_modules|Library|Photos Library\.photoslibrary)$/i.test(e.name) && !e.name.endsWith(".photoslibrary")) walk(p, depth + 1);
-      } else if (VIDEO.test(e.name)) {
+      } else if (mediaKind(e.name)) {
         try {
           const st = fs.statSync(p);
-          if (st.mtimeMs >= since) found.push({ path: p, name: e.name, folder: dir.replace(os.homedir(), "~"), mtime: st.mtimeMs });
+          if (st.mtimeMs >= since) found.push({ path: p, name: e.name, kind: mediaKind(e.name), folder: dir.replace(os.homedir(), "~"), mtime: st.mtimeMs });
         } catch {}
       }
     }
   };
   for (const f of cfg.folders) walk(f, 0);
-  return found
+  const newest = (kind, n) => found.filter((f) => f.kind === kind).sort((a, b) => b.mtime - a.mtime).slice(0, n);
+  return [...newest("video", 40), ...newest("image", 20), ...newest("audio", 20)]
     .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, 40)
     .map((f) => ({ path: f.path, name: f.name, folder: f.folder, modifiedAt: new Date(f.mtime).toISOString(), duration: duration(f.path), thumb: thumb(f.path, f.mtime) }));
 }
 
@@ -613,8 +625,8 @@ async function gather(edit, terms, dir) {
 
 // ------------------------------------------------------------ picking clips with the Mac file picker
 
-// The videos in a folder (and the folders inside it), by name - the order you filmed them in.
-function videosIn(dir) {
+// The videos, images and audio in a folder (and the folders inside it), by name - the order you filmed them in.
+function mediaIn(dir) {
   const out = [];
   const walk = (d, depth) => {
     let entries = [];
@@ -627,14 +639,14 @@ function videosIn(dir) {
       if (e.name.startsWith(".")) continue;
       const p = path.join(d, e.name);
       if (e.isDirectory() && depth < 1) walk(p, depth + 1);
-      else if (VIDEO.test(e.name)) out.push(p);
+      else if (mediaKind(e.name)) out.push(p);
     }
   };
   walk(dir, 0);
   return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
-// The Mac's own picker: "folder" (a folder of clips), "files" (several videos) or "video" (just one).
+// The Mac's own picker: "folder" (a folder of clips), "files" (several videos, images or audio files) or "video" (just one video).
 function pickerScript(prompt, mode) {
   const p = prompt.replace(/"/g, "'");
   if (mode === "folder") return ['tell application "Finder"', "activate", `set picked to choose folder with prompt "${p}"`, "end tell", "return POSIX path of picked"];
@@ -642,7 +654,7 @@ function pickerScript(prompt, mode) {
   return [
     'tell application "Finder"',
     "activate",
-    `set picked to choose file with prompt "${p}" of type {"public.movie"} with multiple selections allowed`,
+    `set picked to choose file with prompt "${p}" of type {"public.movie", "public.image", "public.audio"} with multiple selections allowed`,
     "end tell",
     'set out to ""',
     "repeat with f in picked",
@@ -656,11 +668,11 @@ function pickFiles(label, mode) {
   const folder = mode === "folder";
   if (process.env.CDH_PICK_CMD) {
     const lines = run("/bin/sh", ["-c", process.env.CDH_PICK_CMD], { timeout: 600_000, env: { ...process.env, CDH_PICK_MODE: folder ? "folder" : "files" } }).split("\n").filter(Boolean);
-    return folder ? lines.flatMap(videosIn) : lines;
+    return folder ? lines.flatMap(mediaIn) : lines;
   }
-  const prompt = `${folder ? "Pick the folder with the clips" : "Pick the clips"} for ${label || "this video"}`;
+  const prompt = `${folder ? "Pick the folder with the files" : "Pick the videos, images and audio"} for ${label || "this video"}`;
   const lines = run("osascript", pickerScript(prompt, folder ? "folder" : "files").flatMap((l) => ["-e", l]), { timeout: 600_000 }).split("\n").filter(Boolean);
-  return folder ? lines.flatMap(videosIn) : lines;
+  return folder ? lines.flatMap(mediaIn) : lines;
 }
 
 // One video, without holding everything else up while the picker is open. Cancelled: nothing.
@@ -677,7 +689,7 @@ async function handlePick(p) {
   const paths = pickFiles(p.label, p.mode);
   const picked = paths.map((f) => ({ path: f, name: path.basename(f), duration: duration(f) }));
   await update(p.id, { pickDone: true, picked });
-  log(picked.length ? `Picked ${picked.length} clip(s).` : "Nothing picked.");
+  log(picked.length ? `Picked ${picked.length} file(s).` : "Nothing picked.");
 }
 
 // ------------------------------------------------------------ edit styles: your editing setup and key frames
@@ -1373,8 +1385,21 @@ function queueSetupSync(s) {
 
 // ------------------------------------------------------------ editing with Claude Code
 
+/** The files picked for an edit, one a line, saying which are images or audio. */
+function fileLines(files) {
+  const lines = files.map((f) => {
+    const kind = mediaKind(f.name || f.path);
+    const about = [kind === "image" || kind === "audio" ? kind : "", f.duration ? mmss(f.duration) : ""].filter(Boolean).join(", ");
+    return `- ${f.path}${about ? ` (${about})` : ""}`;
+  });
+  const extras = new Set(files.map((f) => mediaKind(f.name || f.path)).filter((k) => k === "image" || k === "audio"));
+  if (extras.has("image")) lines.push("Images go in as stills or overlays (a logo, product shot, screenshot) where the card says, or where they fit best.");
+  if (extras.has("audio")) lines.push("Audio files are a voiceover or music for this edit: use them as the card says (a voiceover under or instead of the talking, music under everything at a level the talking sits clearly over). If it doesn't say, use your judgement and tell me what you did.");
+  return lines.join("\n");
+}
+
 function promptFor(edit, broll = "") {
-  const clips = edit.files.map((f) => `- ${f.path}${f.duration ? ` (${mmss(f.duration)})` : ""}`).join("\n");
+  const clips = fileLines(edit.files);
   if (edit.videoCode === "ALL") return wholeSheetPrompt(edit, clips);
   if (TRIAL_LINE.test(edit.brief)) return trialPrompt(edit, clips);
   const name = (edit.personal ? ["Personal", edit.videoCode || edit.title.slice(0, 40)] : [edit.brand, edit.videoCode]).filter(Boolean).join(" ") || edit.title.slice(0, 50) || "Creator Desk edit";

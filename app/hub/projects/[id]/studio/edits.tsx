@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HELPER_FOR_LIBRARY, LATEST_HELPER, LIBRARY_LINE, STATUS_LABEL, WHOLE_SHEET, findsOwnClips, helperOlderThan, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
+import { HELPER_FOR_LIBRARY, LATEST_HELPER, LIBRARY_LINE, STATUS_LABEL, WHOLE_SHEET, findsOwnClips, helperOlderThan, mediaKind, type MediaKind, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile } from "../../../_lib/edits/types";
 import type { SheetSummary } from "../../../_lib/studio/types";
 import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
@@ -330,7 +330,7 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
             placeholder="How should it be edited? Say it the way you would in Claude Code: cut the pauses, captions in my usual style, hook text on screen, 30-40 seconds, B-roll of the gym from my Photos…"
             aria-label="How should it be edited?"
           />
-          <p className="text-xs text-text-dim">Next, pick its clips on the card, then press Edit in CapCut.</p>
+          <p className="text-xs text-text-dim">Next, pick its files on the card (videos, images, audio), then press Edit in CapCut.</p>
           <button disabled={busy || !brief.trim()} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
             Add edit
           </button>
@@ -457,7 +457,7 @@ function Card({
         )}
         <span className="min-w-0 flex-1 truncate font-medium">{card.title || "Untitled video"}</span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{STATUS_LABEL[card.status]}</span>
-        {card.files.length > 0 && <span className="text-xs text-text-dim">{card.files.length} clip{card.files.length === 1 ? "" : "s"}</span>}
+        {card.files.length > 0 && <span className="text-xs text-text-dim">{card.files.length} file{card.files.length === 1 ? "" : "s"}</span>}
       </button>
       {open && (
         <div className="space-y-4 border-t border-border px-4 py-4">
@@ -482,7 +482,7 @@ function Card({
                 Stop
               </button>
             ) : (
-              <Tooltip label={!mac ? "Connect your Mac first" : !card.files.length && !ownClips ? "Pick the clips first" : null}>
+              <Tooltip label={!mac ? "Connect your Mac first" : !card.files.length && !ownClips ? "Pick the files first" : null}>
                 <button
                   type="button"
                   disabled={(!card.files.length && !ownClips) || !mac}
@@ -574,20 +574,39 @@ function ClipPicker({
   card: EditCard;
   files: DeviceFile[];
   mac: Device | undefined;
-  setFiles: (f: EditFile[]) => void;
+  setFiles: (f: EditFile[]) => Promise<void>;
   onPick: (mode: "files" | "folder") => void;
   onCancelPick: () => void;
 }) {
   const [browsing, setBrowsing] = useState(false);
-  const chosen = new Set(card.files.map((f) => f.path));
-  const toggle = (f: DeviceFile) =>
-    setFiles(chosen.has(f.path) ? card.files.filter((x) => x.path !== f.path) : [...card.files, { path: f.path, name: f.name, duration: f.duration }]);
+  // Your latest files: everything, or just the videos, images or audio.
+  const [only, setOnly] = useState<MediaKind | "">("");
+  const shown = only ? files.filter((f) => mediaKind(f.name) === only) : files;
+  // Picks show at once and save one at a time, in order, so quick clicks never undo each other;
+  // the card's own list takes over again once they're all saved.
+  const [mine, setMine] = useState<EditFile[] | null>(null);
+  const picked = mine ?? card.files;
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const sending = useRef(0);
+  const save = (next: EditFile[]) => {
+    setMine(next);
+    sending.current++;
+    queue.current = queue.current
+      .then(() => setFiles(next))
+      .finally(() => {
+        if (--sending.current === 0) setMine(null);
+      });
+  };
+  const chosen = new Set(picked.map((f) => f.path));
+  const toggle = (f: DeviceFile) => save(chosen.has(f.path) ? picked.filter((x) => x.path !== f.path) : [...picked, { path: f.path, name: f.name, duration: f.duration }]);
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium">Clips</p>
+        <p className="text-sm font-medium">
+          Files <span className="font-normal text-text-dim">- videos, images and audio</span>
+        </p>
         <button type="button" disabled={!files.length} onClick={() => setBrowsing(!browsing)} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50">
-          {browsing ? "Hide your latest clips" : "From your latest clips"}
+          {browsing ? "Hide your latest files" : "From your latest files"}
         </button>
         {card.pickRequested ? (
           <span className="flex items-center gap-2 text-xs text-accent">
@@ -617,26 +636,42 @@ function ClipPicker({
           too.
         </p>
       )}
-      {card.files.length > 0 ? (
+      {picked.length > 0 ? (
         <ul className="flex flex-wrap gap-1.5">
-          {card.files.map((f) => (
+          {picked.map((f) => (
             <li key={f.path} className="flex max-w-full items-center gap-1.5 rounded-full bg-bg-elevated py-1 pl-3 pr-1.5 text-xs">
               <Tooltip label={f.path} className="min-w-0">
                 <span className="truncate">{f.name}</span>
               </Tooltip>
+              {mediaKind(f.name) !== "video" && <span className="text-text-dim">{mediaKind(f.name)}</span>}
               {f.duration ? <span className="text-text-dim">{mmss(f.duration)}</span> : null}
-              <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(card.files.filter((x) => x.path !== f.path))} className="rounded-full px-1 text-text-dim hover:text-accent">
+              <button type="button" aria-label={`Remove ${f.name}`} onClick={() => save(picked.filter((x) => x.path !== f.path))} className="rounded-full px-1 text-text-dim hover:text-accent">
                 ✕
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-text-dim">No clips yet. Videos stay on your Mac - only their names go to Creator Desk.</p>
+        <p className="text-xs text-text-dim">Nothing picked yet. Your files stay on your Mac - only their names go to Creator Desk.</p>
+      )}
+      {browsing && (
+        <div className="flex flex-wrap gap-1.5 text-xs" role="group" aria-label="Show">
+          {(["", "video", "image", "audio"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              aria-pressed={only === k}
+              onClick={() => setOnly(k)}
+              className={`rounded-full border px-2.5 py-0.5 ${only === k ? "border-accent bg-accent text-on-accent" : "border-border text-text-muted hover:border-accent hover:text-accent"}`}
+            >
+              {k === "" ? "All" : k === "video" ? "Videos" : k === "image" ? "Images" : "Audio"} ({k ? files.filter((f) => mediaKind(f.name) === k).length : files.length})
+            </button>
+          ))}
+        </div>
       )}
       {browsing && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {files.map((f) => (
+          {shown.map((f) => (
             <Tooltip key={f.path} label={f.path} className="min-w-0">
               <button
                 type="button"
@@ -648,11 +683,14 @@ function ClipPicker({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={f.thumb} alt="" className="aspect-[9/16] w-full bg-bg-elevated object-cover" />
                 ) : (
-                  <div className="aspect-[9/16] w-full bg-bg-elevated" />
+                  <div className="flex aspect-[9/16] w-full items-center justify-center bg-bg-elevated text-2xl text-text-dim" aria-hidden>
+                    {mediaKind(f.name) === "audio" ? "♪" : mediaKind(f.name) === "image" ? "▣" : ""}
+                  </div>
                 )}
                 <span className="block truncate px-1.5 pt-1">{f.name}</span>
                 <span className="block truncate px-1.5 pb-1 text-text-dim">
-                  {mmss(f.duration)} {f.modifiedAt && `· ${new Date(f.modifiedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+                  {mediaKind(f.name) === "image" ? "Image" : mediaKind(f.name) === "audio" ? `Audio ${mmss(f.duration)}` : mmss(f.duration)}{" "}
+                  {f.modifiedAt && `· ${new Date(f.modifiedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
                 </span>
               </button>
             </Tooltip>
