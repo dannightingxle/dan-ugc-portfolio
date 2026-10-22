@@ -79,6 +79,12 @@ export function StylesPage() {
         <Link href="/hub/studio/notes" className="mt-2 inline-block text-sm text-accent hover:underline">
           Editing notes - feedback Claude remembers →
         </Link>
+        <p className="mt-2 text-sm text-text-muted">
+          Styles are a short summary. Your full setup - every CLAUDE.md, skill and memory file, word for word, carried between your Macs - is on{" "}
+          <Link href="/hub/studio/setup" className="text-accent hover:underline">
+            Editing setup →
+          </Link>
+        </p>
       </div>
 
       <section className="space-y-3 rounded-2xl border border-border bg-bg-card p-4 sm:p-5" aria-label="Read your Mac">

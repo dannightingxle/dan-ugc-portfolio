@@ -5,6 +5,7 @@ import { adminClient } from "../supabase/admin";
 import { BRAND_ID } from "../studio/brand-types";
 import { ask, studioErrorMessage } from "../studio/claude";
 import type { DeviceAuth } from "./data";
+import { setupSettings } from "./setup";
 import {
   FRAME_DATA,
   MAX_FRAMES,
@@ -235,12 +236,13 @@ export async function styleWorkFor(auth: DeviceAuth) {
   // Claimed only if still waiting, so two Macs polling at once don't both take it.
   const take = (r: ReqRow) => patchRequest(auth.userId, r, { status: "taken", takenAt: new Date().toISOString(), deviceId: auth.deviceId }, "waiting");
 
-  let styleScan: { id: string; folders: string[] } | null = null;
+  let styleScan: { id: string; folders: string[]; skills: { include: string[]; exclude: string[] } } | null = null;
   const scan = waiting.find((r) => r.data.kind === "scan");
   if (scan && (await take(scan))) {
     // Every folder your jobs' edits start in: their CLAUDE.md, skills and notes are where the styles are written down.
     const folders = [...new Set((await cfgRows(auth.userId)).map((c) => c.folder.trim()).filter(Boolean))];
-    styleScan = { id: scan.project_id, folders };
+    // The same skills as the Editing setup page says to carry.
+    styleScan = { id: scan.project_id, folders, skills: await setupSettings(auth.userId) };
   }
   // With the style's name, so the Mac's picker can say what the frames are for.
   const frameGrabs: { id: string; styleId: string; styleName: string }[] = [];

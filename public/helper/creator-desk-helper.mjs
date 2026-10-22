@@ -19,6 +19,14 @@
   It also keeps your edit styles in step: Creator Desk can ask it to read how your Claude Code is set
   up to edit (your CLAUDE.md files, skills and Claude Code's memory for your edit folders - read only),
   or to take a few key frames from a finished video you pick, so every Mac edits in the same style.
+  Only your editing skills are read (ones about CapCut, video, captions, B-roll, shortform…), not the rest.
+
+  And it can copy your editing setup word for word between your Macs ("Sync my editing setup"): one Mac
+  sends Creator Desk its ~/.claude/CLAUDE.md, its editing skills (every file in them: brands/*.md, caption
+  timing scripts…), the CLAUDE.md files and skills in your edit folders and Claude Code's memory for them;
+  the other Mac writes them into the same places. Before replacing a file that's different it keeps a copy
+  in ~/.creator-desk/backups, it never deletes anything, and it only ever writes CLAUDE.md files, skills
+  and Claude Code memory.
 
   It keeps itself up to date: when Creator Desk has a newer helper, it downloads it and restarts
   between edits (set CDH_NO_UPDATE=1 to stop that).
@@ -36,11 +44,12 @@
 */
 
 import { spawn, execFile, execFileSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.8";
+const VERSION = "0.3.9";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -173,6 +182,8 @@ function info() {
     browser: BROWSER,
     // It can read your editing setup and take key frames for Creator Desk's edit styles.
     styles: true,
+    // It can copy your editing setup (CLAUDE.md files, editing skills, memory) between your Macs.
+    setup: true,
   };
 }
 
@@ -750,26 +761,84 @@ async function memoryDirs(folder) {
   return dirs;
 }
 
-// A skills folder: each skill's SKILL.md, plus the smaller .md files that come with it.
-async function skillsIn(dir, add) {
+// Which skills are about editing: ones whose name, description or first 4 KB mention CapCut, video, captions,
+// B-roll, shortform and so on (as whole words, give or take an "s" or "ing"). "Edit" and "hook" are everyday
+// words too (editing a PDF or marketing copy, git hooks), so they only count in a skill's name or description,
+// and not when that's about copy, documents or code. Creator Desk can pick skills itself by folder name.
+const EDITING_WORDS = /(?<![a-z0-9])(capcut|video|caption|subtitle|b-?roll|footage|short-?form|ugc|reel|tiktok|ffmpeg)(s|es|ed|er|ers|ing)?(?![a-z0-9])/i;
+const EDIT_WORDS = /(?<![a-z0-9])(edit|hook)(s|ed|er|ers|ing|or|ors)?(?![a-z0-9])/i;
+const NOT_VIDEO = /(?<![a-z0-9])(copy|copywriting|documents?|docs|docx|pdfs?|spreadsheets?|xlsx|pptx|presentations?|slides|code|codebase|emails?|landing pages?)(?![a-z0-9])/i;
+
+// A SKILL.md's name and description (from the --- block at its top).
+function frontmatter(text) {
+  const out = {};
+  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  if (!m) return out;
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const kv = /^(name|description):\s*(.*)$/.exec(lines[i]);
+    if (!kv) continue;
+    let v = kv[2].trim();
+    if (!v || /^[>|][-+]?$/.test(v)) {
+      const more = [];
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) more.push(lines[++i].trim());
+      v = more.join(" ");
+    }
+    out[kv[1]] = v.replace(/^(["'])(.*)\1$/, "$2");
+  }
+  return out;
+}
+
+// Creator Desk's own choice of skills (folder names): include wins over the guess, exclude over both.
+const listOf = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()) : []);
+const pickOf = (skills) => ({ include: listOf(skills?.include), exclude: listOf(skills?.exclude) });
+const picked = (s, pick) => (pick.exclude.includes(s.name) ? false : pick.include.includes(s.name) ? true : s.editing);
+
+// The skills in a skills folder: { name (its folder), dir, description, editing }. Folders without a SKILL.md aren't skills.
+async function skillFolders(dir) {
+  const out = [];
   for (const e of await entries(dir)) {
     const skill = path.join(dir, e.name);
     if (e.name.startsWith(".") || !(await isDir(skill))) continue;
-    const main = path.join(skill, "SKILL.md");
+    let head;
+    try {
+      const fh = await fs.promises.open(path.join(skill, "SKILL.md"), "r");
+      try {
+        const buf = Buffer.alloc(16_384);
+        const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+        head = buf.subarray(0, bytesRead).toString("utf8");
+      } finally {
+        await fh.close();
+      }
+    } catch {
+      continue;
+    }
+    const fm = frontmatter(head);
+    const about = [e.name, fm.name, fm.description].filter(Boolean).join("\n");
+    const editing = EDITING_WORDS.test(about) || EDITING_WORDS.test(head.slice(0, 4096)) || (EDIT_WORDS.test(about) && !NOT_VIDEO.test(about));
+    out.push({ name: e.name, dir: skill, description: String(fm.description || "").slice(0, 500), editing });
+  }
+  return out;
+}
+
+// A skills folder, for the edit styles: each editing skill's SKILL.md, plus the smaller .md files that come with it.
+async function skillsIn(dir, add, pick) {
+  for (const s of await skillFolders(dir)) {
+    if (!picked(s, pick)) continue;
+    const main = path.join(s.dir, "SKILL.md");
     const text = await readText(main);
     if (text == null) continue;
-    const editing = ABOUT_EDITING.test(text);
-    await add(main, editing ? 2 : 3, text);
-    for (const extra of await textFilesIn(skill, 2, (n) => n !== "SKILL.md" && /\.md$/i.test(n))) {
+    await add(main, 2, text);
+    for (const extra of await textFilesIn(s.dir, 2, (n) => n !== "SKILL.md" && /\.md$/i.test(n))) {
       const more = await readText(extra, SCAN.extraBytes);
-      if (more != null) await add(extra, editing || ABOUT_EDITING.test(more) ? 2 : 3, more);
+      if (more != null) await add(extra, 2, more);
     }
   }
 }
 
 // Everything that says how you edit, best first: CLAUDE.md files (always), Claude Code's memory for your edit
-// folders, then skills and notes about editing, then other skills and notes if there's room. Read only.
-async function collectSetup(folders) {
+// folders, then your editing skills and notes about editing, then other notes if there's room. Read only.
+async function collectSetup(folders, pick = pickOf()) {
   const found = [];
   const seen = new Set();
   // tier: 0 CLAUDE.md, 1 memory, 2 about editing, 3 the rest.
@@ -799,7 +868,7 @@ async function collectSetup(folders) {
     if (dir.startsWith(home + path.sep)) for (let d = path.dirname(dir); d.startsWith(home); d = path.dirname(d)) await add(path.join(d, "CLAUDE.md"), 0);
     for (const n of ["CLAUDE.md", "CLAUDE.local.md", path.join(".claude", "CLAUDE.md")]) await add(path.join(dir, n), 0);
     for (const mem of await memoryDirs(dir)) for (const m of await textFilesIn(mem, 1, (n) => /\.md$/i.test(n))) await add(m, 1);
-    await skillsIn(path.join(dir, ".claude", "skills"), add);
+    await skillsIn(path.join(dir, ".claude", "skills"), add, pick);
     // Notes in the folder itself - not when it's your whole home folder.
     if (dir === home || dir === path.parse(dir).root) continue;
     for (const p of await textFilesIn(dir, 2, (n) => STYLE_FILE.test(n) && !/^CLAUDE(\.local)?\.md$/i.test(n))) {
@@ -807,7 +876,7 @@ async function collectSetup(folders) {
       if (text != null) await add(p, ABOUT_EDITING.test(path.basename(p) + "\n" + text) ? 2 : 3, text);
     }
   }
-  await skillsIn(path.join(CLAUDE_DIR, "skills"), add);
+  await skillsIn(path.join(CLAUDE_DIR, "skills"), add, pick);
 
   // Best first, then within Creator Desk's limits (long files are cut short).
   const files = [];
@@ -824,10 +893,10 @@ async function collectSetup(folders) {
 }
 
 // Creator Desk can be busy for a moment: try a couple more times before giving up.
-async function send(route, body) {
+async function send(route, body, method = "POST") {
   for (let i = 0; ; i++) {
     try {
-      return await api("POST", route, body);
+      return await api(method, route, body);
     } catch (e) {
       if (i >= 2) throw e;
       await sleep(3000);
@@ -839,10 +908,10 @@ const scansSeen = new Set();
 async function handleStyleScan(scan) {
   if (!scan?.id || scansSeen.has(scan.id)) return;
   scansSeen.add(scan.id);
-  log("Reading your editing setup (CLAUDE.md files, skills and Claude Code memory) for your edit styles…");
+  log("Reading your editing setup (CLAUDE.md files, editing skills and Claude Code memory) for your edit styles…");
   let body;
   try {
-    const files = await collectSetup(Array.isArray(scan.folders) ? scan.folders : []);
+    const files = await collectSetup(Array.isArray(scan.folders) ? scan.folders : [], pickOf(scan.skills));
     body = { requestId: scan.id, files };
     log(`Sending Creator Desk ${files.length} file(s) about how you edit.`);
   } catch (e) {
@@ -907,6 +976,399 @@ async function handleFrameGrab(g) {
   }
   log(result.frames ? `Sending ${result.frames.length} key frames from ${path.basename(file)}.` : `No key frames: ${result.error}`);
   await send("/api/hub/helper/styles/frames", { requestId: g.id, styleId: g.styleId, ...result }).catch((e) => log("Couldn't send the key frames to Creator Desk:", e.message));
+}
+
+// ------------------------------------------------------------ syncing your editing setup between your Macs
+
+// "Sync my editing setup" copies your editing files word for word from one Mac to the other through Creator Desk:
+// ~/.claude/CLAUDE.md, your editing skills (every file in them), and for each edit folder its CLAUDE.md files, its
+// own editing skills and Claude Code's memory for it. Paths are sent with your home folder as "~", and memory as
+// "memory:<the edit folder>/<file>", so they land in the right place on a Mac with a different user name.
+// The Mac that gets them only ever writes those kinds of files, keeps a copy of anything it replaces in
+// ~/.creator-desk/backups, and never deletes anything.
+const SETUP = { maxBytes: 2_000_000, batchBytes: 3_000_000, depth: 6, files: 5_000, folders: 50 };
+const SKIP_SYNC_DIR = /^(\.git|node_modules|__pycache__|\.venv|venv|dist|build)$/;
+const SECRET_FILE = /^\.env(\..+)?$/;
+const BACKUPS = path.join(HOME, "backups");
+
+const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
+const inside = (p, root) => p === root || p.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+const underHome = (p) => p.startsWith(os.homedir() + path.sep);
+const mb = (n) => `${(n / 1_000_000).toFixed(1)} MB`;
+const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+function isText(buf) {
+  if (buf.includes(0)) return false;
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    return true;
+  } catch {
+    return false;
+  }
+}
+// A file's contents to send: as text when it's text (and that's no bigger), else base64.
+function contentOf(buf) {
+  const b64 = buf.toString("base64");
+  if (isText(buf)) {
+    const text = buf.toString("utf8");
+    if (Buffer.byteLength(JSON.stringify(text)) <= b64.length + 2) return { text };
+  }
+  return { base64: b64 };
+}
+// The real path of p, following links, even when its last parts don't exist yet.
+async function realish(p) {
+  const rest = [];
+  for (let cur = p; ; cur = path.dirname(cur)) {
+    try {
+      return path.join(await fs.promises.realpath(cur), ...rest.reverse());
+    } catch {
+      if (cur === path.dirname(cur)) return p;
+      rest.push(path.basename(cur));
+    }
+  }
+}
+
+// Your edit folders on this Mac: the usual one and the ones Creator Desk names, when they're in your home folder.
+function editFolders(list, skipped) {
+  const out = [];
+  [cfg.workdir, ...listOf(list)].slice(0, SETUP.folders).forEach((f, i) => {
+    if (typeof f !== "string" || !f.trim()) return;
+    const full = path.resolve(expandHome(f.trim()));
+    if (!underHome(full)) {
+      if (i > 0 && skipped) skipped.push({ path: f, why: "it isn't in your home folder" });
+      return;
+    }
+    if (!out.includes(full)) out.push(full);
+  });
+  return out;
+}
+
+// Where Claude Code keeps a folder's memory on this Mac: the folder's own (or its git repo's) projects/<key>/memory,
+// the one that's there already if Claude Code has been used there, else a new one. Null when its path is so long
+// that Claude Code shortens it with a hash (then it can only use one that's there already).
+async function memoryDirFor(folder) {
+  let root = folder;
+  for (let d = folder; d !== path.dirname(d); d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, ".git"))) {
+      root = d;
+      break;
+    }
+  }
+  const projects = path.join(CLAUDE_DIR, "projects");
+  const names = (await entries(projects)).filter((e) => e.isDirectory()).map((e) => e.name);
+  for (const r of root === folder ? [root] : [root, folder]) {
+    const key = r.replace(/[^a-zA-Z0-9]/g, "-");
+    const hit = names.find((n) => n.toLowerCase() === key.toLowerCase()) ?? (key.length > 200 ? names.find((n) => n.toLowerCase().startsWith(key.slice(0, 200).toLowerCase() + "-")) : undefined);
+    if (hit) return path.join(projects, hit, "memory");
+  }
+  const key = root.replace(/[^a-zA-Z0-9]/g, "-");
+  return key.length > 200 ? null : path.join(projects, key, "memory");
+}
+
+// Everything to sync from this Mac, with each file's fingerprint (sha256), size, date and whether it's a script you can run.
+async function collectSync(folderList, pick) {
+  const home = os.homedir();
+  const realHome = await realish(home);
+  const realClaude = await realish(CLAUDE_DIR);
+  const files = [];
+  const skipped = [];
+  const skippedSkills = [];
+  const seen = new Set(); // real paths: a file reached two ways is sent once
+  const logicals = new Set();
+
+  // A file, or a folder and everything in it (down to SETUP.depth). Links are followed when they stay in your home folder.
+  const visit = async (p, logical, depth = 0, fileOnly = false) => {
+    let st;
+    try {
+      st = await fs.promises.lstat(p);
+    } catch {
+      return;
+    }
+    let real = p;
+    if (st.isSymbolicLink()) {
+      try {
+        real = await fs.promises.realpath(p);
+        st = await fs.promises.stat(p);
+      } catch {
+        return; // a broken link
+      }
+      if (!inside(real, realHome) && !inside(real, realClaude)) {
+        skipped.push({ path: logical, why: "it's a link to somewhere outside your home folder" });
+        return;
+      }
+    } else real = await realish(p);
+    const name = path.basename(p);
+    if (st.isDirectory()) {
+      if (fileOnly || depth >= SETUP.depth || (depth > 0 && SKIP_SYNC_DIR.test(name)) || seen.has(real)) return;
+      seen.add(real);
+      for (const e of (await entries(p)).sort((a, b) => a.name.localeCompare(b.name))) await visit(path.join(p, e.name), `${logical}/${e.name}`, depth + 1);
+      return;
+    }
+    if (!st.isFile() || name === ".DS_Store" || seen.has(real) || logicals.has(logical)) return;
+    seen.add(real);
+    if (SECRET_FILE.test(name)) return skipped.push({ path: logical, why: "it might hold passwords or keys" });
+    if (st.size > SETUP.maxBytes) return skipped.push({ path: logical, why: `it's ${mb(st.size)} - files over 2 MB aren't synced` });
+    if (files.length >= SETUP.files) return skipped.push({ path: logical, why: `more than ${SETUP.files} files` });
+    let buf;
+    try {
+      buf = await fs.promises.readFile(p);
+    } catch (e) {
+      return skipped.push({ path: logical, why: `couldn't read it (${e.code || e.message})` });
+    }
+    logicals.add(logical);
+    files.push({ path: logical, real: p, sha: sha256(buf), size: buf.length, mtime: st.mtime.toISOString(), exec: Boolean(st.mode & 0o100) });
+  };
+  // The editing skills in a skills folder; the others are listed so Creator Desk can offer them.
+  const skills = async (dir, logical) => {
+    for (const s of await skillFolders(dir)) {
+      if (picked(s, pick)) await visit(s.dir, `${logical}/${s.name}`);
+      else if (!skippedSkills.some((x) => x.name === s.name)) skippedSkills.push({ name: s.name, description: s.description });
+    }
+  };
+
+  await visit(path.join(CLAUDE_DIR, "CLAUDE.md"), "~/.claude/CLAUDE.md", 0, true);
+  await skills(path.join(CLAUDE_DIR, "skills"), "~/.claude/skills");
+  for (const dir of editFolders(folderList, skipped)) {
+    if (!(await isDir(dir))) continue;
+    const t = tilde(dir);
+    for (const n of ["CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md"]) await visit(path.join(dir, n), `${t}/${n}`, 0, true);
+    await skills(path.join(dir, ".claude", "skills"), `${t}/.claude/skills`);
+    // The git repo's memory first: that's the one Claude Code uses in a repo.
+    for (const mem of (await memoryDirs(dir)).reverse()) await visit(mem, `memory:${t}`);
+  }
+  return { files, skipped, skippedSkills };
+}
+
+async function syncUpload(job) {
+  log("Syncing your editing setup: reading your CLAUDE.md files, editing skills and Claude Code memory…");
+  const { files, skipped, skippedSkills } = await collectSync(job.folders, pickOf(job.skills));
+  const { want } = await send("/api/hub/helper/setup/manifest", {
+    requestId: job.id,
+    files: files.map(({ path, sha, size, mtime, exec }) => ({ path, sha, size, mtime, exec })),
+    skippedSkills,
+  });
+  const wanted = new Set(listOf(want));
+  let batch = [];
+  let bytes = 0;
+  let sent = 0;
+  const flush = async () => {
+    if (!batch.length) return;
+    await send("/api/hub/helper/setup/files", { requestId: job.id, files: batch });
+    sent += batch.length;
+    batch = [];
+    bytes = 0;
+  };
+  for (const f of files) {
+    if (!wanted.has(f.path)) continue;
+    let buf;
+    try {
+      buf = await fs.promises.readFile(f.real);
+    } catch {
+      skipped.push({ path: f.path, why: "it went missing while syncing" });
+      continue;
+    }
+    if (sha256(buf) !== f.sha) {
+      skipped.push({ path: f.path, why: "it changed while syncing - sync again" });
+      continue;
+    }
+    const entry = { path: f.path, sha: f.sha, size: f.size, mtime: f.mtime, exec: f.exec, ...contentOf(buf) };
+    const n = Buffer.byteLength(JSON.stringify(entry));
+    if (batch.length && bytes + n > SETUP.batchBytes) await flush();
+    batch.push(entry);
+    bytes += n;
+  }
+  await flush();
+  await send("/api/hub/helper/setup/done", { requestId: job.id, phase: "upload", sent, skipped });
+  const same = files.filter((f) => !wanted.has(f.path)).length;
+  log(`Syncing your editing setup: sent ${plural(sent, "file")}${same > 0 ? ` (${same} Creator Desk already had)` : ""}${skipped.length ? `, skipped ${skipped.length}` : ""}.`);
+}
+
+// Where a synced file goes on this Mac, or why it can't: only ~/.claude/CLAUDE.md, ~/.claude/skills/**, Claude Code's
+// memory folders, and in your edit folders CLAUDE.md, CLAUDE.local.md, .claude/CLAUDE.md and .claude/skills/**.
+// Checked again after following any links, so a link can't send a file somewhere else.
+async function targetFor(logical, folders) {
+  const no = (why) => ({ error: why });
+  if (typeof logical !== "string" || !logical || logical.length > 1000 || /[\0\\]/.test(logical)) return no("that path isn't allowed");
+  const mem = logical.startsWith("memory:");
+  const p = mem ? logical.slice("memory:".length) : logical;
+  if (!p.startsWith("~/")) return no("only files in your home folder are synced");
+  const parts = p.slice(2).split("/");
+  if (parts.some((s) => s === "" || s === "." || s === "..")) return no('that path isn\'t allowed (it has ".." or empty parts)');
+  const home = os.homedir();
+  let root;
+  let file;
+  if (mem) {
+    // The edit folder is the longest of yours the path starts with; else everything before the file name.
+    const rel = parts.join("/");
+    const known = folders.map((f) => path.relative(home, f).split(path.sep).join("/")).filter((k) => rel.startsWith(k + "/")).sort((a, b) => b.length - a.length)[0];
+    const folderRel = known ?? parts.slice(0, -1).join("/");
+    if (!folderRel) return no("it isn't Claude Code memory for a folder in your home folder");
+    const dir = await memoryDirFor(path.join(home, ...folderRel.split("/")));
+    if (!dir) return no("Claude Code hasn't been used in that folder on this Mac yet - open it there once, then sync again");
+    root = dir;
+    file = path.join(dir, ...rel.slice(folderRel.length + 1).split("/"));
+  } else if (parts[0] === ".claude") {
+    if (parts.length === 2 && parts[1] === "CLAUDE.md") root = CLAUDE_DIR;
+    else if (parts[1] === "skills" && parts.length >= 4) root = path.join(CLAUDE_DIR, "skills");
+    else return no("only CLAUDE.md, skills and memory are synced in ~/.claude");
+    file = path.join(CLAUDE_DIR, ...parts.slice(1));
+  } else {
+    const full = path.join(home, ...parts);
+    for (const f of [...folders].sort((a, b) => b.length - a.length)) {
+      const r = path.relative(f, full).split(path.sep);
+      if (r[0] === ".." || path.isAbsolute(r[0])) continue;
+      const rel = r.join("/");
+      if (rel === "CLAUDE.md" || rel === "CLAUDE.local.md" || rel === ".claude/CLAUDE.md") root = f;
+      else if (r[0] === ".claude" && r[1] === "skills" && r.length >= 4) root = path.join(f, ".claude", "skills");
+      else continue;
+      file = full;
+      break;
+    }
+    if (!file) return no("it isn't a CLAUDE.md file or skill in one of your edit folders on this Mac");
+  }
+  const t = { file, root, backup: mem ? ["memory", ...parts] : parts };
+  return (await stillSafe(t)) ? t : no("a link on this Mac points that path somewhere else");
+}
+// The file's real path must be exactly where it looks like it is inside its root (no link takes it elsewhere).
+async function stillSafe(t) {
+  const realRoot = await realish(t.root);
+  const realFile = await realish(t.file);
+  const want = path.relative(t.root, t.file);
+  return Boolean(want) && !want.startsWith("..") && inside(realFile, realRoot) && path.relative(realRoot, realFile) === want;
+}
+
+// Replace (or add) one file: the old one is copied to the backup folder first, the new one written next to it and
+// renamed into place, so it's never half-written.
+async function writeSynced(t, buf, exec, mtime, backupDir) {
+  await fs.promises.mkdir(path.dirname(t.file), { recursive: true });
+  if (!(await stillSafe(t))) throw new Error("a link on this Mac points that path somewhere else");
+  let mode = exec ? 0o755 : 0o644;
+  let backedUp = false;
+  let st = null;
+  try {
+    st = await fs.promises.stat(t.file);
+  } catch {}
+  if (st) {
+    if (!st.isFile()) throw new Error("there's a folder with that name here");
+    const m = st.mode & 0o777;
+    mode = exec ? m | 0o100 | (m & 0o040 ? 0o010 : 0) | (m & 0o004 ? 0o001 : 0) : m & 0o666;
+    const dest = path.join(backupDir, ...t.backup);
+    await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+    await fs.promises.copyFile(t.file, dest);
+    backedUp = true;
+  }
+  const tmp = path.join(path.dirname(t.file), `.${path.basename(t.file)}.cdh-${process.pid}-${Date.now()}`);
+  try {
+    await fs.promises.writeFile(tmp, buf, { flag: "wx", mode });
+    await fs.promises.chmod(tmp, mode);
+    const when = new Date(mtime);
+    if (!Number.isNaN(when.getTime())) await fs.promises.utimes(tmp, when, when).catch(() => {});
+    await fs.promises.rename(tmp, t.file);
+  } catch (e) {
+    await fs.promises.rm(tmp, { force: true }).catch(() => {});
+    throw e;
+  }
+  return backedUp;
+}
+
+async function syncDownload(job) {
+  log("Syncing your editing setup: checking what your other Mac sent…");
+  const manifest = await send(`/api/hub/helper/setup/manifest?requestId=${encodeURIComponent(job.id)}`, undefined, "GET");
+  const folders = editFolders([...listOf(job.folders), ...listOf(manifest.folders)]);
+  const skipped = [];
+  const written = [];
+  const backedUp = [];
+  const stamp = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 19).replace("T", "_").replace(/:/g, "-");
+  const backupDir = path.join(BACKUPS, stamp);
+  const need = [];
+  const seenPaths = new Set();
+  for (const f of Array.isArray(manifest.files) ? manifest.files : []) {
+    if (!f || typeof f.path !== "string" || seenPaths.has(f.path)) continue;
+    seenPaths.add(f.path);
+    if (!/^[0-9a-f]{64}$/.test(String(f.sha))) {
+      skipped.push({ path: f.path, why: "it has no fingerprint (sha256)" });
+      continue;
+    }
+    const t = await targetFor(f.path, folders);
+    if (t.error) {
+      skipped.push({ path: f.path, why: t.error });
+      continue;
+    }
+    let st = null;
+    try {
+      st = await fs.promises.stat(t.file);
+    } catch {}
+    if (st && !st.isFile()) {
+      skipped.push({ path: f.path, why: "there's a folder with that name here" });
+      continue;
+    }
+    if (st && (f.size == null || st.size === Number(f.size)) && sha256(await fs.promises.readFile(t.file)) === f.sha) {
+      // Already the same: just make sure it can run (or not) like on the other Mac.
+      if (Boolean(st.mode & 0o100) !== Boolean(f.exec)) await fs.promises.chmod(t.file, f.exec ? (st.mode & 0o777) | 0o100 : st.mode & 0o666).catch(() => {});
+      continue;
+    }
+    need.push({ f, t });
+  }
+
+  // Ask for what's missing or different, ~3 MB at a time; Creator Desk may send fewer, so ask again for the rest.
+  const queue = [...need];
+  while (queue.length) {
+    const batch = [];
+    let bytes = 0;
+    while (queue.length && batch.length < 200 && (!batch.length || bytes + (Number(queue[0].f.size) || 0) <= SETUP.batchBytes)) {
+      bytes += Number(queue[0].f.size) || 0;
+      batch.push(queue.shift());
+    }
+    const res = await send("/api/hub/helper/setup/fetch", { requestId: job.id, paths: batch.map((x) => x.f.path) });
+    const left = new Map(batch.map((x) => [x.f.path, x]));
+    let got = 0;
+    for (const g of Array.isArray(res.files) ? res.files : []) {
+      const x = left.get(g?.path);
+      if (!x) continue;
+      left.delete(g.path);
+      got++;
+      const buf = typeof g.text === "string" ? Buffer.from(g.text, "utf8") : typeof g.base64 === "string" ? Buffer.from(g.base64, "base64") : null;
+      if (!buf) {
+        skipped.push({ path: x.f.path, why: "it came back empty" });
+        continue;
+      }
+      if (sha256(buf) !== x.f.sha) {
+        skipped.push({ path: x.f.path, why: "it didn't arrive intact (its fingerprint didn't match)" });
+        continue;
+      }
+      try {
+        if (await writeSynced(x.t, buf, Boolean(x.f.exec ?? g.exec), x.f.mtime, backupDir)) backedUp.push(x.f.path);
+        written.push(x.f.path);
+      } catch (e) {
+        skipped.push({ path: x.f.path, why: `couldn't write it (${e.code || e.message})` });
+      }
+    }
+    if (!got) for (const x of left.values()) skipped.push({ path: x.f.path, why: "Creator Desk didn't send it" });
+    else queue.unshift(...left.values());
+  }
+
+  await send("/api/hub/helper/setup/done", { requestId: job.id, phase: "download", written, backedUp, backupDir: tilde(backupDir), skipped });
+  log(
+    written.length
+      ? `Got ${plural(written.length, "file")} from your other Mac${backedUp.length ? ` (${backedUp.length} backed up first, in ${tilde(backupDir)})` : ""}${skipped.length ? `, skipped ${skipped.length}` : ""}.`
+      : `Your editing setup already matches your other Mac${skipped.length ? ` (skipped ${skipped.length})` : ""}.`,
+  );
+}
+
+const syncsSeen = new Set();
+let syncQueue = Promise.resolve(); // one sync at a time
+function queueSetupSync(s) {
+  if (!s?.id || (s.phase !== "upload" && s.phase !== "download")) return;
+  const key = `${s.id}:${s.phase}`;
+  if (syncsSeen.has(key)) return;
+  syncsSeen.add(key);
+  syncQueue = syncQueue.then(async () => {
+    try {
+      await (s.phase === "upload" ? syncUpload(s) : syncDownload(s));
+    } catch (e) {
+      log("Couldn't sync your editing setup:", e.message);
+      await send("/api/hub/helper/setup/done", { requestId: s.id, phase: s.phase, error: `The helper couldn't sync your editing setup: ${e.message}` }).catch((e2) => log("Couldn't tell Creator Desk:", e2.message));
+    }
+  });
 }
 
 // ------------------------------------------------------------ editing with Claude Code
@@ -1203,6 +1665,8 @@ async function handleWork(work) {
   // Edit styles: reading your setup and taking key frames go on alongside everything else.
   if (work.styleScan) handleStyleScan(work.styleScan).catch((e) => log("Couldn't read your editing setup:", e.message));
   for (const g of work.frameGrabs ?? []) queueFrameGrab(g);
+  // Syncing your editing setup with your other Mac goes on alongside too.
+  if (work.setupSync) queueSetupSync(work.setupSync);
   // A shoot sheet is waiting on these, so they go first.
   await handleReads(work.reads);
   for (const p of work.picks ?? []) await handlePick(p);
