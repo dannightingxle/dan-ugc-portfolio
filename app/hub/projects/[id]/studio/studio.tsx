@@ -115,6 +115,26 @@ export function Studio({ projectId }: { projectId: string }) {
     return () => window.removeEventListener("pagehide", onHide);
   }, [flush]);
 
+  // When one of this job's Claude runs finishes (a shoot sheet adding hooks to the script bank, the setup, a
+  // review), take the updated workspace whichever tab is open - typing not yet saved goes first, so neither undoes the other.
+  const runs = [useTask(projectId, "week"), useTask(projectId, "intake"), useTask(projectId, "review")];
+  const finished = runs.map((t) => (t?.status === "done" ? (t.finishedAt ?? "") : "")).join("|");
+  const seenFinished = useRef<string | null>(null);
+  useEffect(() => {
+    if (seenFinished.current === null) {
+      seenFinished.current = finished; // what had finished before this page opened is in what it loaded
+      return;
+    }
+    if (finished === seenFinished.current) return;
+    seenFinished.current = finished;
+    void flush()
+      .then(() => call<{ workspace: Workspace }>(api, "GET"))
+      .then((r) => {
+        if (!pending.current) setWs(r.workspace);
+      })
+      .catch(() => {});
+  }, [finished, flush, api]);
+
   if (loadError) return <p className="text-accent">{loadError}</p>;
   if (!ws) return <p className="text-text-muted">Opening Studio…</p>;
 
