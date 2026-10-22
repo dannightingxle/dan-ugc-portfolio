@@ -58,7 +58,7 @@ export function StylePicker({ scope }: { scope: string }) {
         </span>
         <span aria-hidden>·</span>
         <button type="button" onClick={() => setChanging(!changing)} className="font-medium text-accent hover:underline">
-          {changing ? "cancel" : "change"}
+          {changing ? "Cancel" : "Change style"}
         </button>
         <span aria-hidden>·</span>
         {link}
