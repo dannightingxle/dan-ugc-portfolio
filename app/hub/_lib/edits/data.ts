@@ -1,6 +1,7 @@
 import "server-only";
 import { readsFor } from "./mac-reads";
 import { listStyles, styleWorkFor } from "./styles";
+import { setupWorkFor } from "./setup";
 import { styleFor } from "./style-types";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
@@ -400,6 +401,11 @@ export async function workFor(auth: DeviceAuth, runningIds: string[] | null = nu
     reads: await readsFor(auth),
     // Reading this Mac's editing setup into styles, and grabbing key frames from a video picked on it.
     ...(await styleWorkFor(auth)),
+    // Carrying the editing setup's files between your Macs: this Mac's turn to send or get them.
+    setupSync: await setupWorkFor(auth).catch((e) => {
+      console.error("Creator Desk setup sync:", e);
+      return null;
+    }),
     // How many edits this Mac runs side by side.
     maxEdits: device.data?.info?.maxEdits ?? DEFAULT_MAX_EDITS,
   };

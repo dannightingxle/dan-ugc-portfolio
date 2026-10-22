@@ -35,6 +35,11 @@ export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
             Edit styles - how each kind of video looks →
           </Link>
         )}
+        {edits && (
+          <Link href="/hub/studio/setup" className="mt-2 ml-4 inline-block text-sm text-accent hover:underline">
+            Editing setup - your CLAUDE.md, skills and memory on every Mac →
+          </Link>
+        )}
       </div>
 
       {brand && (
