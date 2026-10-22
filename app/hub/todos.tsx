@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { isArchived, paymentDue, useProjects, type Project } from "./_lib/store";
 import { CHECK_IN_AFTER_DAYS, REPEATS, REPEAT_LABEL, checkInOn, finish, localDay, placeOf, unfinish, type Repeat, type Todo } from "./_lib/todos/types";
 import { input } from "./projects/fields";
-import { money, shortDate } from "./_lib/ui";
+import { Busy, Spinner, money, shortDate } from "./_lib/ui";
 import { useFeature } from "./account-provider";
 
 /* Your to-dos, at the top of the home page: what to do, chase and check in on.
@@ -61,6 +61,20 @@ export function YourTodos() {
       )
       .finally(() => pending.current--);
   }
+  // Adding one waits its turn in the same queue: a tick still on its way could otherwise answer after it
+  // with the list from before, and the new to-do would vanish from the screen (it's saved either way).
+  function addTodo(body: unknown) {
+    pending.current++;
+    setError("");
+    const added = queue.current.then(() => call<{ todos: Todo[] }>(API, "POST", body));
+    queue.current = added
+      .then((r) => {
+        if (pending.current === 1) setTodos(r.todos);
+      })
+      .catch(() => {})
+      .finally(() => pending.current--);
+    return added.then(() => undefined);
+  }
   function patch(t: Todo, changes: Partial<Todo>) {
     setTodos((list) => list && list.map((x) => (x.id === t.id ? { ...x, ...changes } : x)));
     send(API, "PATCH", { id: t.id, ...changes });
@@ -104,11 +118,15 @@ export function YourTodos() {
         {todos && <span className="text-sm text-text-dim">{count === 0 ? "All clear" : `${count} to do`}</span>}
       </div>
 
-      <AddTodo jobs={live} onAdded={setTodos} />
+      <AddTodo jobs={live} add={addTodo} />
       {error && <p className="text-sm text-accent">{error}</p>}
 
       {!todos ? (
-        !error && <p className="text-sm text-text-muted">Loading your to-dos…</p>
+        !error && (
+          <p className="flex items-center gap-2 text-sm text-text-muted">
+            <Spinner /> Loading your to-dos…
+          </p>
+        )
       ) : (
         <>
           {count > 0 && (
@@ -279,7 +297,7 @@ function TodoRow({ t, job, today, onTick, onSubmit, onEdit, onDelete }: { t: Tod
   );
 }
 
-function AddTodo({ jobs, onAdded }: { jobs: Project[]; onAdded: (todos: Todo[]) => void }) {
+function AddTodo({ jobs, add: addTodo }: { jobs: Project[]; add: (body: unknown) => Promise<void> }) {
   const [text, setText] = useState("");
   const [more, setMore] = useState(false);
   const [projectId, setProjectId] = useState("");
@@ -296,8 +314,7 @@ function AddTodo({ jobs, onAdded }: { jobs: Project[]; onAdded: (todos: Todo[]) 
     setError("");
     try {
       const n = parseInt(count, 10);
-      const r = await call<{ todos: Todo[] }>(API, "POST", { text, projectId, repeat, due, count: n > 0 ? Math.min(n, 99) : null });
-      onAdded(r.todos);
+      await addTodo({ text, projectId, repeat, due, count: n > 0 ? Math.min(n, 99) : null });
       setText("");
       setProjectId("");
       setRepeat("");
@@ -315,8 +332,10 @@ function AddTodo({ jobs, onAdded }: { jobs: Project[]; onAdded: (todos: Todo[]) 
     <form onSubmit={add} className="space-y-2">
       <div className="flex gap-2">
         <input className={`${input} flex-1`} value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a to-do - e.g. Reply to the Twirl emails" aria-label="New to-do" maxLength={300} />
-        <button disabled={!text.trim() || busy} className="shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-50">
-          Add
+        <button disabled={!text.trim() || busy} aria-busy={busy} className="shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-50">
+          <Busy busy={busy} label="Adding…">
+            Add
+          </Busy>
         </button>
       </div>
       {more ? (

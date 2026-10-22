@@ -9,6 +9,7 @@ import { input } from "../../projects/fields";
 import { call } from "../../projects/[id]/studio/studio";
 import { Tooltip, useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
+import { Busy, Spinner } from "../../_lib/ui";
 
 /* Edit styles: the different ways your videos are edited (personal brand,
    tech UGC, brand deals…), each with a short summary, the rules Claude Code
@@ -60,7 +61,14 @@ export function StylesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!data) return error ? <p className="text-sm text-accent">{error}</p> : <p className="text-sm text-text-muted">Loading your edit styles…</p>;
+  if (!data)
+    return error ? (
+      <p className="text-sm text-accent">{error}</p>
+    ) : (
+      <p className="flex items-center gap-2 text-sm text-text-muted">
+        <Spinner /> Loading your edit styles…
+      </p>
+    );
   const online = data.devices.filter((d) => d.online);
   const mac = online.find((d) => d.id === macId) ?? online[0];
   const replace = (s: Style) => setData((d) => d && { ...d, styles: d.styles.map((x) => (x.id === s.id ? { ...x, ...s } : x)) });
@@ -106,8 +114,10 @@ export function StylesPage() {
           }}
         />
         <div className="flex flex-wrap items-center gap-3">
-          <MacButton mac={mac} busy={scan.live} onClick={() => scan.start({ kind: "scan", deviceId: mac?.id })}>
-            {scan.live ? "Reading your Mac…" : "Read my Mac's editing setup"}
+          <MacButton mac={mac} busy={scan.busy} onClick={() => scan.start({ kind: "scan", deviceId: mac?.id })}>
+            <Busy busy={scan.busy} label="Reading your Mac…">
+              Read my Mac&apos;s editing setup
+            </Busy>
           </MacButton>
           <button type="button" onClick={() => setAdding(!adding)} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
             {adding ? "Cancel" : "+ New style"}
@@ -152,6 +162,8 @@ export function StylesPage() {
 function useMacRequest(onDone: (r: StyleRequest) => void) {
   const [req, setReq] = useState<StyleRequest | null>(null);
   const [error, setError] = useState("");
+  // Between pressing the button and the server taking the request.
+  const [starting, setStarting] = useState(false);
   const done = useRef(onDone);
   useEffect(() => {
     done.current = onDone;
@@ -175,14 +187,20 @@ function useMacRequest(onDone: (r: StyleRequest) => void) {
   return {
     req,
     live,
+    /** Asking, or waiting on the Mac: the button shows it's going. */
+    busy: starting || live,
     error,
     follow: setReq,
     async start(body: { kind: "scan" | "grab"; styleId?: string; deviceId?: string }) {
+      if (starting) return;
       setError("");
+      setStarting(true);
       try {
         setReq((await call<{ request: StyleRequest }>(`${api}/mac`, "POST", body)).request);
       } catch (e) {
         setError(errorText(e));
+      } finally {
+        setStarting(false);
       }
     },
   };
@@ -221,6 +239,7 @@ function MacButton({ mac, busy, onClick, children, small = false }: { mac: Devic
         <button
           type="button"
           disabled={!mac || old || busy}
+          aria-busy={busy}
           onClick={onClick}
           className={
             small
@@ -248,9 +267,15 @@ function MacButton({ mac, busy, onClick, children, small = false }: { mac: Devic
 function ScanStatus({ req, error }: { req: StyleRequest | null; error: string }) {
   if (error) return <p className="text-sm text-accent">{error}</p>;
   if (!req) return null;
-  if (req.status === "waiting") return <p className="text-sm text-accent">Waiting for your Mac to pick this up… (is the Creator Desk Helper running?)</p>;
-  if (req.status === "taken") return <p className="text-sm text-accent">Your Mac is reading its CLAUDE.md, skills and memory files…</p>;
-  if (req.status === "sorting") return <p className="text-sm text-accent">Claude is sorting what your Mac found ({req.files?.length ?? 0} files) into styles - this can take a minute…</p>;
+  const going = (text: string) => (
+    <p className="flex items-start gap-2 text-sm text-accent">
+      <Spinner className="mt-[3px]" />
+      <span>{text}</span>
+    </p>
+  );
+  if (req.status === "waiting") return going("Waiting for your Mac to pick this up… (is the Creator Desk Helper running?)");
+  if (req.status === "taken") return going("Your Mac is reading its CLAUDE.md, skills and memory files…");
+  if (req.status === "sorting") return going(`Claude is sorting what your Mac found (${req.files?.length ?? 0} files) into styles - this can take a minute…`);
   if (req.status === "expired") return <p className="text-sm text-warn">Your Mac didn&apos;t answer in time. Make sure the Creator Desk Helper is running on it, then try again.</p>;
   if (req.status === "failed") return <p className="text-sm text-warn">That didn&apos;t work: {req.error || "something went wrong"}. Try again in a minute.</p>;
   const list = (label: string, names?: string[]) => (names?.length ? `${label}: ${names.join(", ")}` : "");
@@ -287,6 +312,7 @@ function StyleForm({ start, onSave, onCancel }: { start?: Form; onSave: (f: Form
   const set = (patch: Partial<Form>) => setF((x) => ({ ...x, ...patch }));
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
@@ -350,8 +376,10 @@ function StyleForm({ start, onSave, onCancel }: { start?: Form; onSave: (f: Form
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <button disabled={busy || !f.name.trim()} className="rounded-lg bg-accent px-3 py-1.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
-          {busy ? "Saving…" : "Save style"}
+        <button disabled={busy || !f.name.trim()} aria-busy={busy} className="rounded-lg bg-accent px-3 py-1.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+          <Busy busy={busy} label="Saving…">
+            Save style
+          </Busy>
         </button>
         <button type="button" onClick={onCancel} className="text-text-muted hover:text-text">
           Cancel
@@ -371,6 +399,7 @@ function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Devi
   const [frames, setFrames] = useState<StyleFrame[] | null>(style.frameCount ? null : []);
   const [big, setBig] = useState<StyleFrame | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   // A style used by lots of jobs lists the first few until you ask for the rest.
   const [allJobs, setAllJobs] = useState(false);
@@ -466,7 +495,9 @@ function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Devi
           Key frames <span className="font-normal text-text-dim">- what the text, fonts, captions and B-roll look like (up to {MAX_FRAMES})</span>
         </p>
         {frames === null ? (
-          <p className="text-xs text-text-dim">Loading key frames…</p>
+          <p className="flex items-center gap-2 text-xs text-text-dim">
+            <Spinner className="h-3 w-3" /> Loading key frames…
+          </p>
         ) : frames.length === 0 ? (
           <p className="text-xs text-text-dim">None yet. Add screenshots, or stills from a finished video on your Mac.</p>
         ) : (
@@ -482,8 +513,10 @@ function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Devi
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <label className={`cursor-pointer rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent ${uploading ? "pointer-events-none opacity-50" : ""}`}>
-            {uploading ? "Adding…" : "Add screenshots"}
+          <label className={`cursor-pointer rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent ${uploading ? "pointer-events-none opacity-50" : ""}`} aria-busy={uploading}>
+            <Busy busy={uploading} label="Adding…">
+              Add screenshots
+            </Busy>
             <input
               type="file"
               accept="image/*"
@@ -495,8 +528,10 @@ function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Devi
               }}
             />
           </label>
-          <MacButton small mac={mac} busy={grab.live} onClick={() => grab.start({ kind: "grab", styleId: style.id, deviceId: mac?.id })}>
-            Add key frames from a video on my Mac
+          <MacButton small mac={mac} busy={grab.busy} onClick={() => grab.start({ kind: "grab", styleId: style.id, deviceId: mac?.id })}>
+            <Busy busy={grab.busy} label="Waiting on your Mac…">
+              Add key frames from a video on my Mac
+            </Busy>
           </MacButton>
         </div>
         <GrabStatus req={grab.req} error={grab.error} mac={mac} />
@@ -523,13 +558,21 @@ function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Devi
         )}
         <button
           type="button"
+          disabled={deleting}
+          aria-busy={deleting}
           onClick={async () => {
             if (!(await confirm({ title: `Delete ${style.name}?`, message: "Its rules and key frames go too. Jobs that used it go back to their usual style.", confirmLabel: "Delete", danger: true }))) return;
-            void call(`${api}?id=${style.id}`, "DELETE").then(onDelete, (e: Error) => setError(e.message));
+            setDeleting(true);
+            void call(`${api}?id=${style.id}`, "DELETE").then(onDelete, (e: Error) => {
+              setError(e.message);
+              setDeleting(false);
+            });
           }}
-          className="ml-auto text-text-dim hover:text-accent"
+          className="ml-auto text-text-dim hover:text-accent disabled:opacity-60"
         >
-          Delete style
+          <Busy busy={deleting} label="Deleting…">
+            Delete style
+          </Busy>
         </button>
       </div>
       {error && <p className="text-sm text-accent">{error}</p>}
@@ -549,7 +592,13 @@ function GrabStatus({ req, error, mac }: { req: StyleRequest | null; error: stri
     failed: `That didn't work: ${req.error || "something went wrong"}.`,
     expired: "Your Mac didn't answer in time. Make sure the Creator Desk Helper is running on it, then try again.",
   };
-  return <p className={`text-xs ${req.status === "failed" || req.status === "expired" ? "text-warn" : req.status === "done" ? "text-good" : "text-accent"}`}>{text[req.status]}</p>;
+  const going = LIVE.has(req.status);
+  return (
+    <p className={`flex items-start gap-2 text-xs ${req.status === "failed" || req.status === "expired" ? "text-warn" : req.status === "done" ? "text-good" : "text-accent"}`}>
+      {going && <Spinner className="mt-px h-3 w-3" />}
+      <span>{text[req.status]}</span>
+    </p>
+  );
 }
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;

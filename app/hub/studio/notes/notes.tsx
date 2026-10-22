@@ -10,6 +10,7 @@ import { input } from "../../projects/fields";
 import { CHAT_KEYS_HINT, chatKeys } from "../../_lib/chat-keys";
 import { call } from "../../projects/[id]/studio/studio";
 import { TextBox } from "../../_lib/text-box";
+import { Busy, Spinner, useBusy } from "../../_lib/ui";
 
 /* Editing notes: how you want your videos edited, remembered for every future
    edit - like telling Claude Code to remember something. Feedback comes from
@@ -62,6 +63,7 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState("");
   const [adding, setAdding] = useState("");
+  const [saving, save] = useBusy();
   const end = useRef<HTMLDivElement>(null);
   const api = `/api/hub/edits/notes`;
 
@@ -89,23 +91,32 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
       setPending("");
     }
   }
-  async function add(e: React.FormEvent) {
+  function add(e: React.FormEvent) {
     e.preventDefault();
     if (!adding.trim()) return;
-    try {
-      const r = await call<Notes>(api, "POST", { scope, text: adding });
-      setData((d) => ({ ...d, ...r }));
-      setAdding("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    void save(async () => {
+      try {
+        const r = await call<Notes>(api, "POST", { scope, text: adding });
+        setData((d) => ({ ...d, ...r }));
+        setAdding("");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
   }
   async function remove(n: EditNote) {
     setData((d) => d && { ...d, notes: d.notes.filter((x) => x.id !== n.id) });
     await call(`${api}?scope=${encodeURIComponent(scope)}&id=${n.id}`, "DELETE").catch((err: Error) => setError(err.message));
   }
 
-  if (!data) return error ? <p className="text-sm text-accent">{error}</p> : <p className="text-sm text-text-muted">Loading notes…</p>;
+  if (!data)
+    return error ? (
+      <p className="text-sm text-accent">{error}</p>
+    ) : (
+      <p className="flex items-center gap-2 text-sm text-text-muted">
+        <Spinner /> Loading notes…
+      </p>
+    );
   return (
     <div className="space-y-4">
       <section className={compact ? "space-y-2" : "space-y-3 rounded-2xl border border-border bg-bg-card p-5"} aria-label="Notes">
@@ -129,8 +140,10 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
         )}
         <form onSubmit={add} className="flex gap-2">
           <input className={`${input} flex-1`} value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="Add a note yourself, e.g. Cuts: no jump cut in the first second" aria-label="Add a note" maxLength={500} />
-          <button disabled={!adding.trim()} className="shrink-0 rounded-xl border border-border px-3 text-sm hover:border-accent hover:text-accent disabled:opacity-50">
-            Add
+          <button disabled={!adding.trim() || saving} aria-busy={saving} className="shrink-0 rounded-xl border border-border px-3 text-sm hover:border-accent hover:text-accent disabled:opacity-50">
+            <Busy busy={saving} label="Adding…">
+              Add
+            </Busy>
           </button>
         </form>
         {scope !== ALL_EDITS && (data.all?.length ?? 0) > 0 && (
@@ -157,7 +170,9 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
             {pending && (
               <>
                 <li className="ml-auto max-w-[85%] rounded-2xl rounded-tr-sm bg-accent-soft px-3 py-2 text-sm">{pending}</li>
-                <li className="max-w-[85%] rounded-2xl rounded-tl-sm bg-bg-elevated px-3 py-2 text-sm text-text-muted">Updating your notes…</li>
+                <li className="flex max-w-[85%] items-center gap-2 rounded-2xl rounded-tl-sm bg-bg-elevated px-3 py-2 text-sm text-text-muted">
+                  <Spinner /> Updating your notes…
+                </li>
               </>
             )}
             <div ref={end} />
@@ -174,8 +189,10 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
             aria-label="Feedback for Claude"
           />
           <div className="flex flex-wrap items-center gap-3">
-            <button disabled={!message.trim() || Boolean(pending)} className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60">
-              Send
+            <button disabled={!message.trim() || Boolean(pending)} aria-busy={Boolean(pending)} className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60">
+              <Busy busy={Boolean(pending)} label="Sending…">
+                Send
+              </Busy>
             </button>
             <span className="text-xs text-text-dim">{CHAT_KEYS_HINT}</span>
           </div>

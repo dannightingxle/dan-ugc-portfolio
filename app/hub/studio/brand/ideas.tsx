@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { shortDate } from "../../_lib/ui";
+import { Busy, shortDate } from "../../_lib/ui";
 import { EFFORT_LABEL, IDEA_EFFORTS, ideaCopy, type BrandData, type Idea, type IdeaEffort, type IdeaStatus } from "../../_lib/studio/brand-types";
 import { Section } from "../../projects/fields";
 import { ActionButton, call, useAction } from "../../projects/[id]/studio/studio";
@@ -44,6 +44,7 @@ export function IdeasTab({
   const [effort, setEffort] = useState<IdeaEffort | "all">("all");
   const [phase, setPhase] = useState<"stats" | "ideas">("ideas");
   const scan = useAction();
+  const [statusError, setStatusError] = useState("");
   const count = (s: IdeaStatus) => brand.ideas.filter((i) => i.status === s).length;
   const shown = brand.ideas.filter((i) => i.status === view && (effort === "all" || i.effort === effort));
   const empty = !brand.tracked.length && !brand.ideaAccounts.length;
@@ -51,10 +52,13 @@ export function IdeasTab({
   async function setStatus(id: string, status: IdeaStatus, reason = "") {
     // Moves at once; the server's copy replaces it when it answers.
     onBrand({ ideas: brand.ideas.map((i) => (i.id === id ? { ...i, status, reason } : i)) });
+    setStatusError("");
     try {
       onBrand({ ideas: (await call<BrandData>(`${API}/ideas`, "PATCH", { id, status, reason })).ideas });
-    } catch {
+    } catch (e) {
+      // Not saved: put it back where it was, and say so.
       onBrand({ ideas: brand.ideas });
+      setStatusError(`Couldn't move that idea: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -154,6 +158,7 @@ export function IdeasTab({
             </Chip>
           ))}
         </div>
+        {statusError && <p className="text-sm text-accent">{statusError}</p>}
         {shown.length === 0 ? (
           <p className="text-sm text-text-dim">
             {view === "new"
@@ -332,7 +337,8 @@ function IdeaCard({
             <button
               type="button"
               disabled={make.busy}
-              className={button}
+              aria-busy={make.busy}
+              className={`${button} disabled:opacity-60`}
               onClick={() => make.run(async () => setMade((await onMake()) ? "sent" : "card"))}
               title={
                 i.photosSearch.length
@@ -340,7 +346,9 @@ function IdeaCard({
                   : "Makes an edit card: add your clips once you've filmed it"
               }
             >
-              {make.busy ? "Making…" : i.photosSearch.length ? "Make it on my Mac" : "Make an edit card"}
+              <Busy busy={make.busy} label="Making…">
+                {i.photosSearch.length ? "Make it on my Mac" : "Make an edit card"}
+              </Busy>
             </button>
           )}
           {i.status === "planned" && !i.editId && <span className="text-sm text-text-dim">In a shoot sheet</span>}

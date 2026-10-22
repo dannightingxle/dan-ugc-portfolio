@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { accountsEnabled } from "../_lib/supabase/config";
 import { browserClient } from "../_lib/supabase/browser";
 import { BRAND } from "../_lib/brand";
+import { Busy } from "../_lib/ui";
 
 /* Sign in / create account (Supabase), or the single shared password when
    accounts aren't set up. */
@@ -136,8 +137,10 @@ function AccountForm() {
         )}
         {error && <p className="text-sm text-accent">{error}</p>}
         {notice && <p className="rounded-lg bg-good-soft px-3 py-2 text-sm text-good">{notice}</p>}
-        <button disabled={busy} className="w-full rounded-lg bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
-          {busy ? "One moment…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+        <button disabled={busy} aria-busy={busy} className="w-full rounded-lg bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+          <Busy busy={busy} label="One moment…">
+            {mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+          </Busy>
         </button>
       </form>
 
@@ -189,8 +192,10 @@ function PasswordForm() {
         className="w-full rounded-lg border border-border bg-bg px-3 py-2.5 outline-none focus:border-accent"
       />
       {error && <p className="text-sm text-accent">{error}</p>}
-      <button disabled={busy} className="w-full rounded-lg bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
-        {busy ? "Checking…" : "Sign in"}
+      <button disabled={busy} aria-busy={busy} className="w-full rounded-lg bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+        <Busy busy={busy} label="Checking…">
+          Sign in
+        </Busy>
       </button>
     </form>
   );

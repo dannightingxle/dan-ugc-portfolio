@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { compact, shortDate } from "../../_lib/ui";
+import { Busy, compact, shortDate } from "../../_lib/ui";
 import type { BrandData, Trial } from "../../_lib/studio/brand-types";
 import { Field, Section, input } from "../../projects/fields";
 import { ActionButton, CopyButton, call, useAction } from "../../projects/[id]/studio/studio";
@@ -116,6 +116,7 @@ function TrialCard({ trial: t, onBrand, goEdits }: { trial: Trial; onBrand: (b: 
   const [winner, setWinner] = useState<string | null>(t.winner);
   const save = useAction();
   const mac = useAction();
+  const remove = useAction();
   const [macNote, setMacNote] = useState("");
   const confirm = useConfirm();
   // Only once every version has its views: one early number isn't a winner.
@@ -193,6 +194,7 @@ function TrialCard({ trial: t, onBrand, goEdits }: { trial: Trial; onBrand: (b: 
         <button
           type="button"
           disabled={save.busy || !changed}
+          aria-busy={save.busy}
           onClick={() =>
             save.run(async () => {
               const w = winner ?? best();
@@ -203,7 +205,9 @@ function TrialCard({ trial: t, onBrand, goEdits }: { trial: Trial; onBrand: (b: 
           }
           className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
         >
-          {save.busy ? "Saving…" : winner || views.some((v) => v != null) ? "Save results" : "Save"}
+          <Busy busy={save.busy} label="Saving…">
+            {winner || views.some((v) => v != null) ? "Save results" : "Save"}
+          </Busy>
         </button>
         {goEdits &&
           (t.editId ? (
@@ -214,6 +218,7 @@ function TrialCard({ trial: t, onBrand, goEdits }: { trial: Trial; onBrand: (b: 
             <button
               type="button"
               disabled={mac.busy}
+              aria-busy={mac.busy}
               onClick={() =>
                 mac.run(async () => {
                   const r = await call<{ brand: BrandData }>(`${API}/mac`, "POST", { id: t.id });
@@ -223,22 +228,27 @@ function TrialCard({ trial: t, onBrand, goEdits }: { trial: Trial; onBrand: (b: 
               }
               className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-50"
             >
-              {mac.busy ? "Making…" : "Make the drafts on my Mac"}
+              <Busy busy={mac.busy} label="Making…">
+                Make the drafts on my Mac
+              </Busy>
             </button>
           ))}
         <button
           type="button"
+          disabled={remove.busy}
+          aria-busy={remove.busy}
           onClick={async () => {
             if (!(await confirm({ title: "Delete these trial versions?", message: "Any drafts on your Mac stay there.", confirmLabel: "Delete", danger: true }))) return;
-            const b = await call<BrandData>(API, "DELETE", { id: t.id }).catch(() => null);
-            if (b) onBrand({ trials: b.trials });
+            await remove.run(async () => onBrand({ trials: (await call<BrandData>(API, "DELETE", { id: t.id })).trials }));
           }}
-          className="ml-auto text-sm text-text-dim hover:text-accent"
+          className="ml-auto text-sm text-text-dim hover:text-accent disabled:opacity-60"
         >
-          Delete
+          <Busy busy={remove.busy} label="Deleting…">
+            Delete
+          </Busy>
         </button>
       </div>
-      {(save.error || mac.error) && <p className="text-sm text-accent">{save.error || mac.error}</p>}
+      {(save.error || mac.error || remove.error) && <p className="text-sm text-accent">{save.error || mac.error || remove.error}</p>}
       {!winner && views.every((v) => v != null) && <p className="text-xs text-text-dim">No winner picked: saving picks the one with the most views.</p>}
       {!winner && views.some((v) => v != null) && views.some((v) => v == null) && (
         <p className="text-xs text-text-dim">The winner is picked once every version has its views (or pick one yourself).</p>

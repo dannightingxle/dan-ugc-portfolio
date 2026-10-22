@@ -6,6 +6,7 @@ import { useAccount } from "./account-provider";
 import { browserClient } from "./_lib/supabase/browser";
 import { BRAND } from "./_lib/brand";
 import { TextBox } from "./_lib/text-box";
+import { Busy } from "./_lib/ui";
 
 /* "Feedback" button: a short message that lands in the hub_feedback table
    (read it in Supabase → Table editor). Without accounts it opens an email. */
@@ -75,9 +76,12 @@ function FeedbackDialog({ onClose }: { onClose: () => void }) {
             {state === "error" && <p className="text-sm text-accent">Couldn&apos;t send that - please try again.</p>}
             <button
               disabled={state === "sending" || !message.trim()}
+              aria-busy={state === "sending"}
               className="w-full rounded-lg bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60"
             >
-              {state === "sending" ? "Sending…" : "Send"}
+              <Busy busy={state === "sending"} label="Sending…">
+                Send
+              </Busy>
             </button>
           </form>
         )}

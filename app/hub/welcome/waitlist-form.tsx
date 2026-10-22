@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Busy } from "../_lib/ui";
 
 /* The waitlist form on the landing page (while BRAND.waitlist is on). */
 
@@ -62,11 +63,14 @@ export default function WaitlistForm({ tone = "card" }: { tone?: "card" | "accen
       {error && <p className={`text-sm ${onAccent ? "text-on-accent" : "text-accent"}`}>{error}</p>}
       <button
         disabled={state === "busy"}
+        aria-busy={state === "busy"}
         className={`w-full rounded-xl py-3.5 font-semibold transition disabled:opacity-60 ${
           onAccent ? "bg-bg-card text-accent hover:opacity-90" : "bg-accent text-on-accent hover:bg-accent-hover"
         }`}
       >
-        {state === "busy" ? "One moment…" : "Join the waitlist"}
+        <Busy busy={state === "busy"} label="One moment…">
+          Join the waitlist
+        </Busy>
       </button>
     </form>
   );

@@ -182,15 +182,19 @@ function TaskTray() {
       return next;
     });
   }, []);
-  // The job's own page shows its result, so the tray leaves that one out.
+  // The job's own page shows its progress and result, so the tray leaves that one out.
   const here = path.startsWith("/hub/studio/brand") ? BRAND_ID : /^\/hub\/projects\/([^/]+)\/studio/.exec(path)?.[1];
-  const shown = tasks.filter((t) => t.status === "running" || (t.projectId !== here && !faded.has(taskKey(t))));
+  const shown = tasks.filter((t) => t.projectId !== here && (t.status === "running" || !faded.has(taskKey(t))));
+  // Out of the way while you type: a pop-up over a text box would take the click (and the paste) meant for it.
+  const typing = useTyping();
   const alerts = edits.filter((e) => editNeedsLook(e) && !cleared.has(editKey(e)) && !faded.has(editKey(e)) && e.projectId !== here);
   if (!shown.length && !alerts.length) return null;
+  // Bottom left on bigger screens: the right is where the chat panels and their reply boxes are.
   return (
     <div
       aria-live="polite"
-      className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 space-y-2 sm:inset-x-auto sm:right-5 sm:w-80 md:bottom-5"
+      hidden={typing}
+      className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 space-y-2 sm:inset-x-auto sm:left-5 sm:w-80 md:bottom-5"
       role="region"
       aria-label="Jobs running in the background"
     >
@@ -210,6 +214,27 @@ function TaskTray() {
       ))}
     </div>
   );
+}
+
+/** Whether you're typing in a text box (or any field you can type in) right now. */
+function useTyping() {
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const el = document.activeElement as HTMLElement | null;
+      const field = el && (el.tagName === "TEXTAREA" || el.isContentEditable || (el.tagName === "INPUT" && /^(text|search|email|url|number|password|)$/.test((el as HTMLInputElement).type)));
+      setTyping(Boolean(field));
+    };
+    // Leaving a field: check once focus has landed wherever it's going.
+    const later = () => setTimeout(check, 0);
+    document.addEventListener("focusin", check);
+    document.addEventListener("focusout", later);
+    return () => {
+      document.removeEventListener("focusin", check);
+      document.removeEventListener("focusout", later);
+    };
+  }, []);
+  return typing;
 }
 
 /** Shows for 15 seconds, then fades out and goes (held while the pointer is over it). */

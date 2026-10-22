@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { shortDate } from "../../../_lib/ui";
+import { Busy, Spinner, shortDate, useBusy } from "../../../_lib/ui";
 import { useConfirm } from "../../../_lib/popups";
 import type { ChatMessage, ChatSummary, SheetChat } from "../../../_lib/studio/chats";
 import { input } from "../../fields";
@@ -56,7 +56,8 @@ export function CouldntOpen({ items, after }: { items: string[]; after?: string 
 }
 
 export function ChatView({
-  chat,
+  chat: loaded,
+  loading = false,
   busy,
   writing,
   stopped,
@@ -66,6 +67,8 @@ export function ChatView({
   goEdits,
 }: {
   chat: OpenChat | null;
+  /** The chat picked is still on its way (what's in chat is the one before). */
+  loading?: boolean;
   busy: boolean;
   /** "Reading the linked pages… 0:12" while Claude works on this chat. */
   writing: string | null;
@@ -77,6 +80,9 @@ export function ChatView({
   goEdits?: () => void;
 }) {
   const [reply, setReply] = useState("");
+  const [sending, run] = useBusy();
+  const chat = loading ? null : loaded;
+  const opening = loading && !writing;
   const messages = chat?.messages ?? [];
   const last = messages.at(-1);
   const hasSheet = Boolean(chat?.sheetId);
@@ -85,18 +91,26 @@ export function ChatView({
   async function send(e?: React.FormEvent) {
     e?.preventDefault();
     if (!reply.trim() || busy) return;
-    if (await onReply(reply.trim())) setReply("");
+    await run(async () => {
+      if (await onReply(reply.trim())) setReply("");
+    });
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="min-w-0 truncate font-semibold">{chat?.title ?? "New shoot sheet"}</h3>
+        <h3 className="min-w-0 truncate font-semibold">{chat?.title ?? (opening ? "Opening the chat…" : "New shoot sheet")}</h3>
         <button type="button" onClick={onNew} className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:border-accent hover:text-accent">
           + New shoot sheet
         </button>
       </div>
       <ol className="space-y-3" aria-label="Conversation">
+        {opening && (
+          <li className="flex items-center gap-2 text-sm text-text-muted">
+            <Spinner />
+            Loading the messages…
+          </li>
+        )}
         {messages.map((m, i) => (
           <Message key={m.at + i} m={m} first={i === 0} attached={i === 0 ? (chat?.attached ?? []) : []} latestSheet={m === lastSheet} goEdits={goEdits} />
         ))}
@@ -107,7 +121,7 @@ export function ChatView({
             <span className="mt-1 block text-xs text-text-dim">Running in the background: you can leave this page, or start something on another job.</span>
           </li>
         )}
-        {!writing && last?.role === "you" && (
+        {!writing && !sending && last?.role === "you" && (
           <li className="max-w-[85%] rounded-2xl rounded-tl-sm bg-warn-soft px-4 py-3 text-sm text-warn">
             {stopped || "This one didn't finish."} Reply below to try again.
           </li>
@@ -131,8 +145,10 @@ export function ChatView({
           />
         </label>
         <div className="flex flex-wrap items-center gap-3">
-          <button disabled={busy || !reply.trim()} className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-60">
-            {hasSheet ? "Change the sheet" : "Send and try again"}
+          <button disabled={busy || sending || opening || !reply.trim()} className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-60">
+            <Busy busy={sending} label="Sending…">
+              {hasSheet ? "Change the sheet" : "Send and try again"}
+            </Busy>
           </button>
           <span className="text-xs text-text-dim">
             {CHAT_KEYS_HINT}.{" "}
@@ -186,8 +202,22 @@ function Message({ m, first, attached, latestSheet, goEdits }: { m: ChatMessage;
 }
 
 /** Earlier shoot sheet chats for this job. */
-export function ChatList({ chats, openId, runningId, onOpen, onDelete }: { chats: ChatSummary[]; openId: string | null; runningId?: string; onOpen: (id: string) => void; onDelete: (id: string) => void }) {
+export function ChatList({
+  chats,
+  openId,
+  runningId,
+  onOpen,
+  onDelete,
+}: {
+  chats: ChatSummary[];
+  openId: string | null;
+  runningId?: string;
+  onOpen: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
+}) {
   const confirm = useConfirm();
+  const [deleting, run] = useBusy();
+  const [which, setWhich] = useState("");
   if (!chats.length) return null;
   return (
     <ul className="divide-y divide-border" aria-label="Shoot sheet chats">
@@ -206,13 +236,18 @@ export function ChatList({ chats, openId, runningId, onOpen, onDelete }: { chats
               <button
                 type="button"
                 aria-label={`Delete chat ${c.title}`}
+                aria-busy={deleting && which === c.id}
+                disabled={deleting}
                 onClick={async () => {
                   if (!(await confirm({ title: "Delete this chat?", message: "Its shoot sheet stays in the list below.", confirmLabel: "Delete", danger: true }))) return;
-                  onDelete(c.id);
+                  await run(async () => {
+                    setWhich(c.id);
+                    await onDelete(c.id);
+                  });
                 }}
-                className="shrink-0 px-1 text-xs text-text-dim hover:text-accent"
+                className="shrink-0 px-1 text-xs text-text-dim hover:text-accent disabled:opacity-60"
               >
-                ✕
+                {deleting && which === c.id ? <Spinner className="h-3 w-3" /> : "✕"}
               </button>
             )}
           </li>

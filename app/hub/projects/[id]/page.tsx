@@ -21,7 +21,7 @@ import {
   type Deliverable,
   type Project,
 } from "../../_lib/store";
-import { compact, money, shortDate } from "../../_lib/ui";
+import { Spinner, compact, money, shortDate } from "../../_lib/ui";
 import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "../fields";
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
@@ -49,7 +49,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const followups = useFeature("followups");
   const p = projects.find((x) => x.id === id);
 
-  if (!ready) return null;
+  if (!ready)
+    return (
+      <p className="flex items-center gap-2 text-sm text-text-dim">
+        <Spinner /> Loading…
+      </p>
+    );
   if (!p) {
     return (
       <p className="text-text-muted">
@@ -82,7 +87,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <Link href="/hub/projects" className="text-sm text-text-dim hover:text-text">
           ← Projects
         </Link>
-        <span className={`text-xs ${sync === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+        <span className={`flex items-center gap-1.5 text-xs ${sync === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+          {sync === "saving" && <Spinner className="h-3 w-3" />}
           {sync === "saving" ? "Saving…" : sync === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
         </span>
       </div>
