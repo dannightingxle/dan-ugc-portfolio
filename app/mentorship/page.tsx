@@ -122,7 +122,7 @@ export default function MentorshipPage() {
         <h1 className="mt-6 font-display text-6xl sm:text-7xl lg:text-8xl leading-[0.92] tracking-[-0.02em]">
           Anyone <em className="text-[color:var(--accent)]">Can Create.</em>
         </h1>
-        <p className="mt-6 text-lg sm:text-xl font-medium tracking-tight leading-snug text-[color:var(--text-muted)] max-w-2xl mx-auto">
+        <p className="mt-6 text-lg sm:text-xl font-medium leading-snug text-[color:var(--text-muted)] max-w-2xl mx-auto">
           The UGC mentorship that gets you paid. My exact system for landing paid brand deals around your 9-5, with me
           and a small group in your corner while you do it.
         </p>

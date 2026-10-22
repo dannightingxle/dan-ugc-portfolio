@@ -51,27 +51,28 @@
   --color-warn-soft: var(--warn-soft);
   --color-thumb-a: var(--thumb-a);
   --color-thumb-b: var(--thumb-b);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-jakarta);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-serif);
 }
 
-/* Editorial serif display */
+/* Display headings: bold, tightly tracked sans, as on the Creator Desk
+   (app/hub/hub.css). Accent words keep their colour but stay upright. */
 .font-display {
-  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  line-height: 0.98;
+  font-family: var(--font-jakarta), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1;
 }
 .font-display em,
 .font-display i {
-  font-style: italic;
+  font-style: normal;
 }
 
 html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-jakarta), -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -274,8 +275,8 @@ html {
 .marquee:hover .marquee-track {
   animation-play-state: paused;
 }
-/* `.font-display` sets line-height: 0.98, which sits outside Tailwind's utility
-   layer and so beats any `leading-*` class. At 0.98 the serif ascenders and
+/* `.font-display` sets line-height: 1, which sits outside Tailwind's utility
+   layer and so beats any `leading-*` class. At 1 the ascenders and
    descenders spill past the line box and get cut off by `.marquee`'s
    overflow: hidden. Restate it here (higher specificity) with room to spare. */
 .marquee .marquee-word {

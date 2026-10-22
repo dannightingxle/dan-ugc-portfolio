@@ -219,17 +219,17 @@ export default function Home() {
 
           <div className="grid lg:grid-cols-[1fr_0.9fr] gap-5 sm:gap-10 lg:gap-16 items-center lg:min-h-[560px]">
             <div className="flex flex-col justify-center order-2 lg:order-1">
-              <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl xl:text-[5.5rem] leading-[0.92] tracking-[-0.02em]">
+              <h1 className="font-display text-[2.75rem] sm:text-6xl lg:text-7xl xl:text-[5.5rem]">
                 <KineticText text="Dan Nightingale" className="block" />
                 <span className="block">
                   <KineticText text="UGC " delay={220} />
-                  <KineticText text="creator" delay={220} className="italic text-[color:var(--accent)]" />
+                  <KineticText text="creator" delay={220} className="text-[color:var(--accent)]" />
                 </span>
               </h1>
               <Reveal delay={160}>
-                <p className="mt-5 sm:mt-8 text-lg sm:text-xl font-medium tracking-tight leading-snug text-[color:var(--text)] max-w-xl">
+                <p className="mt-5 sm:mt-8 text-lg sm:text-xl font-medium leading-snug text-[color:var(--text)] max-w-xl">
                   Marketing-trained UGC for fitness, family and lifestyle brands - written, filmed and
-                  edited to <span className="font-display italic text-[color:var(--accent)]">convert</span>, not
+                  edited to <span className="font-display text-[color:var(--accent)]">convert</span>, not
                   just look good.
                 </p>
               </Reveal>
@@ -683,15 +683,19 @@ function KineticText({
     <span ref={ref} className={`kin ${inView ? "in" : ""} ${className}`} aria-label={text}>
       {words.map((word, w) => (
         <Fragment key={w}>
-          {[...word].map((ch, c) => {
-            const d = delay + idx * 34;
-            idx += 1;
-            return (
-              <span key={c} className="kin-letter" aria-hidden="true" style={{ transitionDelay: `${d}ms` }}>
-                {ch}
-              </span>
-            );
-          })}
+          {/* Keep each word whole: the letters are inline-blocks, so a line
+              could otherwise break between any two of them. */}
+          <span className="whitespace-nowrap">
+            {[...word].map((ch, c) => {
+              const d = delay + idx * 34;
+              idx += 1;
+              return (
+                <span key={c} className="kin-letter" aria-hidden="true" style={{ transitionDelay: `${d}ms` }}>
+                  {ch}
+                </span>
+              );
+            })}
+          </span>
           {w < words.length - 1 ? " " : null}
         </Fragment>
       ))}

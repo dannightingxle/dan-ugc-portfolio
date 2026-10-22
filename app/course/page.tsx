@@ -33,7 +33,7 @@ export default function CoursePage() {
         <h1 className="mt-6 font-display text-6xl sm:text-7xl leading-[0.92] tracking-[-0.02em]">
           Anyone <em className="text-[color:var(--accent)]">Can Create.</em>
         </h1>
-        <p className="mt-6 text-lg sm:text-xl font-medium tracking-tight leading-snug text-[color:var(--text-muted)] max-w-2xl">
+        <p className="mt-6 text-lg sm:text-xl font-medium leading-snug text-[color:var(--text-muted)] max-w-2xl">
           The full course: the exact system I use to land paid UGC deals around a 9-5, to work through at your own pace.
         </p>
       </div>
