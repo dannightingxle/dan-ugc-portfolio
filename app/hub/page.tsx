@@ -8,17 +8,22 @@ import { WelcomeBanner } from "./welcome-banner";
 import { ExampleTag } from "./projects/fields";
 import { isArchived, isLost, paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { useFeature } from "./account-provider";
-import { TechJobs } from "./studio/tech-jobs";
+import { JobsSwitch, TechJobs, useJobsView } from "./studio/tech-jobs";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, daysAgo, money, shortDate, useApi } from "./_lib/ui";
 import { useMoney } from "./_lib/money";
+import { YourTodos } from "./todos";
 
-/* Dashboard: projects and money first, then the tech UGC jobs, then every starred ad with live numbers. */
+/* Dashboard: your to-dos, then projects - brand deals and money, or the tech UGC jobs - then every starred ad with live numbers. */
 
 export default function HubHome() {
   const { stars, toggle } = useStars();
   const { projects } = useProjects();
   const followups = useFeature("followups");
   const studio = useFeature("studio");
+  const todos = useFeature("todos");
+  // The Projects section shows brand deals or tech jobs (the same switch as the board's).
+  const [view, choose] = useJobsView();
+  const tech = studio && view === "tech";
   const ads = useMemo(() => Object.values(stars).sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0)), [stars]);
 
   const running = ads.filter((a) => a.status === "active").length;
@@ -51,135 +56,143 @@ export default function HubHome() {
         <WelcomeBanner />
       </Suspense>
       <ImportLocal />
+      {todos && <YourTodos />}
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-serif text-4xl italic sm:text-5xl">Projects</h1>
-            <p className="mt-2 text-text-muted">Your brand deals and what you&apos;re owed.</p>
+            <p className="mt-2 text-text-muted">{tech ? "Your tech UGC jobs, busiest first." : "Your brand deals and what you're owed."}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/hub/projects?new=1" className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
-              + New job
+            <Link href={tech ? "/hub/projects?new=tech" : "/hub/projects?new=1"} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
+              {tech ? "+ New tech job" : "+ New job"}
             </Link>
-            <Link href="/hub/projects" className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+            <Link href={tech ? "/hub/projects?view=tech" : "/hub/projects?view=deals"} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
               Open board →
             </Link>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Tile label="Earned" value={format(earned)} accent={earned > 0} />
-          <Tile label="Awaiting payment" value={format(awaiting)} note={overdue ? `${overdue} overdue` : undefined} />
-          <Tile label="In the pipeline" value={format(pipeline)} />
-          <Tile label="Active projects" value={projects.filter((p) => p.stage !== "Paid").length.toString()} />
-        </div>
-        {converted && <p className="-mt-2 text-xs text-text-dim">Fees in other currencies are converted to {base} at today&apos;s rates.</p>}
+        {/* Brand deals or tech jobs, like the tabs on the Projects board. */}
+        {studio && <JobsSwitch view={view} onChange={choose} deals={projects.filter((p) => !p.techStage && !isArchived(p)).length} tech={projects.filter((p) => p.techStage && !isArchived(p)).length} />}
 
-        {followups && waiting.length > 0 && (
-          <div className="rounded-2xl border border-border bg-bg-card">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="font-medium">Waiting on</h2>
-              <span className="text-xs text-text-dim">Done only when they&apos;ve replied or paid</span>
+        {tech ? (
+          <TechJobs title="Tech UGC jobs" hideHeading hideNew studioLink />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <Tile label="Earned" value={format(earned)} accent={earned > 0} />
+              <Tile label="Awaiting payment" value={format(awaiting)} note={overdue ? `${overdue} overdue` : undefined} />
+              <Tile label="In the pipeline" value={format(pipeline)} />
+              <Tile label="Active projects" value={projects.filter((p) => p.stage !== "Paid").length.toString()} />
             </div>
-            <ul className="divide-y divide-border">
-              {waiting.map((p) => {
-                const due = Boolean(p.chaseOn && p.chaseOn <= today);
-                return (
-                  <li key={p.id}>
-                    <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
-                      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
-                        <p className="text-xs text-text-dim">
-                          {p.brand}
-                          {p.lastContact && ` · last message ${daysAgo(p.lastContact)}`}
-                        </p>
-                        <p className="text-sm font-medium">{p.waitingOn}</p>
-                      </div>
-                      <span className={`ml-auto rounded-full px-2 py-0.5 text-xs sm:ml-0 ${due ? "bg-warn-soft font-medium text-warn" : "bg-text/5 text-text-dim"}`}>
-                        {!p.chaseOn ? "No chase date" : due ? "Chase today" : `Chase ${shortDate(p.chaseOn)}`}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
+            {converted && <p className="-mt-2 text-xs text-text-dim">Fees in other currencies are converted to {base} at today&apos;s rates.</p>}
 
-        {invoiced.length > 0 && (
-          <div className="rounded-2xl border border-border bg-bg-card">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="font-medium">Invoices out</h2>
-              <span className="text-xs text-text-dim">Due = invoice date + payment terms</span>
+            {followups && waiting.length > 0 && (
+              <div className="rounded-2xl border border-border bg-bg-card">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <h2 className="font-medium">Waiting on</h2>
+                  <span className="text-xs text-text-dim">Done only when they&apos;ve replied or paid</span>
+                </div>
+                <ul className="divide-y divide-border">
+                  {waiting.map((p) => {
+                    const due = Boolean(p.chaseOn && p.chaseOn <= today);
+                    return (
+                      <li key={p.id}>
+                        <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
+                          <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+                            <p className="text-xs text-text-dim">
+                              {p.brand}
+                              {p.lastContact && ` · last message ${daysAgo(p.lastContact)}`}
+                            </p>
+                            <p className="text-sm font-medium">{p.waitingOn}</p>
+                          </div>
+                          <span className={`ml-auto rounded-full px-2 py-0.5 text-xs sm:ml-0 ${due ? "bg-warn-soft font-medium text-warn" : "bg-text/5 text-text-dim"}`}>
+                            {!p.chaseOn ? "No chase date" : due ? "Chase today" : `Chase ${shortDate(p.chaseOn)}`}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {invoiced.length > 0 && (
+              <div className="rounded-2xl border border-border bg-bg-card">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <h2 className="font-medium">Invoices out</h2>
+                  <span className="text-xs text-text-dim">Due = invoice date + payment terms</span>
+                </div>
+                <ul className="divide-y divide-border">
+                  {invoicesOut.map((p) => {
+                    const due = paymentDue(p);
+                    return (
+                      <li key={p.id}>
+                        <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
+                          <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+                            <p className="text-xs text-text-dim">
+                              {p.brand}
+                              {p.invoicedOn && ` · invoiced ${shortDate(p.invoicedOn)}`}
+                            </p>
+                            <p className="truncate text-sm font-medium">{p.title || "Untitled"}</p>
+                          </div>
+                          <span className="text-sm font-semibold">{money(p.fee, p.feeCurrency)}</span>
+                          <span
+                            className={`ml-auto rounded-full px-2 py-0.5 text-xs sm:ml-0 ${
+                              !due ? "bg-text/5 text-text-dim" : due.overdue ? "bg-accent-soft font-medium text-accent" : "bg-warn-soft text-warn"
+                            }`}
+                          >
+                            {!due ? "Add the invoice date" : due.overdue ? `Overdue since ${shortDate(due.date)}` : `Due ${shortDate(due.date)}`}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-border bg-bg-card">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <h2 className="font-medium">Coming up</h2>
+                <Link href="/hub/projects?new=1" className="text-sm text-accent hover:underline">
+                  + New project
+                </Link>
+              </div>
+              {upNext.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-text-dim">Nothing in progress. Add a project when a brand deal lands.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {upNext.map((p) => {
+                    const done = p.deliverables.filter((d) => d.done).length;
+                    return (
+                      <li key={p.id}>
+                        <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
+                          <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+                            <p className="flex items-center gap-1.5 text-xs text-text-dim">
+                              {p.brand}
+                              {p.example && <ExampleTag />}
+                            </p>
+                            <p className="truncate text-sm font-medium">{p.title || "Untitled"}</p>
+                          </div>
+                          <span className="rounded-full bg-text/5 px-2 py-0.5 text-xs text-text-muted">{p.stage}</span>
+                          {p.deliverables.length > 0 && (
+                            <span className="text-xs text-text-dim">
+                              {done}/{p.deliverables.length} done
+                            </span>
+                          )}
+                          <span className="ml-auto text-right text-xs text-text-dim sm:ml-0 sm:w-20">{p.due ? `Due ${shortDate(p.due)}` : "No date"}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
-            <ul className="divide-y divide-border">
-              {invoicesOut.map((p) => {
-                const due = paymentDue(p);
-                return (
-                  <li key={p.id}>
-                    <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
-                      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
-                        <p className="text-xs text-text-dim">
-                          {p.brand}
-                          {p.invoicedOn && ` · invoiced ${shortDate(p.invoicedOn)}`}
-                        </p>
-                        <p className="truncate text-sm font-medium">{p.title || "Untitled"}</p>
-                      </div>
-                      <span className="text-sm font-semibold">{money(p.fee, p.feeCurrency)}</span>
-                      <span
-                        className={`ml-auto rounded-full px-2 py-0.5 text-xs sm:ml-0 ${
-                          !due ? "bg-text/5 text-text-dim" : due.overdue ? "bg-accent-soft font-medium text-accent" : "bg-warn-soft text-warn"
-                        }`}
-                      >
-                        {!due ? "Add the invoice date" : due.overdue ? `Overdue since ${shortDate(due.date)}` : `Due ${shortDate(due.date)}`}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          </>
         )}
-
-        <div className="rounded-2xl border border-border bg-bg-card">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h2 className="font-medium">Coming up</h2>
-            <Link href="/hub/projects?new=1" className="text-sm text-accent hover:underline">
-              + New project
-            </Link>
-          </div>
-          {upNext.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-text-dim">Nothing in progress. Add a project when a brand deal lands.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {upNext.map((p) => {
-                const done = p.deliverables.filter((d) => d.done).length;
-                return (
-                  <li key={p.id}>
-                    <Link href={`/hub/projects/${p.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-bg-elevated">
-                      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
-                        <p className="flex items-center gap-1.5 text-xs text-text-dim">
-                          {p.brand}
-                          {p.example && <ExampleTag />}
-                        </p>
-                        <p className="truncate text-sm font-medium">{p.title || "Untitled"}</p>
-                      </div>
-                      <span className="rounded-full bg-text/5 px-2 py-0.5 text-xs text-text-muted">{p.stage}</span>
-                      {p.deliverables.length > 0 && (
-                        <span className="text-xs text-text-dim">
-                          {done}/{p.deliverables.length} done
-                        </span>
-                      )}
-                      <span className="ml-auto text-right text-xs text-text-dim sm:ml-0 sm:w-20">{p.due ? `Due ${shortDate(p.due)}` : "No date"}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
       </section>
-
-      {studio && <TechJobs title="Tech UGC jobs" studioLink boardLink />}
 
       <section className="space-y-5">
         <div>

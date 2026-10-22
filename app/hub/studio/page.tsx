@@ -7,7 +7,7 @@ import { StudioHome } from "./studio-home";
 
 export const metadata: Metadata = { title: "Studio" };
 
-/* Studio home: the personal brand plan and every tech UGC job's workspace. */
+/* Studio home: the personal brand plan, and every tech UGC job's and brand deal's workspace. */
 export default async function StudioPage() {
   const [jobs, brand] = await Promise.all([studioUser("studio"), studioUser("brand")]);
   if (!jobs && !brand) notFound();

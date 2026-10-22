@@ -9,6 +9,7 @@ import { input } from "../../fields";
 import { call, CopyButton } from "./studio";
 import { Tooltip, useConfirm } from "../../../_lib/popups";
 import { EditingNotes } from "../../../studio/notes/notes";
+import { StylePicker } from "../../../studio/styles/style-picker";
 import { CHAT_KEYS_HINT, chatKeys } from "../../../_lib/chat-keys";
 import { TextBox } from "../../../_lib/text-box";
 
@@ -83,6 +84,7 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
     <div className="space-y-5">
       <MacBar devices={macs} mac={mac} onChoose={chooseMac} />
       {mac && <FolderSetting projectId={projectId} folder={data.folder ?? ""} usual={mac.info.workdir} onSaved={(folder) => setData((d) => d && { ...d, folder })} />}
+      <StylePicker scope={projectId} />
       <details className="group rounded-xl border border-border bg-bg-card px-4 py-3 text-sm">
         <summary className="cursor-pointer font-medium">
           Editing notes for this job <span className="font-normal text-text-dim">- how you want these edited, remembered for every edit</span>

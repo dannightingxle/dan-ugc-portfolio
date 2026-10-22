@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { isArchived, techMonthly, useDataReady, useProjects, type Project } from "../_lib/store";
 import { useMoney } from "../_lib/money";
 import { money, shortDate } from "../_lib/ui";
@@ -16,7 +17,8 @@ function liveTechJobs(projects: Project[]) {
     .sort((a, b) => ORDER.indexOf(a.techStage) - ORDER.indexOf(b.techStage) || a.brand.localeCompare(b.brand));
 }
 
-export function TechJobs({ title, studioLink, boardLink, hideHeading }: { title: string; studioLink?: boolean; boardLink?: boolean; hideHeading?: boolean }) {
+/** hideNew: the page has its own + New tech job button. */
+export function TechJobs({ title, studioLink, boardLink, hideHeading, hideNew }: { title: string; studioLink?: boolean; boardLink?: boolean; hideHeading?: boolean; hideNew?: boolean }) {
   const { projects } = useProjects();
   const ready = useDataReady();
   const jobs = liveTechJobs(projects);
@@ -31,7 +33,8 @@ export function TechJobs({ title, studioLink, boardLink, hideHeading }: { title:
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          {!hideHeading && <h2 className="text-lg font-semibold">{title}</h2>}
+          {/* Kept for screen readers when the page's own heading and switch say what this is. */}
+          <h2 className={hideHeading ? "sr-only" : "text-lg font-semibold"}>{title}</h2>
           {monthly > 0 && (
             <p className="text-sm text-text-muted">
               About <span className="font-semibold text-good">{format(monthly)}</span> a month from active jobs{mixed && ", at today's rates"}
@@ -49,9 +52,11 @@ export function TechJobs({ title, studioLink, boardLink, hideHeading }: { title:
               Open board →
             </Link>
           )}
-          <Link href="/hub/projects?new=tech" className="text-accent hover:underline">
-            + New tech job
-          </Link>
+          {!hideNew && (
+            <Link href="/hub/projects?new=tech" className="text-accent hover:underline">
+              + New tech job
+            </Link>
+          )}
         </div>
       </div>
       {ready && jobs.length === 0 ? (
@@ -94,5 +99,55 @@ export function TechJobs({ title, studioLink, boardLink, hideHeading }: { title:
         </div>
       )}
     </section>
+  );
+}
+
+/* Brand deals or tech jobs: the switch on the dashboard and the Projects board (the choice is shared and remembered). */
+
+const VIEW_KEY = "cd-board-view";
+export type JobsView = "deals" | "tech";
+
+/** asked: a view a link asked for (?view=tech), which wins over the remembered one. */
+export function useJobsView(asked: JobsView | null = null) {
+  const [view, setView] = useState<JobsView>(asked ?? "deals");
+  useEffect(() => {
+    if (asked) return;
+    const t = setTimeout(() => {
+      try {
+        if (localStorage.getItem(VIEW_KEY) === "tech") setView("tech");
+      } catch {}
+    }, 0);
+    return () => clearTimeout(t);
+  }, [asked]);
+  const choose = (v: JobsView) => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {}
+  };
+  return [view, choose] as const;
+}
+
+export function JobsSwitch({ view, onChange, deals, tech }: { view: JobsView; onChange: (v: JobsView) => void; deals: number; tech: number }) {
+  return (
+    <div role="tablist" aria-label="Which jobs" className="inline-flex rounded-xl border border-border bg-bg-card p-1 text-sm">
+      {(
+        [
+          ["deals", "Brand deals", deals],
+          ["tech", "Tech jobs", tech],
+        ] as const
+      ).map(([v, label, n]) => (
+        <button
+          key={v}
+          type="button"
+          role="tab"
+          aria-selected={view === v}
+          onClick={() => onChange(v)}
+          className={`rounded-lg px-4 py-1.5 transition ${view === v ? "bg-accent font-medium text-on-accent" : "text-text-muted hover:text-text"}`}
+        >
+          {label} <span className={view === v ? "opacity-80" : "text-text-dim"}>{n}</span>
+        </button>
+      ))}
+    </div>
   );
 }
