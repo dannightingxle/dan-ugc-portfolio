@@ -63,6 +63,9 @@ export type EditEvent = { id: number; kind: "status" | "assistant" | "tool" | "u
 
 /** A recent clip on one of your Macs (deviceId says which). */
 /** What a picked file is, from its name: edits can use videos, images and audio. */
+/** Helpers from this one run in the background at a click, and update as soon as there's a new one. */
+export const HELPER_FOR_BACKGROUND = "0.3.11";
+
 export type MediaKind = "video" | "image" | "audio";
 export function mediaKind(name: string): MediaKind {
   if (/\.(jpe?g|png|heic|heif|gif|webp|tiff?|bmp|svg|psd)$/i.test(name)) return "image";
@@ -76,14 +79,29 @@ export type Device = {
   name: string;
   lastSeen: string | null;
   online: boolean;
-  info: { capcut?: string; claude?: string; macos?: string; capcutRunning?: boolean; helper?: string; folders?: string[]; libraries?: string[]; osxphotos?: boolean; maxEdits?: number; workdir?: string };
+  info: {
+    capcut?: string;
+    claude?: string;
+    macos?: string;
+    capcutRunning?: boolean;
+    helper?: string;
+    folders?: string[];
+    libraries?: string[];
+    osxphotos?: boolean;
+    maxEdits?: number;
+    workdir?: string;
+    /** The helper runs in the background (starts at login, restarts itself), not in a Terminal window. */
+    background?: boolean;
+    /** You asked for that to change (set here, done by the helper on its next check-in). */
+    backgroundWanted?: boolean;
+  };
 };
 
 /** How many edits a Mac runs side by side, unless you choose otherwise on the Mac helper page. */
 export const DEFAULT_MAX_EDITS = 3;
 export const MAX_EDITS_CHOICES = [1, 2, 3, 4];
 /** The helper on the site now (keep in step with VERSION in public/helper/creator-desk-helper.mjs). */
-export const LATEST_HELPER = "0.3.10";
+export const LATEST_HELPER = "0.3.11";
 /** The oldest helper that runs more than one edit at once. */
 export const HELPER_FOR_PARALLEL = "0.3.3";
 

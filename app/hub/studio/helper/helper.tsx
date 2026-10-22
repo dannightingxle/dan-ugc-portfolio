@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { DEFAULT_MAX_EDITS, HELPER_FOR_LIBRARY, HELPER_FOR_PARALLEL, MAX_EDITS_CHOICES, helperOlderThan, type Device } from "../../_lib/edits/types";
+import { DEFAULT_MAX_EDITS, HELPER_FOR_BACKGROUND, HELPER_FOR_LIBRARY, HELPER_FOR_PARALLEL, LATEST_HELPER, MAX_EDITS_CHOICES, helperOlderThan, type Device } from "../../_lib/edits/types";
 import { call, CopyButton } from "../../projects/[id]/studio/studio";
 import { useConfirm } from "../../_lib/popups";
 
@@ -16,6 +16,51 @@ const ago = (iso: string | null) => {
 };
 
 const OSXPHOTOS_INSTALL = "curl -LsSf https://astral.sh/uv/install.sh | sh && ~/.local/bin/uv tool install --python 3.13 osxphotos";
+
+/** Whether a Mac's helper is up to date, and whether it runs in the background - with the button to switch. */
+function HelperState({ d, onBackground }: { d: Device; onBackground: (on: boolean) => void }) {
+  const old = helperOlderThan(d.info.helper, LATEST_HELPER);
+  const canBackground = !helperOlderThan(d.info.helper, HELPER_FOR_BACKGROUND);
+  const wanted = d.info.backgroundWanted;
+  const switching = wanted !== undefined && wanted !== Boolean(d.info.background);
+  return (
+    <div className="mt-1 space-y-1 text-xs">
+      <p className={old ? "text-warn" : "text-good"}>
+        {!old
+          ? "Helper up to date"
+          : d.online
+            ? `Updating to ${LATEST_HELPER} by itself - as soon as no edit is running (give it a minute)`
+            : `Updates to ${LATEST_HELPER} by itself next time it's on`}
+      </p>
+      {canBackground && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text-muted">
+          {switching ? (
+            <span className="text-accent">{wanted ? "Moving to the background… (your Terminal window will say when you can close it)" : "Stopping the background helper…"}</span>
+          ) : d.info.background ? (
+            <>
+              <span className="text-good">Runs in the background - no Terminal window needed, starts when you log in</span>
+              <button type="button" onClick={() => onBackground(false)} className="text-text-dim underline hover:text-accent">
+                Stop running in the background
+              </button>
+            </>
+          ) : (
+            <>
+              <span>Runs in a Terminal window.</span>
+              <button
+                type="button"
+                disabled={!d.online}
+                onClick={() => onBackground(true)}
+                className="rounded-lg border border-border px-2.5 py-1 font-medium text-text hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                Run in the background
+              </button>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function Helper() {
   // Only shown once the Macs have loaded, so after the page is up.
@@ -55,6 +100,11 @@ export function Helper() {
     if (!(await confirm({ title: `Disconnect ${d.name}?`, message: "Its helper will stop getting work until you connect it again.", confirmLabel: "Disconnect", danger: true }))) return;
     await call(`/api/hub/edits/devices?id=${d.id}`, "DELETE").catch((e: Error) => setError(e.message));
     setDevices((list) => list?.filter((x) => x.id !== d.id) ?? null);
+  }
+
+  async function setBackground(d: Device, background: boolean) {
+    setDevices((list) => list?.map((x) => (x.id === d.id ? { ...x, info: { ...x.info, backgroundWanted: background } } : x)) ?? null);
+    await call("/api/hub/edits/devices", "PATCH", { id: d.id, background }).catch((e: Error) => setError(e.message));
   }
 
   async function setMaxEdits(d: Device, maxEdits: number) {
@@ -99,6 +149,7 @@ export function Helper() {
                     {d.info.claude && ` · ${d.info.claude}`}
                     {d.info.helper && ` · helper ${d.info.helper}`}
                   </p>
+                  <HelperState d={d} onBackground={(on) => setBackground(d, on)} />
                   {d.online && d.info.capcutRunning && <p className="text-xs text-warn">CapCut is open. Close it before an edit saves, or Claude will wait for you.</p>}
                   {d.info.folders?.length ? <p className="text-xs text-text-dim">Looks for clips in {d.info.folders.map((f) => f.replace(/^\/Users\/[^/]+/, "~")).join(", ")}</p> : null}
                   {d.info.libraries?.length ? <p className="text-xs text-text-dim">Finds B-roll in Apple Photos and {d.info.libraries.join(", ")}</p> : null}
@@ -196,7 +247,7 @@ export function Helper() {
               <CopyButton text={command} label="Copy" />
             </div>
             <p className={`text-sm ${connected ? "font-medium text-good" : "text-text-muted"}`}>
-              {connected ? "Connected. Leave that Terminal window open while you edit." : "Waiting for your Mac…"}
+              {connected ? "Connected. Leave that Terminal window open while you edit - or press Run in the background next to this Mac above, then close it." : "Waiting for your Mac…"}
             </p>
           </div>
         )}
@@ -204,10 +255,13 @@ export function Helper() {
         <div className="space-y-1 border-t border-border pt-3 text-sm text-text-muted">
           <p className="font-medium text-text">After that</p>
           <p>
-            Start it again any time: <code className="text-xs">node ~/.creator-desk/creator-desk-helper.mjs</code>
+            You only connect a Mac once. The helper keeps itself up to date: when there&apos;s a new one it updates as soon as no edit is running - no new code, nothing to do.
           </p>
           <p>
-            Or have it start by itself when you log in: <code className="text-xs">node ~/.creator-desk/creator-desk-helper.mjs autostart on</code>
+            Press <strong>Run in the background</strong> next to a Mac and you can close Terminal: your Mac starts the helper when you log in and again if it ever stops.
+          </p>
+          <p>
+            Not running in the background and closed the window? Start it again with <code className="text-xs">node ~/.creator-desk/creator-desk-helper.mjs</code> (no new code needed).
           </p>
           <p>Claude Code runs without a window, so the helper lets it use your CapCut tool, run commands and write files in your editing folder without asking each time.</p>
           <p>
