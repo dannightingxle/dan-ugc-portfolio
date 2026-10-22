@@ -16,6 +16,10 @@
   "dog" or "laptop" work) and exports what it finds, and looks through every video on your
   external drives by folder and file name. Claude Code then picks the clips that fit.
 
+  It also keeps your edit styles in step: Creator Desk can ask it to read how your Claude Code is set
+  up to edit (your CLAUDE.md files, skills and Claude Code's memory for your edit folders - read only),
+  or to take a few key frames from a finished video you pick, so every Mac edits in the same style.
+
   It keeps itself up to date: when Creator Desk has a newer helper, it downloads it and restarts
   between edits (set CDH_NO_UPDATE=1 to stop that).
 
@@ -36,7 +40,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.7";
+const VERSION = "0.3.8";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -167,6 +171,8 @@ function info() {
     // Pages you're logged in to (a brand's portal, a Google-login brief) can be read through your browser.
     reads: true,
     browser: BROWSER,
+    // It can read your editing setup and take key frames for Creator Desk's edit styles.
+    styles: true,
   };
 }
 
@@ -348,8 +354,8 @@ const PHOTOS_EXPORT = [
   "end run",
 ];
 
-const runAsync = (cmd, args, timeout) =>
-  new Promise((resolve) => execFile(cmd, args, { timeout, maxBuffer: 10_000_000 }, (err, stdout, stderr) => resolve({ err, stdout: String(stdout), stderr: String(stderr) })));
+const runAsync = (cmd, args, timeout, env = process.env) =>
+  new Promise((resolve) => execFile(cmd, args, { timeout, maxBuffer: 10_000_000, env }, (err, stdout, stderr) => resolve({ err, stdout: String(stdout), stderr: String(stderr) })));
 const filesIn = (dir) => {
   try {
     return fs.readdirSync(dir).filter((n) => !n.startsWith(".")).map((n) => path.join(dir, n));
@@ -617,28 +623,42 @@ function videosIn(dir) {
   return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+// The Mac's own picker: "folder" (a folder of clips), "files" (several videos) or "video" (just one).
+function pickerScript(prompt, mode) {
+  const p = prompt.replace(/"/g, "'");
+  if (mode === "folder") return ['tell application "Finder"', "activate", `set picked to choose folder with prompt "${p}"`, "end tell", "return POSIX path of picked"];
+  if (mode === "video") return ['tell application "Finder"', "activate", `set picked to choose file with prompt "${p}" of type {"public.movie"}`, "end tell", "return POSIX path of picked"];
+  return [
+    'tell application "Finder"',
+    "activate",
+    `set picked to choose file with prompt "${p}" of type {"public.movie"} with multiple selections allowed`,
+    "end tell",
+    'set out to ""',
+    "repeat with f in picked",
+    "set out to out & POSIX path of f & linefeed",
+    "end repeat",
+    "return out",
+  ];
+}
+
 function pickFiles(label, mode) {
   const folder = mode === "folder";
   if (process.env.CDH_PICK_CMD) {
     const lines = run("/bin/sh", ["-c", process.env.CDH_PICK_CMD], { timeout: 600_000, env: { ...process.env, CDH_PICK_MODE: folder ? "folder" : "files" } }).split("\n").filter(Boolean);
     return folder ? lines.flatMap(videosIn) : lines;
   }
-  const prompt = `${folder ? "Pick the folder with the clips" : "Pick the clips"} for ${label || "this video"}`.replace(/"/g, "'");
-  const script = folder
-    ? ['tell application "Finder"', "activate", `set picked to choose folder with prompt "${prompt}"`, "end tell", "return POSIX path of picked"]
-    : [
-        'tell application "Finder"',
-        "activate",
-        `set picked to choose file with prompt "${prompt}" of type {"public.movie"} with multiple selections allowed`,
-        "end tell",
-        'set out to ""',
-        "repeat with f in picked",
-        "set out to out & POSIX path of f & linefeed",
-        "end repeat",
-        "return out",
-      ];
-  const lines = run("osascript", script.flatMap((l) => ["-e", l]), { timeout: 600_000 }).split("\n").filter(Boolean);
+  const prompt = `${folder ? "Pick the folder with the clips" : "Pick the clips"} for ${label || "this video"}`;
+  const lines = run("osascript", pickerScript(prompt, folder ? "folder" : "files").flatMap((l) => ["-e", l]), { timeout: 600_000 }).split("\n").filter(Boolean);
   return folder ? lines.flatMap(videosIn) : lines;
+}
+
+// One video, without holding everything else up while the picker is open. Cancelled: nothing.
+async function pickVideo(prompt) {
+  const { err, stdout } = process.env.CDH_PICK_CMD
+    ? await runAsync("/bin/sh", ["-c", process.env.CDH_PICK_CMD], 600_000, { ...process.env, CDH_PICK_MODE: "video" })
+    : await runAsync("osascript", pickerScript(prompt, "video").flatMap((l) => ["-e", l]), 600_000);
+  if (err) return "";
+  return stdout.split("\n").map((l) => l.trim()).find(Boolean) || "";
 }
 
 async function handlePick(p) {
@@ -647,6 +667,246 @@ async function handlePick(p) {
   const picked = paths.map((f) => ({ path: f, name: path.basename(f), duration: duration(f) }));
   await update(p.id, { pickDone: true, picked });
   log(picked.length ? `Picked ${picked.length} clip(s).` : "Nothing picked.");
+}
+
+// ------------------------------------------------------------ edit styles: your editing setup and key frames
+
+// Creator Desk keeps your edit styles (personal brand, tech UGC, brand deals…) so every Mac edits the same way.
+// "Read my Mac's editing setup" sends it the text of how Claude Code is set up to edit here (read only - nothing
+// on the Mac changes); "Add key frames" sends a few stills from a finished video you pick, so it can see the look.
+const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+const SCAN = { files: 60, chars: 20_000, total: 400_000, bytes: 200_000, extraBytes: 50_000 };
+// Files about editing come first; ones that never mention it only fill any room left.
+const ABOUT_EDITING = /capcut|edit|caption|font|b-?roll|video/i;
+const STYLE_FILE = /style|brand|edit|note|caption|font|template/i;
+
+const expandHome = (p) => (p === "~" ? os.homedir() : p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : p);
+const tilde = (p) => (p === os.homedir() || p.startsWith(os.homedir() + path.sep) ? "~" + p.slice(os.homedir().length) : p);
+async function isDir(p) {
+  try {
+    return (await fs.promises.stat(p)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+async function entries(dir) {
+  try {
+    return await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+// A text file's contents, or null when it's missing, too big or not text.
+async function readText(p, maxBytes = SCAN.bytes) {
+  try {
+    const st = await fs.promises.stat(p);
+    if (!st.isFile() || st.size > maxBytes) return null;
+    const buf = await fs.promises.readFile(p);
+    if (buf.subarray(0, 8000).includes(0)) return null;
+    return buf.toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+// .md (and .txt) files in a folder and the folders inside it, two levels down, skipping CapCut, node_modules and hidden folders.
+async function textFilesIn(dir, maxDepth, test = () => true) {
+  const out = [];
+  const walk = async (d, depth) => {
+    for (const e of await entries(d)) {
+      if (e.name.startsWith(".") || out.length >= 200) continue;
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) {
+        if (depth < maxDepth && !SKIP_DIR.test(e.name)) await walk(p, depth + 1);
+      } else if (e.isFile() && /\.(md|txt)$/i.test(e.name) && test(e.name)) out.push(p);
+    }
+  };
+  await walk(dir, 0);
+  return out;
+}
+
+// Claude Code keeps a folder's memory in ~/.claude/projects/<its path, with everything but letters and numbers
+// turned into "-">/memory (paths over 200 characters are cut short and given a hash). In a git repo it's the
+// repo's top folder that counts, so both are looked for.
+async function memoryDirs(folder) {
+  const roots = [folder];
+  for (let d = folder; d !== path.dirname(d); d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, ".git"))) {
+      if (d !== folder) roots.push(d);
+      break;
+    }
+  }
+  const projects = path.join(CLAUDE_DIR, "projects");
+  const names = (await entries(projects)).filter((e) => e.isDirectory()).map((e) => e.name);
+  const dirs = [];
+  for (const r of roots) {
+    const key = r.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
+    for (const n of names) {
+      const low = n.toLowerCase();
+      if (low === key || (key.length > 200 && low.startsWith(key.slice(0, 200) + "-"))) dirs.push(path.join(projects, n, "memory"));
+    }
+  }
+  return dirs;
+}
+
+// A skills folder: each skill's SKILL.md, plus the smaller .md files that come with it.
+async function skillsIn(dir, add) {
+  for (const e of await entries(dir)) {
+    const skill = path.join(dir, e.name);
+    if (e.name.startsWith(".") || !(await isDir(skill))) continue;
+    const main = path.join(skill, "SKILL.md");
+    const text = await readText(main);
+    if (text == null) continue;
+    const editing = ABOUT_EDITING.test(text);
+    await add(main, editing ? 2 : 3, text);
+    for (const extra of await textFilesIn(skill, 2, (n) => n !== "SKILL.md" && /\.md$/i.test(n))) {
+      const more = await readText(extra, SCAN.extraBytes);
+      if (more != null) await add(extra, editing || ABOUT_EDITING.test(more) ? 2 : 3, more);
+    }
+  }
+}
+
+// Everything that says how you edit, best first: CLAUDE.md files (always), Claude Code's memory for your edit
+// folders, then skills and notes about editing, then other skills and notes if there's room. Read only.
+async function collectSetup(folders) {
+  const found = [];
+  const seen = new Set();
+  // tier: 0 CLAUDE.md, 1 memory, 2 about editing, 3 the rest.
+  const add = async (p, tier, text) => {
+    let real;
+    try {
+      real = await fs.promises.realpath(p);
+    } catch {
+      return;
+    }
+    if (seen.has(real)) return;
+    if (text === undefined) text = await readText(real);
+    if (text == null || !text.trim()) return;
+    seen.add(real);
+    found.push({ path: tilde(p), text, tier });
+  };
+
+  await add(path.join(CLAUDE_DIR, "CLAUDE.md"), 0);
+  const dirs = [];
+  for (const f of [cfg.workdir, ...folders].filter((f) => typeof f === "string" && f.trim()).slice(0, 50)) {
+    const full = path.resolve(expandHome(f.trim()));
+    if (!dirs.includes(full) && (await isDir(full))) dirs.push(full);
+  }
+  for (const dir of dirs) {
+    // Claude Code reads the CLAUDE.md files in the folders above too (up to your home folder).
+    const home = os.homedir();
+    if (dir.startsWith(home + path.sep)) for (let d = path.dirname(dir); d.startsWith(home); d = path.dirname(d)) await add(path.join(d, "CLAUDE.md"), 0);
+    for (const n of ["CLAUDE.md", "CLAUDE.local.md", path.join(".claude", "CLAUDE.md")]) await add(path.join(dir, n), 0);
+    for (const mem of await memoryDirs(dir)) for (const m of await textFilesIn(mem, 1, (n) => /\.md$/i.test(n))) await add(m, 1);
+    await skillsIn(path.join(dir, ".claude", "skills"), add);
+    // Notes in the folder itself - not when it's your whole home folder.
+    if (dir === home || dir === path.parse(dir).root) continue;
+    for (const p of await textFilesIn(dir, 2, (n) => STYLE_FILE.test(n) && !/^CLAUDE(\.local)?\.md$/i.test(n))) {
+      const text = await readText(p);
+      if (text != null) await add(p, ABOUT_EDITING.test(path.basename(p) + "\n" + text) ? 2 : 3, text);
+    }
+  }
+  await skillsIn(path.join(CLAUDE_DIR, "skills"), add);
+
+  // Best first, then within Creator Desk's limits (long files are cut short).
+  const files = [];
+  let total = 0;
+  for (const f of found.sort((a, b) => a.tier - b.tier)) {
+    if (files.length >= SCAN.files) break;
+    const room = Math.min(SCAN.chars, SCAN.total - total);
+    if (room < 500) break;
+    const text = f.text.length > room ? f.text.slice(0, room - 20) + "\n[... cut short]" : f.text;
+    files.push({ path: f.path, text });
+    total += text.length;
+  }
+  return files;
+}
+
+// Creator Desk can be busy for a moment: try a couple more times before giving up.
+async function send(route, body) {
+  for (let i = 0; ; i++) {
+    try {
+      return await api("POST", route, body);
+    } catch (e) {
+      if (i >= 2) throw e;
+      await sleep(3000);
+    }
+  }
+}
+
+const scansSeen = new Set();
+async function handleStyleScan(scan) {
+  if (!scan?.id || scansSeen.has(scan.id)) return;
+  scansSeen.add(scan.id);
+  log("Reading your editing setup (CLAUDE.md files, skills and Claude Code memory) for your edit styles…");
+  let body;
+  try {
+    const files = await collectSetup(Array.isArray(scan.folders) ? scan.folders : []);
+    body = { requestId: scan.id, files };
+    log(`Sending Creator Desk ${files.length} file(s) about how you edit.`);
+  } catch (e) {
+    body = { requestId: scan.id, error: `The helper couldn't read your editing setup: ${e.message}` };
+    log("Couldn't read your editing setup:", e.message);
+  }
+  await send("/api/hub/helper/styles/scan", body).catch((e) => log("Couldn't send your editing setup to Creator Desk:", e.message));
+}
+
+const FRAMES = 6;
+// Each still at most ~88KB, so it's under ~120KB once it's sent as text.
+const FRAME_BYTES = 88_000;
+
+// Stills spread through the video (skipping the first and last 5%), 540px wide; squeezed harder if one's too big.
+async function keyFrames(file, dir) {
+  const bin = ffmpeg();
+  if (!bin || !ffprobe()) throw new Error("ffmpeg isn't on this Mac. Install it once in Terminal: brew install ffmpeg");
+  const len = duration(file);
+  if (!len) throw new Error(`Couldn't read ${path.basename(file)} - is it a video?`);
+  const frames = [];
+  for (let i = 0; i < FRAMES; i++) {
+    const at = Math.round(len * (0.05 + (0.9 * i) / (FRAMES - 1)) * 10) / 10;
+    const out = path.join(dir, `frame-${i + 1}.jpg`);
+    for (const q of [5, 8, 12, 18, 25, 31]) {
+      fs.rmSync(out, { force: true });
+      await runAsync(bin, ["-v", "error", "-y", "-ss", String(at), "-i", file, "-frames:v", "1", "-vf", "scale=540:-2", "-q:v", String(q), out], 60_000);
+      const size = fs.existsSync(out) ? fs.statSync(out).size : 0;
+      if (!size) break; // no frame there (right at the end of a clip): skip it
+      if (size <= FRAME_BYTES) {
+        frames.push({ data: "data:image/jpeg;base64," + fs.readFileSync(out).toString("base64"), at, source: tilde(file) });
+        break;
+      }
+    }
+  }
+  return frames;
+}
+
+const grabsSeen = new Set();
+let grabQueue = Promise.resolve(); // one picker at a time
+function queueFrameGrab(g) {
+  if (!g?.id || grabsSeen.has(g.id)) return;
+  grabsSeen.add(g.id);
+  grabQueue = grabQueue.then(() => handleFrameGrab(g)).catch((e) => log("Couldn't take key frames:", e.message));
+}
+
+async function handleFrameGrab(g) {
+  const name = String(g.styleName || g.name || "").trim();
+  log(`Opening the file picker for key frames${name ? ` for ${name}` : ""}…`);
+  const file = await pickVideo(`Pick a finished video for your ${name ? `${name} ` : "edit style's "}key frames`);
+  let result;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdh-frames-"));
+  try {
+    if (!file) result = { error: "No video picked." };
+    else {
+      const frames = await keyFrames(file, dir);
+      result = frames.length ? { frames } : { error: `Couldn't take any frames from ${path.basename(file)}.` };
+    }
+  } catch (e) {
+    result = { error: e.message };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  log(result.frames ? `Sending ${result.frames.length} key frames from ${path.basename(file)}.` : `No key frames: ${result.error}`);
+  await send("/api/hub/helper/styles/frames", { requestId: g.id, styleId: g.styleId, ...result }).catch((e) => log("Couldn't send the key frames to Creator Desk:", e.message));
 }
 
 // ------------------------------------------------------------ editing with Claude Code
@@ -659,6 +919,7 @@ function promptFor(edit, broll = "") {
   return [
     `Edit this video in CapCut for me, the same way as when I paste a video card and the clip names into this chat.${whose(edit)}`,
     ...folderLines(edit),
+    ...styleLines(edit),
     ...notesLines(edit),
     "",
     ...(broll ? [broll, ""] : []),
@@ -678,8 +939,38 @@ function promptFor(edit, broll = "") {
 
 /** Whose video it is, so Claude uses the right style. */
 function whose(edit) {
-  if (edit.personal) return " It's for my own personal brand, not a client: use my editing skills and my personal-brand style and notes.";
-  return edit.brand ? ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.` : "";
+  const style = styleOf(edit);
+  if (edit.personal) {
+    return style
+      ? " It's for my own personal brand, not a client: follow my edit style below, along with my editing skills and notes."
+      : " It's for my own personal brand, not a client: use my editing skills and my personal-brand style and notes.";
+  }
+  if (!edit.brand) return style ? " Follow my edit style below, along with my editing skills." : "";
+  return style
+    ? ` It's for ${edit.brand}: follow my edit style below, along with my editing skills and the brand profile for ${edit.brand} if there is one.`
+    : ` It's for ${edit.brand}: use my editing skills and the brand profile for ${edit.brand} if there is one.`;
+}
+
+/** The edit style Creator Desk says this video follows (personal brand, tech, brand deals…), tidied; null if none. */
+function styleOf(edit) {
+  const s = edit.style;
+  if (!s || typeof s !== "object") return null;
+  const name = String(s.name || "").trim();
+  const summary = String(s.summary || "").trim();
+  const rules = (Array.isArray(s.rules) ? s.rules : []).map((r) => String(r).trim()).filter(Boolean);
+  return name || summary || rules.length ? { name: name || "my usual style", summary, rules } : null;
+}
+
+/** The edit style, kept in Creator Desk so every Mac edits the same way. Your CLAUDE.md and skills on this Mac still apply. */
+function styleLines(edit) {
+  const style = styleOf(edit);
+  if (!style) return [];
+  return [
+    "",
+    `My edit style for this video - ${style.name}${style.summary ? `: ${style.summary}` : ""}`,
+    "(This is the saved copy of how I edit these, so every Mac edits them the same way. My CLAUDE.md files and skills on this Mac still apply alongside it.)",
+    ...(style.rules.length ? ["Style rules:", ...style.rules.map((r) => `- ${r}`)] : []),
+  ];
 }
 
 /** The job's own folder on this Mac, when it has one: Claude Code starts there, so its CLAUDE.md, notes and skills apply. */
@@ -690,7 +981,8 @@ function folderLines(edit) {
 /** Your editing notes (feedback saved from earlier edits and the notes chat in Creator Desk). */
 function notesLines(edit) {
   if (!edit.notes?.length) return [];
-  return ["", "My editing notes - follow these on every edit unless the card says otherwise (where two clash, the later one wins):", ...edit.notes.map((n) => `- ${n}`)];
+  const overStyle = styleOf(edit) ? ". They're more specific than my edit style, so where a note and the style clash, the note wins" : "";
+  return ["", `My editing notes - follow these on every edit unless the card says otherwise (where two clash, the later one wins)${overStyle}:`, ...edit.notes.map((n) => `- ${n}`)];
 }
 
 // Lasting feedback gets saved to the editing notes, the way you'd tell Claude Code to remember something.
@@ -732,6 +1024,8 @@ function trialPrompt(edit, clips) {
     ...(fromDraft
       ? [`Start from my CapCut draft "${fromDraft}": duplicate it for each version and never change the original.${clips ? " These files are on this Mac too if you need them:" : ""}`, ...(clips ? [clips] : [])]
       : ["The reel, on this Mac:", clips || "(no file - ask me for the finished video or its clips and stop)"]),
+    // Matters when it rebuilds from the clips or adds new text or a cover.
+    ...styleLines(edit),
     "",
     "Trial card:",
     edit.brief,
@@ -752,6 +1046,7 @@ function wholeSheetPrompt(edit, clips) {
   return [
     `Edit every video on this shoot sheet in CapCut for me, the same way as when I paste a shoot sheet and a screenshot of my clips into this chat.${whose(edit)}`,
     ...folderLines(edit),
+    ...styleLines(edit),
     ...notesLines(edit),
     "",
     `All the clips I filmed for it, on this Mac (${edit.files.length}):`,
@@ -905,6 +1200,9 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
 }
 
 async function handleWork(work) {
+  // Edit styles: reading your setup and taking key frames go on alongside everything else.
+  if (work.styleScan) handleStyleScan(work.styleScan).catch((e) => log("Couldn't read your editing setup:", e.message));
+  for (const g of work.frameGrabs ?? []) queueFrameGrab(g);
   // A shoot sheet is waiting on these, so they go first.
   await handleReads(work.reads);
   for (const p of work.picks ?? []) await handlePick(p);

@@ -75,7 +75,7 @@ export type Device = {
 export const DEFAULT_MAX_EDITS = 3;
 export const MAX_EDITS_CHOICES = [1, 2, 3, 4];
 /** The helper on the site now (keep in step with VERSION in public/helper/creator-desk-helper.mjs). */
-export const LATEST_HELPER = "0.3.7";
+export const LATEST_HELPER = "0.3.8";
 /** The oldest helper that runs more than one edit at once. */
 export const HELPER_FOR_PARALLEL = "0.3.3";
 
