@@ -85,8 +85,8 @@ export function StylesPage() {
         <div className="space-y-1">
           <h2 className="font-semibold">Read my Mac&apos;s editing setup</h2>
           <p className="text-sm text-text-muted">
-            Your Mac looks through the CLAUDE.md, skills and memory files Claude Code uses to edit your videos, and Claude sorts them into styles here. Styles you&apos;ve changed yourself are left
-            as they are.
+            Your Mac looks through the CLAUDE.md, skills and memory files Claude Code uses to edit your videos, and Claude sorts them into styles here. Got more than one Mac? Read each
+            one: what&apos;s new on each is added to the same styles, nothing is lost. Styles you&apos;ve changed yourself are left as they are.
           </p>
         </div>
         <MacChoice
@@ -357,6 +357,8 @@ function StyleForm({ start, onSave, onCancel }: { start?: Form; onSave: (f: Form
 }
 
 const USED_BY_SHOWN = 8;
+/** "MacBook Air", "MacBook Air and Mac mini", "A, B and C". */
+const listNames = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Device | undefined; onChange: (s: Style) => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
@@ -413,7 +415,7 @@ function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Devi
           <h2 className="break-words font-serif text-2xl">{style.name}</h2>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-dim">
             <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent">{KIND_LABEL[style.kind]}</span>
-            <span>{style.source === "you" ? "Changed by you" : "From your Mac's setup"}</span>
+            <span>{style.source === "you" ? "Changed by you" : style.macs?.length ? `Read from ${listNames(style.macs)}` : "From your Mac's setup"}</span>
           </p>
         </div>
         {!editing && (
