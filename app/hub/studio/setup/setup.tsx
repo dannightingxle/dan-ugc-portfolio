@@ -484,46 +484,68 @@ function Skills({ skills, onChange }: { skills: SetupSkill[]; onChange: (s: Setu
       setError(errorText(e));
     }
   }
+  const isOn = (s: SetupSkill) => (s.choice ? s.choice === "include" : s.files > 0);
+  const synced = skills.filter(isOn);
+  const left = skills.filter((s) => !isOn(s));
   return (
     <section className="min-w-0 space-y-3 rounded-2xl border border-border bg-bg-card p-4 sm:p-5" aria-label="Which skills">
       <div className="space-y-1">
         <h2 className="font-semibold">Which skills</h2>
         <p className="text-sm text-text-muted">
-          Your Macs carry the skills that are about editing your videos, and leave the rest out. Switch any skill on or off here - it applies at the next sync. Switching one off just stops it
-          syncing: it stays on your Macs.
+          Only the skills about editing your videos are carried between your Macs. Untick one to stop it syncing (it stays on your Macs), or switch on one of the others - it applies at the next
+          sync.
         </p>
       </div>
-      <ul className="space-y-2">
-        {skills.map((s) => {
-          const on = s.choice ? s.choice === "include" : s.files > 0;
-          return (
-            <li key={s.name} className="flex min-w-0 items-start gap-3 rounded-xl bg-bg-elevated px-3 py-2">
-              <input type="checkbox" checked={on} onChange={(e) => choose(s, e.target.checked ? "include" : "exclude")} aria-label={`Sync ${s.name}`} className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]" />
-              <div className="min-w-0 flex-1 text-sm">
-                <p className="break-all font-medium">{s.name}</p>
-                <p className="text-xs text-text-muted">
-                  {s.files > 0 ? `${plural(s.files, "file")} here` : s.skippedBy?.length ? `Left out by ${s.skippedBy.join(" and ")}` : "Not sent yet"}
-                  {s.description && ` - ${s.description}`}
-                </p>
-                <p className="text-xs text-text-dim">
-                  {s.choice ? (
-                    <>
-                      {s.choice === "include" ? "Always synced (your choice)" : "Never synced (your choice)"} ·{" "}
-                      <button type="button" onClick={() => choose(s, null)} className="text-accent hover:underline">
-                        let your Macs decide
-                      </button>
-                    </>
-                  ) : (
-                    "Your Macs decide"
-                  )}
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      {synced.length > 0 ? (
+        <ul className="space-y-2" aria-label="Synced skills">
+          {synced.map((s) => (
+            <SkillRow key={s.name} s={s} on onChoose={choose} />
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-text-dim">No skills are synced yet.</p>
+      )}
+      {left.length > 0 && (
+        <details className="min-w-0 rounded-xl border border-border">
+          <summary className="cursor-pointer px-3 py-2 text-sm">
+            <span className="font-medium">Not synced ({left.length})</span> <span className="text-xs text-text-dim">- not about editing, so they stay on the Mac they&apos;re on</span>
+          </summary>
+          <ul className="space-y-1 border-t border-border p-2" aria-label="Skills not synced">
+            {left.map((s) => (
+              <SkillRow key={s.name} s={s} on={false} compact onChoose={choose} />
+            ))}
+          </ul>
+        </details>
+      )}
       {error && <p className="text-sm text-accent">{error}</p>}
     </section>
+  );
+}
+
+function SkillRow({ s, on, compact = false, onChoose }: { s: SetupSkill; on: boolean; compact?: boolean; onChoose: (s: SetupSkill, choice: SetupSkill["choice"]) => void }) {
+  return (
+    <li className={`flex min-w-0 items-start gap-3 rounded-xl px-3 py-2 ${compact ? "" : "bg-bg-elevated"}`}>
+      <input type="checkbox" checked={on} onChange={(e) => onChoose(s, e.target.checked ? "include" : "exclude")} aria-label={`Sync ${s.name}`} className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]" />
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="break-all font-medium">{s.name}</p>
+        {compact ? (
+          s.description && <p className="line-clamp-1 text-xs text-text-dim">{s.description}</p>
+        ) : (
+          <p className="text-xs text-text-muted">
+            {s.files > 0 ? `${plural(s.files, "file")} here` : s.skippedBy?.length ? `Left out by ${s.skippedBy.join(" and ")}` : "Not sent yet"}
+            {s.description && ` - ${s.description}`}
+          </p>
+        )}
+        {s.choice && (
+          <p className="text-xs text-text-dim">
+            {s.choice === "include" ? "Always synced (your choice)" : "Never synced (your choice)"} ·{" "}
+            <button type="button" onClick={() => onChoose(s, null)} className="text-accent hover:underline">
+              let your Macs decide
+            </button>
+          </p>
+        )}
+      </div>
+    </li>
   );
 }
 
