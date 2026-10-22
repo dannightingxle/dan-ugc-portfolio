@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { isArchived, paymentDue, useProjects, type Project } from "./_lib/store";
 import { CHECK_IN_AFTER_DAYS, REPEATS, REPEAT_LABEL, checkInOn, finish, localDay, placeOf, unfinish, type Repeat, type Todo } from "./_lib/todos/types";
 import { input } from "./projects/fields";
-import { money, shortDate } from "./_lib/ui";
+import { Busy, Spinner, money, shortDate } from "./_lib/ui";
 import { useFeature } from "./account-provider";
 
 /* Your to-dos, at the top of the home page: what to do, chase and check in on.
@@ -108,7 +108,11 @@ export function YourTodos() {
       {error && <p className="text-sm text-accent">{error}</p>}
 
       {!todos ? (
-        !error && <p className="text-sm text-text-muted">Loading your to-dos…</p>
+        !error && (
+          <p className="flex items-center gap-2 text-sm text-text-muted">
+            <Spinner /> Loading your to-dos…
+          </p>
+        )
       ) : (
         <>
           {count > 0 && (
@@ -315,8 +319,10 @@ function AddTodo({ jobs, onAdded }: { jobs: Project[]; onAdded: (todos: Todo[]) 
     <form onSubmit={add} className="space-y-2">
       <div className="flex gap-2">
         <input className={`${input} flex-1`} value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a to-do - e.g. Reply to the Twirl emails" aria-label="New to-do" maxLength={300} />
-        <button disabled={!text.trim() || busy} className="shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-50">
-          Add
+        <button disabled={!text.trim() || busy} aria-busy={busy} className="shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-50">
+          <Busy busy={busy} label="Adding…">
+            Add
+          </Busy>
         </button>
       </div>
       {more ? (

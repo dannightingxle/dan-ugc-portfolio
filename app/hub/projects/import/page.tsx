@@ -11,6 +11,7 @@ import { input } from "../fields";
 import { type ClaudeProject, isTechProject, mapDocs, matchJob, projectToJob, readClaudeExport } from "../../_lib/claude-projects";
 import type { Project } from "../../_lib/store";
 import { TextBox } from "../../_lib/text-box";
+import { Busy, Spinner } from "../../_lib/ui";
 
 /* Bring jobs in from a Claude chat or a file, or whole Claude Projects from a
    Claude export: preview what will be added or filled in, then import. Only
@@ -102,8 +103,10 @@ export default function ImportPage() {
             <button onClick={() => preview()} disabled={!text.trim() || !loaded} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50">
               Preview
             </button>
-            <label className="cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent">
-              {loaded ? "Choose a file" : "Loading your board…"}
+            <label className="cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent" aria-busy={!loaded}>
+              <Busy busy={!loaded} label="Loading your board…">
+                Choose a file
+              </Busy>
               <input type="file" accept=".json,.txt,.md,application/json,text/plain" disabled={!loaded} className="sr-only" onChange={(e) => readFile(e.target.files?.[0])} />
             </label>
           </div>
@@ -166,7 +169,8 @@ export default function ImportPage() {
 
       {progress && (
         <div className="space-y-3 rounded-2xl border border-border bg-bg-card p-5">
-          <p className="font-medium">
+          <p className="flex flex-wrap items-center gap-x-2 font-medium">
+            {!(finished && sync !== "saving") && <Spinner />}
             {finished && sync !== "saving" ? "Done." : `Importing… ${progress.done} of ${progress.total}`}
             {finished && sync === "saving" && " Saving the last few…"}
           </p>
@@ -261,9 +265,11 @@ function ClaudeProjects({ projects, onPlan }: { projects: Project[]; onPlan: (pl
           skipped and never leave this computer.
         </p>
       </div>
-      <label className="inline-block cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent">
-        {reading ? "Reading…" : found ? "Choose a different export" : "Choose your Claude export"}
-        <input type="file" accept=".zip,.json,application/zip,application/json" className="sr-only" onChange={(e) => choose(e.target.files?.[0])} />
+      <label className="inline-block cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm hover:border-accent hover:text-accent" aria-busy={reading}>
+        <Busy busy={reading} label="Reading…">
+          {found ? "Choose a different export" : "Choose your Claude export"}
+        </Busy>
+        <input type="file" accept=".zip,.json,application/zip,application/json" disabled={reading} className="sr-only" onChange={(e) => choose(e.target.files?.[0])} />
       </label>
       {error && <p className="text-sm text-accent">{error}</p>}
 

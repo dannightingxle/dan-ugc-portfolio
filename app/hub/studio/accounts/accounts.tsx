@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { PLATFORM_LABEL, type Post } from "../../_lib/studio/brand-types";
 import { compact, followerChange, postSummary, profileUrl, type AccountView, type AccountsData, type Snapshot } from "../../_lib/accounts/types";
 import { call } from "../../projects/[id]/studio/studio";
-import { shortDate } from "../../_lib/ui";
+import { Busy, Spinner, shortDate } from "../../_lib/ui";
 
 /* Accounts: every TikTok / Instagram account you track - your own and each
    tech UGC job's - with followers over time and the latest posts. */
@@ -33,6 +33,7 @@ export function Accounts() {
   }, []);
 
   async function refresh() {
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
@@ -78,9 +79,12 @@ export function Accounts() {
             type="button"
             onClick={refresh}
             disabled={busy || !data.apify || !data.accounts.length}
+            aria-busy={busy}
             className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
           >
-            {busy ? "Pulling the latest…" : "Refresh now"}
+            <Busy busy={busy} label="Pulling the latest…">
+              Refresh now
+            </Busy>
           </button>
           <p className="min-w-0 flex-1 text-sm text-text-muted">
             {busy ? "This can take a couple of minutes." : `Updated ${ago(data.lastRefresh)}.`}
@@ -102,7 +106,11 @@ export function Accounts() {
         </ul>
       )}
 
-      {!data && !error && <p className="text-text-muted">Loading…</p>}
+      {!data && !error && (
+        <p className="flex items-center gap-2 text-text-muted">
+          <Spinner /> Loading…
+        </p>
+      )}
 
       {data && !data.accounts.length && (
         <div className="space-y-2 rounded-2xl border border-dashed border-border p-6 text-sm text-text-muted">

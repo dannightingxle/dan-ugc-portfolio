@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useAccount } from "../account-provider";
 import { useProjects, useStars, type Project } from "../_lib/store";
 import { browserClient } from "../_lib/supabase/browser";
-import { shortDate, useApi } from "../_lib/ui";
+import { Busy, Spinner, shortDate, useApi } from "../_lib/ui";
 import { Section, input } from "../projects/fields";
 
 /* Account page sections: billing, TrendTrack, data export, delete account. */
@@ -69,9 +69,12 @@ export function BillingSection() {
                   setBusy(false);
                 });
               }}
+              aria-busy={busy}
               className="rounded-lg border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
             >
-              {busy ? "Opening…" : "Manage billing, card & invoices"}
+              <Busy busy={busy} label="Opening…">
+                Manage billing, card & invoices
+              </Busy>
             </button>
           ) : null}
           {!billing.hasAccess && (
@@ -98,6 +101,7 @@ export function TrendTrackSection() {
   const s = status ?? data;
 
   async function call(method: "POST" | "DELETE") {
+    if (busy) return;
     setBusy(true);
     setError("");
     const res = await fetch("/api/hub/trendtrack", {
@@ -117,15 +121,19 @@ export function TrendTrackSection() {
     <div id="trendtrack">
     <Section title="TrendTrack">
       {loading && !s ? (
-        <p className="text-sm text-text-dim">Checking…</p>
+        <p className="flex items-center gap-2 text-sm text-text-dim">
+          <Spinner /> Checking…
+        </p>
       ) : s?.connected ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm">
             <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-good" />
             Connected to <strong>{s.workspace}</strong>. Find ads uses your TrendTrack account.
           </p>
-          <button type="button" disabled={busy} onClick={() => call("DELETE")} className="text-sm text-text-dim hover:text-accent">
-            Disconnect
+          <button type="button" disabled={busy} aria-busy={busy} onClick={() => call("DELETE")} className="text-sm text-text-dim hover:text-accent disabled:opacity-60">
+            <Busy busy={busy} label="Disconnecting…">
+              Disconnect
+            </Busy>
           </button>
         </div>
       ) : (
@@ -162,8 +170,10 @@ export function TrendTrackSection() {
                 placeholder="TrendTrack API key"
                 required
               />
-              <button disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
-                {busy ? "Checking…" : "Connect"}
+              <button disabled={busy} aria-busy={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+                <Busy busy={busy} label="Checking…">
+                  Connect
+                </Busy>
               </button>
             </form>
           )}
@@ -282,9 +292,12 @@ export function DeleteSection() {
               type="button"
               disabled={busy || confirm !== "DELETE"}
               onClick={remove}
+              aria-busy={busy}
               className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
             >
-              {busy ? "Deleting…" : "Delete forever"}
+              <Busy busy={busy} label="Deleting…">
+                Delete forever
+              </Busy>
             </button>
             <button type="button" onClick={() => setOpen(false)} className="px-2 text-sm text-text-dim hover:text-text">
               Cancel

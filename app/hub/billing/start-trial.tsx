@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Offer } from "../_lib/billing/types";
+import { Busy } from "../_lib/ui";
 
 const FEATURES = [
   "Every brand deal from pitch to paid, with what you're owed",
@@ -91,9 +92,12 @@ export function StartTrial({
           type="button"
           onClick={start}
           disabled={busy}
+          aria-busy={busy}
           className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-60"
         >
-          {busy ? "Opening secure checkout…" : offer.trialDays > 0 ? "Add card & start free trial" : "Continue to checkout"}
+          <Busy busy={busy} label="Opening secure checkout…">
+            {offer.trialDays > 0 ? "Add card & start free trial" : "Continue to checkout"}
+          </Busy>
         </button>
         {error && <p className="text-center text-sm text-accent">{error}</p>}
         <p className="text-center text-xs text-text-dim">Payments are handled securely by Stripe. We never see your card details.</p>

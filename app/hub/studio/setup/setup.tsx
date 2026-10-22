@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { SYNC_LIVE, memoryFolder, readPath, type SetupFile, type SetupRequest, type SetupSkill, type SetupVersion } from "../../_lib/edits/setup-types";
 import { HELPER_FOR_SETUP } from "../../_lib/edits/style-types";
 import { call } from "../../projects/[id]/studio/studio";
+import { Busy, Spinner } from "../../_lib/ui";
 
 /* Editing setup: the files Claude Code edits your videos with - its main
    CLAUDE.md, your skills (with their brand profiles and scripts), each edit
@@ -80,6 +81,7 @@ export function SetupPage() {
   }, [going]);
 
   async function syncAll() {
+    if (starting) return;
     setStarting(true);
     setError("");
     try {
@@ -92,7 +94,14 @@ export function SetupPage() {
     }
   }
 
-  if (!data) return error ? <p className="text-sm text-accent">{error}</p> : <p className="text-sm text-text-muted">Loading your editing setup…</p>;
+  if (!data)
+    return error ? (
+      <p className="text-sm text-accent">{error}</p>
+    ) : (
+      <p className="flex items-center gap-2 text-sm text-text-muted">
+        <Spinner /> Loading your editing setup…
+      </p>
+    );
   const ready = data.devices.filter((d) => d.online && d.ready);
   const lastSynced = data.macs.reduce((t, m) => (m.at > t ? m.at : t), "");
   const conflicts = data.files.filter((f) => f.other);
@@ -128,9 +137,12 @@ export function SetupPage() {
             type="button"
             onClick={syncAll}
             disabled={!ready.length || going || starting}
+            aria-busy={going || starting}
             className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60"
           >
-            {going ? "Syncing your Macs…" : starting ? "Starting…" : "Sync all my Macs"}
+            <Busy busy={going || starting} label={going ? "Syncing your Macs…" : "Starting…"}>
+              Sync all my Macs
+            </Busy>
           </button>
           {!data.devices.length && (
             <Link href="/hub/studio/helper" className="text-xs text-accent hover:underline">
@@ -192,6 +204,7 @@ function SyncStatus({ sync }: { sync: Sync }) {
       <ul className="space-y-2">
         {sync.requests.map((r) => (
           <li key={r.id} className="min-w-0">
+            {SYNC_LIVE.has(r.status) && <Spinner className="mr-1.5 text-accent" />}
             <span className="font-medium">{r.mac}: </span>
             <RequestText r={r} />
             <Details r={r} />
@@ -275,7 +288,8 @@ function Conflicts({ files, onOpen, onChanged }: { files: SetupFile[]; onOpen: (
 }
 
 function Conflict({ file, onOpen, onChanged }: { file: SetupFile; onOpen: (path: string, v: SetupVersion) => void; onChanged: () => Promise<void> }) {
-  const [busy, setBusy] = useState<"keep" | "combine" | null>(null);
+  // "combine", or the version being kept.
+  const [busy, setBusy] = useState<string | null>(null);
   const [done, setDone] = useState("");
   const [error, setError] = useState("");
   const other = file.other!;
@@ -287,7 +301,8 @@ function Conflict({ file, onOpen, onChanged }: { file: SetupFile; onOpen: (path:
   const name = (v: SetupVersion, i: number) => (sameName ? `${v.mac}'s ${i === 0 ? "newer" : "other"} one` : `${v.mac}'s`);
 
   async function choose(body: { keep: string } | { combine: true }) {
-    setBusy("keep" in body ? "keep" : "combine");
+    if (busy) return;
+    setBusy("keep" in body ? body.keep : "combine");
     setError("");
     try {
       const r = await call<{ note?: string }>(`${api}/conflict`, "POST", { path: file.path, ...body });
@@ -331,20 +346,26 @@ function Conflict({ file, onOpen, onChanged }: { file: SetupFile; onOpen: (path:
               key={v.sha}
               type="button"
               disabled={Boolean(busy)}
+              aria-busy={busy === v.sha}
               onClick={() => choose({ keep: v.sha })}
               className="rounded-lg border border-border px-3 py-1.5 text-sm hover:border-accent hover:text-accent disabled:opacity-50"
             >
-              Use {name(v, i)}
+              <Busy busy={busy === v.sha} label="Saving…">
+                Use {name(v, i)}
+              </Busy>
             </button>
           ))}
           {!file.binary && !other.binary && (
             <button
               type="button"
               disabled={Boolean(busy)}
+              aria-busy={busy === "combine"}
               onClick={() => choose({ combine: true })}
               className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60"
             >
-              {busy === "combine" ? "Claude is combining them…" : "Combine both with Claude"}
+              <Busy busy={busy === "combine"} label="Claude is combining them…">
+                Combine both with Claude
+              </Busy>
             </button>
           )}
         </div>
@@ -591,7 +612,9 @@ function Viewer({ path, version, onClose }: { path: string; version: SetupVersio
         {error ? (
           <p className="text-sm text-text-muted">{error}</p>
         ) : text === null ? (
-          <p className="text-sm text-text-muted">Loading…</p>
+          <p className="flex items-center gap-2 text-sm text-text-muted">
+            <Spinner /> Loading…
+          </p>
         ) : (
           <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-bg-elevated p-3 font-mono text-xs leading-relaxed">{text || "(empty file)"}</pre>
         )}

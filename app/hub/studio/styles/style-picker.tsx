@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { KIND_LABEL, type StyleKind } from "../../_lib/edits/style-types";
 import { input } from "../../projects/fields";
 import { call } from "../../projects/[id]/studio/studio";
+import { Spinner, useBusy } from "../../_lib/ui";
 
 /* "Style: Brand deals · change" at the top of a job's Edits tab: which edit
    style this job's edits follow. Unpicked, it's the usual one for the kind of
@@ -18,21 +19,23 @@ export function StylePicker({ scope }: { scope: string }) {
   const [data, setData] = useState<Data | null>(null);
   const [changing, setChanging] = useState(false);
   const [error, setError] = useState("");
+  const [saving, save] = useBusy();
   const api = "/api/hub/edits/styles/use";
 
   useEffect(() => {
     call<Data>(`${api}?scope=${encodeURIComponent(scope)}`, "GET").then(setData, (e: Error) => setError(e.message));
   }, [scope]);
 
-  async function pick(styleId: string) {
-    setError("");
-    try {
-      setData(await call<Data>(api, "PATCH", { scope, styleId }));
-      setChanging(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
+  const pick = (styleId: string) =>
+    save(async () => {
+      setError("");
+      try {
+        setData(await call<Data>(api, "PATCH", { scope, styleId }));
+        setChanging(false);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
 
   if (!data) return error ? <p className="px-1 text-xs text-accent">{error}</p> : null;
   const usual = USUAL[data.usual];
@@ -64,14 +67,21 @@ export function StylePicker({ scope }: { scope: string }) {
         {link}
       </p>
       {changing && (
-        <select className={`${input} w-auto max-w-full`} value={data.auto ? "" : (data.style?.id ?? "")} onChange={(e) => void pick(e.target.value)} aria-label="Edit style for this job">
-          <option value="">The usual for {usual}</option>
-          {data.styles.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} ({KIND_LABEL[s.kind]})
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <select className={`${input} w-auto max-w-full`} value={data.auto ? "" : (data.style?.id ?? "")} onChange={(e) => void pick(e.target.value)} disabled={saving} aria-busy={saving} aria-label="Edit style for this job">
+            <option value="">The usual for {usual}</option>
+            {data.styles.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({KIND_LABEL[s.kind]})
+              </option>
+            ))}
+          </select>
+          {saving && (
+            <span className="inline-flex items-center gap-1.5">
+              <Spinner /> Saving…
+            </span>
+          )}
+        </div>
       )}
       {error && <p className="text-accent">{error}</p>}
     </div>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import type { AdDetail, Source } from "../../_lib/types";
 import { newProject, useProjects, useStars } from "../../_lib/store";
-import { ReachChart, SourceBadge, StatusPill, Thumb, compact, shortDate, useApi } from "../../_lib/ui";
+import { ReachChart, SourceBadge, Spinner, StatusPill, Thumb, compact, shortDate, useApi } from "../../_lib/ui";
 import { Tooltip } from "../../_lib/popups";
 
 /* One ad: creative, numbers, reach over time, and its script. */
@@ -23,7 +23,12 @@ export default function AdPage({ params }: { params: Promise<{ id: string }> }) 
     if (data) refresh(data.ad);
   }, [data, refresh]);
 
-  if (loading) return <p className="text-text-dim">Loading ad…</p>;
+  if (loading)
+    return (
+      <p className="flex items-center gap-2 text-text-dim">
+        <Spinner /> Loading ad…
+      </p>
+    );
   // Can't fetch fresh numbers (e.g. TrendTrack not connected)? Show the last ones we saved.
   const saved = stars[adId];
   if (!data && !saved) return <p className="text-accent">{error ?? "Ad not found."}</p>;

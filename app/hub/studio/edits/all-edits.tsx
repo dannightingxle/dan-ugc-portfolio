@@ -6,6 +6,7 @@ import { STATUS_LABEL, WHOLE_SHEET, type EditStatus } from "../../_lib/edits/typ
 import { editHref } from "../../_lib/studio/tasks-client";
 import { input } from "../../projects/fields";
 import { call } from "../../projects/[id]/studio/studio";
+import { Spinner } from "../../_lib/ui";
 
 /* Every job's edits (and the personal brand's) in one list, newest first in
    each group: what needs you, what's ready to check in CapCut, what's being
@@ -61,7 +62,11 @@ export function AllEdits() {
       )}
       {error && !edits && <p className="text-accent">{error}</p>}
       {!edits ? (
-        !error && <p className="text-text-muted">Loading edits…</p>
+        !error && (
+          <p className="flex items-center gap-2 text-text-muted">
+            <Spinner /> Loading edits…
+          </p>
+        )
       ) : shown.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border-strong bg-bg-card p-4 text-sm text-text-muted">
           No edits yet. Make them on a job&apos;s Edits tab in Studio - from a shoot sheet, or a new edit in your own words.
