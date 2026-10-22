@@ -75,6 +75,7 @@ export function TechJobs({ title, studioLink, boardLink, hideHeading }: { title:
                   </span>
                 </div>
                 {p.title && <p className="truncate text-sm text-text-muted">{p.title}</p>}
+                {p.forGroup && <span className="mt-1 inline-block rounded-full bg-text/5 px-2 py-0.5 text-[11px] font-medium text-text-muted">For the group</span>}
                 {p.perVideo != null && (
                   <p className="mt-1 text-xs text-text-dim">
                     {money(p.perVideo, p.currency)} a video
