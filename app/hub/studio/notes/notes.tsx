@@ -34,6 +34,9 @@ export function NotesPage() {
           How you want your videos edited. Every edit on your Mac follows these, and they build up as you go: when you give feedback in an edit&apos;s chat that should stick (&ldquo;captions are always
           too big&rdquo;), Claude saves it here. Or tell Claude below, any time.
         </p>
+        <Link href="/hub/studio/styles" className="mt-2 inline-block text-sm text-accent hover:underline">
+          Edit styles - your different ways of editing, with key frames →
+        </Link>
       </div>
       <label className="block space-y-1 text-sm">
         <span className="font-medium">Notes for</span>

@@ -1,16 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { isArchived, useProjects } from "../_lib/store";
 import { TechJobs } from "./tech-jobs";
+import { BrandDeals } from "./brand-deals";
 import { useFeature } from "../account-provider";
 
-/* Where Studio starts: personal brand first, then each tech UGC job. */
+/* Where Studio starts: personal brand first, then each tech UGC job and brand deal. */
 export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
-  const { projects } = useProjects();
   const edits = useFeature("edits");
   const accounts = useFeature("accounts");
-  const otherJobs = projects.filter((p) => !p.techStage && p.stage !== "Paid" && !isArchived(p));
 
   return (
     <div className="space-y-8">
@@ -32,6 +30,11 @@ export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
             Editing notes - how you want your videos edited →
           </Link>
         )}
+        {edits && (
+          <Link href="/hub/studio/styles" className="mt-2 ml-4 inline-block text-sm text-accent hover:underline">
+            Edit styles - how each kind of video looks →
+          </Link>
+        )}
       </div>
 
       {brand && (
@@ -48,25 +51,8 @@ export function StudioHome({ jobs, brand }: { jobs: boolean; brand: boolean }) {
         </Link>
       )}
 
-      {jobs && (
-        <div className="space-y-3">
-          <TechJobs title="Tech UGC jobs" />
-          {otherJobs.length > 0 && (
-            <details className="text-sm">
-              <summary className="cursor-pointer text-text-muted">Brand deals ({otherJobs.length}) - every project has a Studio too</summary>
-              <ul className="mt-2 divide-y divide-border rounded-xl border border-border bg-bg-card">
-                {otherJobs.map((p) => (
-                  <li key={p.id}>
-                    <Link href={`/hub/projects/${p.id}/studio`} className="block px-4 py-2.5 hover:bg-bg-elevated">
-                      {p.brand} <span className="text-text-dim">{p.title}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
-      )}
+      {jobs && <TechJobs title="Tech UGC jobs" />}
+      {jobs && <BrandDeals />}
     </div>
   );
 }

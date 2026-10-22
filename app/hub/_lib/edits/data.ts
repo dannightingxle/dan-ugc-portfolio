@@ -1,5 +1,7 @@
 import "server-only";
 import { readsFor } from "./mac-reads";
+import { listStyles, styleWorkFor } from "./styles";
+import { styleFor } from "./style-types";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
 import { BRAND_ID } from "../studio/brand-types";
@@ -223,10 +225,11 @@ export async function touchDevice(deviceId: string, info?: Record<string, unknow
 }
 
 // How a job's edits are done, one row per job (and one for every edit, ALL_EDITS): the folder on your Mac
-// Claude Code works in (so that folder's CLAUDE.md, notes and skills apply), and your editing notes -
-// feedback Claude remembers for next time - with the chat you gave it in.
+// Claude Code works in (so that folder's CLAUDE.md, notes and skills apply), your editing notes -
+// feedback Claude remembers for next time - with the chat you gave it in, and the edit style it uses
+// (see styles.ts; unset means the default for its kind of job).
 const folderRow = (scope: string) => `editcfg:${scope}`;
-export type EditCfg = { folder?: string; notes?: EditNote[]; chat?: NotesChatMessage[] };
+export type EditCfg = { folder?: string; notes?: EditNote[]; chat?: NotesChatMessage[]; styleId?: string };
 
 async function getCfg(userId: string, scope: string): Promise<EditCfg> {
   const { data } = await adminClient().from("hub_workspaces").select("data").eq("user_id", userId).eq("project_id", folderRow(scope)).maybeSingle<{ data: EditCfg }>();
@@ -247,6 +250,15 @@ export async function editFolder(userId: string, projectId: string) {
 
 export async function setEditFolder(userId: string, projectId: string, folder: string) {
   await saveCfg(userId, projectId, { folder });
+}
+
+/** The edit style picked for a job or the personal brand ("" = the default for its kind). */
+export async function editStyleId(userId: string, scope: string) {
+  return (await getCfg(userId, scope)).styleId ?? "";
+}
+
+export async function setEditStyle(userId: string, scope: string, styleId: string) {
+  await saveCfg(userId, scope, { styleId });
 }
 
 /** A job's editing notes and their chat (or every edit's, for ALL_EDITS). */
@@ -332,26 +344,33 @@ export async function listDeviceFiles(userId: string): Promise<DeviceFile[]> {
 export async function workFor(auth: DeviceAuth, runningIds: string[] | null = null) {
   const db = adminClient();
   if (runningIds) await releaseDropped(auth, runningIds);
-  const [queued, picks, running, device] = await Promise.all([
+  const [queued, picks, running, device, styles] = await Promise.all([
     db.from("hub_edits").select(EDIT_COLS).eq("user_id", auth.userId).eq("status", "queued").or(`device_id.is.null,device_id.eq.${auth.deviceId}`).order("updated_at").limit(5),
     // A picker opens only on the Mac it was asked of (or any Mac, if none was named).
     db.from("hub_edits").select("id, video_code, title, pick_mode").eq("user_id", auth.userId).not("pick_requested_at", "is", null).or(`device_id.is.null,device_id.eq.${auth.deviceId}`).limit(5),
     db.from("hub_edits").select("id, project_id, session_id, cancel_requested").eq("user_id", auth.userId).eq("device_id", auth.deviceId).in("status", ["editing", "needs_you", "ready"]),
     db.from("hub_devices").select("info").eq("id", auth.deviceId).maybeSingle<{ info: Device["info"] | null }>(),
+    listStyles(auth.userId),
   ]);
   const runIds = (running.data ?? []).map((r) => r.id);
   // The brand name for each queued edit, so the prompt can say whose video it is.
   const projectIds = [...new Set(((queued.data ?? []) as EditRow[]).map((r) => r.project_id))];
   const brands = new Map<string, string>([[BRAND_ID, "Personal brand"]]);
+  // Tech UGC jobs default to your tech style, other jobs to your brand deals style.
+  const tech = new Set<string>();
   if (projectIds.length) {
     const { data: projects } = await db.from("hub_projects").select("id, data").eq("user_id", auth.userId).in("id", projectIds);
-    for (const p of projects ?? []) brands.set(p.id, String((p.data as { brand?: string })?.brand ?? ""));
+    for (const p of projects ?? []) {
+      brands.set(p.id, String((p.data as { brand?: string })?.brand ?? ""));
+      if ((p.data as { techStage?: string })?.techStage) tech.add(p.id);
+    }
   }
   // Each job's folder on the Mac (a carried-on edit needs the same one, as Claude Code keeps its sessions per folder).
   // And the editing notes for every edit and for each job, so new edits follow them.
   const folderIds = [...new Set([...projectIds, ...(running.data ?? []).map((r) => r.project_id as string)])];
   const folders = new Map<string, string>();
   const notes = new Map<string, string[]>();
+  const styleIds = new Map<string, string>();
   {
     const { data: rows } = await db.from("hub_workspaces").select("project_id, data").eq("user_id", auth.userId).in("project_id", [...folderIds, ALL_EDITS].map(folderRow));
     for (const r of rows ?? []) {
@@ -359,13 +378,19 @@ export async function workFor(auth: DeviceAuth, runningIds: string[] | null = nu
       const cfg = (r.data ?? {}) as EditCfg;
       folders.set(scope, String(cfg.folder ?? ""));
       notes.set(scope, (cfg.notes ?? []).map((n) => n.text));
+      if (cfg.styleId) styleIds.set(scope, cfg.styleId);
     }
   }
   const replies = runIds.length
     ? ((await db.from("hub_edit_events").select("id, edit_id, text").in("edit_id", runIds).eq("kind", "user").eq("delivered", false).order("id")).data ?? [])
     : [];
+  // The edit style each edit follows (its key frames stay on Creator Desk).
+  const styleOf = (projectId: string) => {
+    const { style } = styleFor(styles, styleIds.get(projectId), { personal: projectId === BRAND_ID, tech: tech.has(projectId) });
+    return style && { name: style.name, summary: style.summary, rules: style.rules };
+  };
   return {
-    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", notes: [...(notes.get(ALL_EDITS) ?? []), ...(notes.get(r.project_id) ?? [])], files: r.files ?? [], sessionId: r.session_id })),
+    edits: ((queued.data ?? []) as EditRow[]).map((r) => ({ id: r.id, brief: r.brief, title: r.title, videoCode: r.video_code, brand: brands.get(r.project_id) ?? "", personal: r.project_id === BRAND_ID, folder: folders.get(r.project_id) ?? "", notes: [...(notes.get(ALL_EDITS) ?? []), ...(notes.get(r.project_id) ?? [])], files: r.files ?? [], sessionId: r.session_id, style: styleOf(r.project_id) })),
     picks: (picks.data ?? []).map((p) => ({ id: p.id, mode: p.pick_mode, label: p.video_code === "ALL" ? p.title : [p.video_code, p.title].filter(Boolean).join(" · ") })),
     replies: replies.map((r) => {
       const run = running.data?.find((x) => x.id === r.edit_id);
@@ -373,6 +398,8 @@ export async function workFor(auth: DeviceAuth, runningIds: string[] | null = nu
     }),
     cancels: (running.data ?? []).filter((r) => r.cancel_requested).map((r) => r.id),
     reads: await readsFor(auth),
+    // Reading this Mac's editing setup into styles, and grabbing key frames from a video picked on it.
+    ...(await styleWorkFor(auth)),
     // How many edits this Mac runs side by side.
     maxEdits: device.data?.info?.maxEdits ?? DEFAULT_MAX_EDITS,
   };
