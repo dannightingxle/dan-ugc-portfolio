@@ -11,14 +11,16 @@ import { useFeature } from "./account-provider";
 import { JobsSwitch, TechJobs, useJobsView } from "./studio/tech-jobs";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, daysAgo, money, shortDate, useApi } from "./_lib/ui";
 import { useMoney } from "./_lib/money";
+import { YourTodos } from "./todos";
 
-/* Dashboard: projects - brand deals and money, or the tech UGC jobs - then every starred ad with live numbers. */
+/* Dashboard: your to-dos, then projects - brand deals and money, or the tech UGC jobs - then every starred ad with live numbers. */
 
 export default function HubHome() {
   const { stars, toggle } = useStars();
   const { projects } = useProjects();
   const followups = useFeature("followups");
   const studio = useFeature("studio");
+  const todos = useFeature("todos");
   // The Projects section shows brand deals or tech jobs (the same switch as the board's).
   const [view, choose] = useJobsView();
   const tech = studio && view === "tech";
@@ -54,6 +56,7 @@ export default function HubHome() {
         <WelcomeBanner />
       </Suspense>
       <ImportLocal />
+      {todos && <YourTodos />}
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

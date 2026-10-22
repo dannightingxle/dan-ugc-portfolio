@@ -4,8 +4,9 @@ import { crossSite } from "../same-origin";
 import { BRAND_ID, studioApiUser, validProjectId } from "../studio/data";
 import { ALL_EDITS } from "./types";
 import type { HubUser } from "../supabase/server";
+import type { FeatureKey } from "../features-list";
 
-/* Shared plumbing for the Edits API routes the web app calls (the helper's own routes use a device token instead). */
+/* Shared plumbing for the Edits API routes the web app calls (the helper's own routes use a device token instead), and the to-dos'. */
 
 export const text = (max: number) => z.string().max(max).default("");
 export const FileList = z.array(z.object({ path: z.string().min(1).max(1_000), name: z.string().max(300), duration: z.number().nullable().optional() })).max(40);
@@ -14,10 +15,11 @@ export async function editsApi<S extends z.ZodType>(
   request: Request,
   schema: S | null,
   run: (args: { user: HubUser; body: z.infer<S> }) => Promise<unknown>,
+  feature: FeatureKey = "edits",
 ) {
   const blocked = crossSite(request);
   if (blocked) return blocked;
-  const auth = await studioApiUser("edits");
+  const auth = await studioApiUser(feature);
   if (!auth.ok) return auth.response;
   let body: unknown = {};
   if (schema) {
