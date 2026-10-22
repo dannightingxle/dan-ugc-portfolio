@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjects } from "../../../_lib/store";
-import { shortDate } from "../../../_lib/ui";
+import { Busy, Spinner, shortDate, useBusy } from "../../../_lib/ui";
 import { ACCOUNT_CHECKS, DEFAULT_FILMING, FILES, type Profile, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
 import { Field, Section, input } from "../../fields";
 import { useFeature } from "../../../account-provider";
-import { Edits } from "./edits";
+import { EditPanel, EditsList, editName, useEditsData } from "./edits";
 import { ChatList, ChatView, CouldntOpen, type OpenChat } from "./sheet-chat";
 import type { ChatSummary } from "../../../_lib/studio/chats";
 import { weekDataBlock } from "../../../_lib/studio/custom-template";
@@ -69,6 +69,36 @@ export function Studio({ projectId }: { projectId: string }) {
   // On a wide screen the shoot sheet chat sits on the right, beside whichever tab is open.
   const wide = useWide();
   const shown: Tab = wide && tab === "week" ? (editsOn ? "edits" : "setup") : tab;
+
+  // On a wide screen an edit card opens on the right too, like a chat (?edit=<id> in the address, so links open it there).
+  // panelEdit is the edit with a tab in the panel; editOpen says whether it's showing, or the shoot sheet chat is.
+  const linkedEdit = useSearchParams().get("edit");
+  const [panelEdit, setPanelEdit] = useState<string | null>(linkedEdit);
+  const [editOpen, setEditOpen] = useState(Boolean(linkedEdit));
+  const [seenEdit, setSeenEdit] = useState(linkedEdit);
+  if (linkedEdit !== seenEdit) {
+    setSeenEdit(linkedEdit);
+    if (linkedEdit) setPanelEdit(linkedEdit);
+    setEditOpen(Boolean(linkedEdit));
+  }
+  const panelOn = wide && editsOn;
+  const editShown = panelOn && editOpen && panelEdit !== null;
+  const edits = useEditsData(projectId, editsOn && (shown === "edits" || (panelOn && panelEdit !== null)));
+  const panelCard = edits.data?.edits.find((e) => e.id === panelEdit);
+  const openEdit = (id: string) => {
+    setPanelEdit(id);
+    setEditOpen(true);
+    linkEdit(id);
+  };
+  const showChat = () => {
+    setEditOpen(false);
+    linkEdit(null);
+  };
+  const closeEdit = () => {
+    setPanelEdit(null);
+    setEditOpen(false);
+    linkEdit(null);
+  };
 
   useEffect(() => {
     call<{ workspace: Workspace; sheets: SheetSummary[]; claude: boolean }>(api, "GET")
@@ -136,7 +166,13 @@ export function Studio({ projectId }: { projectId: string }) {
   }, [finished, flush, api]);
 
   if (loadError) return <p className="text-accent">{loadError}</p>;
-  if (!ws) return <p className="text-text-muted">Opening Studio…</p>;
+  if (!ws)
+    return (
+      <p className="flex items-center gap-2 text-text-muted">
+        <Spinner />
+        Opening Studio…
+      </p>
+    );
 
   const name = project?.brand || "This job";
   const week = (
@@ -149,7 +185,8 @@ export function Studio({ projectId }: { projectId: string }) {
           <Link href={`/hub/projects/${projectId}`} className="text-sm text-text-dim hover:text-text">
             ← {name}
           </Link>
-          <span className={`text-xs ${saveState === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+          <span className={`flex items-center gap-1.5 text-xs ${saveState === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+            {saveState === "saving" && <Spinner className="h-3 w-3" />}
             {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
           </span>
         </div>
@@ -185,15 +222,56 @@ export function Studio({ projectId }: { projectId: string }) {
         {shown === "files" && <FilesTab ws={ws} edit={edit} />}
         {shown === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
         {shown === "account" && <AccountTab ws={ws} edit={edit} stats={accountsOn} />}
-        {shown === "edits" && editsOn && <Edits projectId={projectId} sheets={sheets} />}
+        {shown === "edits" && editsOn && (
+          <EditsList store={edits} projectId={projectId} sheets={sheets} panel={panelOn ? { openId: editShown ? panelEdit : null, onOpen: (id) => (id ? openEdit(id) : closeEdit()) } : undefined} />
+        )}
       </div>
       {wide && (
-        <aside aria-label="Shoot sheet chat" className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg p-1">
-          {week}
+        <aside
+          aria-label={editShown ? "Edit chat" : "Shoot sheet chat"}
+          className={`sticky top-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-bg ${editShown ? "h-[calc(100vh-6rem)]" : "max-h-[calc(100vh-6rem)]"}`}
+        >
+          {/* With an edit open here: a tab for it beside the shoot sheet chat, to switch between them or close it. */}
+          {panelOn && panelEdit && (
+            <div className="flex shrink-0 items-center gap-1 border-b border-border bg-bg-card p-1.5" role="group" aria-label="Show on the right">
+              <button
+                type="button"
+                aria-pressed={!editShown}
+                onClick={showChat}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${!editShown ? "bg-accent text-on-accent" : "text-text-muted hover:bg-bg-elevated"}`}
+              >
+                Shoot sheet chat
+              </button>
+              <button
+                type="button"
+                aria-pressed={editShown}
+                onClick={() => openEdit(panelEdit)}
+                className={`min-w-0 truncate rounded-full px-3 py-1 text-xs font-medium transition ${editShown ? "bg-accent text-on-accent" : "text-text-muted hover:bg-bg-elevated"}`}
+              >
+                {panelCard ? editName(panelCard) : "Edit"}
+              </button>
+              <button type="button" onClick={closeEdit} aria-label="Close this edit" className="ml-auto shrink-0 rounded-full px-2 py-1 text-xs text-text-dim hover:bg-bg-elevated hover:text-accent">
+                ✕
+              </button>
+            </div>
+          )}
+          <div hidden={editShown} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
+            {week}
+          </div>
+          {editShown && <EditPanel store={edits} id={panelEdit} onClose={closeEdit} />}
         </aside>
       )}
     </div>
   );
+}
+
+/** Show an edit in the right-hand panel (or none) in the address, so it opens there again from a link or a reload. */
+function linkEdit(id: string | null) {
+  const q = new URLSearchParams(window.location.search);
+  if (id) q.set("edit", id);
+  else q.delete("edit");
+  const search = q.toString();
+  window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`);
 }
 
 /** Wide enough to show the shoot sheet chat beside the tabs. */
@@ -241,7 +319,9 @@ export function useAction() {
 export function ActionButton({ busy, seconds, label, busyLabel }: { busy: boolean; seconds: number; label: string; busyLabel: string }) {
   return (
     <button disabled={busy} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
-      {busy ? `${busyLabel} ${seconds}s` : label}
+      <Busy busy={busy} label={`${busyLabel} ${seconds}s`}>
+        {label}
+      </Busy>
     </button>
   );
 }
@@ -291,7 +371,9 @@ function JobButton({ busy, elapsed, label, busyLabel, step }: { busy: boolean; e
   return (
     <div className="space-y-1.5">
       <button disabled={busy} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
-        {busy ? `${busyLabel} ${elapsed}` : label}
+        <Busy busy={busy} label={`${busyLabel} ${elapsed}`}>
+          {label}
+        </Busy>
       </button>
       <p className="text-xs text-text-dim">
         {busy
@@ -382,6 +464,8 @@ function WeekTab({
     if (linked) setPicked(linked);
   }
   const [chat, setChat] = useState<OpenChat | null>(null);
+  // The chat whose messages have arrived (until then, the one picked is still opening).
+  const [loadedId, setLoadedId] = useState<string | null>(null);
   const running = job.task?.status === "running" ? job.task.ref : undefined;
   // A sheet being written stays open here once it's done.
   if (running && picked === undefined) setPicked(running);
@@ -395,7 +479,9 @@ function WeekTab({
       if (!openId) return live ? setChat(null) : undefined;
       const res = await fetch(`${api}/chats?id=${openId}`, { cache: "no-store" }).catch(() => null);
       const json = res?.ok ? ((await res.json()) as { chat: OpenChat }) : null;
-      if (live) setChat(json?.chat ?? null);
+      if (!live) return;
+      setChat(json?.chat ?? null);
+      setLoadedId(openId);
     }, 0);
     return () => {
       live = false;
@@ -431,6 +517,7 @@ function WeekTab({
             chat={chat}
             busy={job.busy}
             writing={writing ?? (job.busy && !running ? `Starting… ${job.elapsed}` : null)}
+            loading={loadedId !== openId}
             stopped={stopped}
             error={job.startError}
             onReply={(message) => job.run({ chatId: openId, message }, "week/reply")}
@@ -787,6 +874,8 @@ function TrackedProfiles({ profiles, handles, onChange }: { profiles: Profile[];
 
 export function SheetList({ sheets, setSheets }: { sheets: SheetSummary[]; setSheets: (s: SheetSummary[]) => void }) {
   const confirm = useConfirm();
+  const [deleting, run] = useBusy();
+  const [which, setWhich] = useState("");
   return (
     <Section title="Shoot sheets">
       {sheets.length === 0 ? (
@@ -803,14 +892,20 @@ export function SheetList({ sheets, setSheets }: { sheets: SheetSummary[]; setSh
               </a>
               <button
                 type="button"
+                disabled={deleting}
                 onClick={async () => {
                   if (!(await confirm({ title: `Delete "${s.title}"?`, message: "Its hooks stay in the script bank.", confirmLabel: "Delete", danger: true }))) return;
-                  await call(`/api/hub/studio/sheets/${s.id}`, "DELETE");
-                  setSheets(sheets.filter((x) => x.id !== s.id));
+                  await run(async () => {
+                    setWhich(s.id);
+                    await call(`/api/hub/studio/sheets/${s.id}`, "DELETE");
+                    setSheets(sheets.filter((x) => x.id !== s.id));
+                  });
                 }}
-                className="text-xs text-text-dim hover:text-accent"
+                className="text-xs text-text-dim hover:text-accent disabled:opacity-60"
               >
-                Delete
+                <Busy busy={deleting && which === s.id} label="Deleting…">
+                  Delete
+                </Busy>
               </button>
             </li>
           ))}

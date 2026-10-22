@@ -12,11 +12,13 @@ import { EditingNotes } from "../../../studio/notes/notes";
 import { StylePicker } from "../../../studio/styles/style-picker";
 import { CHAT_KEYS_HINT, chatKeys } from "../../../_lib/chat-keys";
 import { TextBox } from "../../../_lib/text-box";
+import { Busy, Spinner, useBusy } from "../../../_lib/ui";
 
 /* Edit cards: one per video. Pick the clips (from your Mac's latest videos or
    its file picker), press Edit in CapCut, and the Creator Desk Helper on your
    Mac hands it to your Claude Code and CapCut. The conversation shows here and
-   you can reply to it. */
+   you can reply to it. On a wide Studio page a card opens in the right-hand
+   panel like a chat (EditPanel); otherwise it opens in place. */
 
 type Data = { edits: EditCard[]; devices: Device[]; files: DeviceFile[]; folder?: string };
 const BUSY = new Set(["queued", "editing"]);
@@ -28,13 +30,11 @@ const sortMacs = (devices: Device[]) =>
   [...devices].sort((a, b) => Number(b.online) - Number(a.online) || (helperOlderThan(a.info.helper, b.info.helper ?? "0.0.0") ? 1 : helperOlderThan(b.info.helper, a.info.helper ?? "0.0.0") ? -1 : 0));
 const mmss = (s?: number | null) => (s == null ? "" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
 
-/** onTrials: set on the personal brand, where finished edits can become trial reels. */
-export function Edits({ projectId, sheets, onTrials }: { projectId: string; sheets: SheetSummary[]; onTrials?: () => void }) {
+/** A job's edit cards, its Macs and their latest files, kept fresh while `enabled` (the list or the panel is showing).
+    Studio holds one so the Edits tab and the right-hand panel share it. */
+export function useEditsData(projectId: string, enabled = true) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
-  // A link can open one card (?edit=<id>, from the Edits page or a pop-up).
-  const linked = useSearchParams().get("edit");
-  const [open, setOpen] = useState<string | null>(linked);
   // With more than one Mac connected, which one edits (remembered in this browser).
   const [macId, setMacId] = useState<string | null>(() => {
     try {
@@ -53,6 +53,7 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
   // Check often while something's happening on the Mac, gently otherwise.
   const busy = Boolean(data?.edits.some((e) => BUSY.has(e.status) || e.pickRequested));
   useEffect(() => {
+    if (!enabled) return;
     const tick = () =>
       call<Data>(`/api/hub/edits?projectId=${encodeURIComponent(projectId)}`, "GET").then(
         (d) => {
@@ -64,26 +65,71 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
     void tick();
     const t = setInterval(tick, busy ? 3000 : 15000);
     return () => clearInterval(t);
-  }, [projectId, busy]);
+  }, [projectId, busy, enabled]);
+
+  const replace = useCallback((card: EditCard) => setData((d) => d && { ...d, edits: d.edits.map((e) => (e.id === card.id ? card : e)) }), []);
+  const remove = useCallback((id: string) => setData((d) => d && { ...d, edits: d.edits.filter((e) => e.id !== id) }), []);
+  const add = useCallback((cards: EditCard[]) => setData((d) => d && { ...d, edits: [...d.edits.filter((e) => !cards.some((c) => c.id === e.id)), ...cards] }), []);
+  const setFolder = useCallback((folder: string) => setData((d) => d && { ...d, folder }), []);
+
+  const macs = data ? sortMacs(data.devices) : [];
+  const mac = macs.find((d) => d.id === macId && d.online) ?? macs[0];
+  // Your latest clips, from the Mac doing the editing.
+  const files = (data?.files ?? []).filter((f) => !mac || !f.deviceId || f.deviceId === mac.id);
+  return { data, error, macs, mac, files, chooseMac, replace, remove, add, setFolder };
+}
+
+export type EditsData = ReturnType<typeof useEditsData>;
+
+/** The Edits tab on its own, opening cards in place (the personal brand's Studio). */
+export function Edits({ projectId, sheets, onTrials }: { projectId: string; sheets: SheetSummary[]; onTrials?: () => void }) {
+  const store = useEditsData(projectId);
+  return <EditsList store={store} projectId={projectId} sheets={sheets} onTrials={onTrials} />;
+}
+
+/** "V3 · Morning routine": an edit card's name in a tab or heading. */
+export const editName = (card: EditCard) => `${card.videoCode && card.videoCode !== WHOLE_SHEET ? `${card.videoCode} · ` : ""}${card.title || "Untitled video"}`;
+
+/** onTrials: set on the personal brand, where finished edits can become trial reels.
+    panel: on a wide Studio page, cards open in the right-hand panel instead of in place (openId is the one showing there). */
+export function EditsList({
+  store,
+  projectId,
+  sheets,
+  onTrials,
+  panel,
+}: {
+  store: EditsData;
+  projectId: string;
+  sheets: SheetSummary[];
+  onTrials?: () => void;
+  panel?: { openId: string | null; onOpen: (id: string | null) => void };
+}) {
+  const { data, error, macs, mac, files, chooseMac, replace, remove, add, setFolder } = store;
+  // A link can open one card (?edit=<id>, from the Edits page or a pop-up).
+  const linked = useSearchParams().get("edit");
+  const [open, setOpen] = useState<string | null>(linked);
+  const inPanel = Boolean(panel);
 
   const loaded = Boolean(data);
   useEffect(() => {
-    if (loaded && linked) document.getElementById(`edit-${linked}`)?.scrollIntoView({ block: "start" });
-  }, [loaded, linked]);
-
-  const replace = (card: EditCard) => setData((d) => d && { ...d, edits: d.edits.map((e) => (e.id === card.id ? card : e)) });
+    // In the panel the card you clicked is already in view: only scroll for one a link opened.
+    if (loaded && linked) document.getElementById(`edit-${linked}`)?.scrollIntoView({ block: inPanel ? "nearest" : "start" });
+  }, [loaded, linked, inPanel]);
 
   if (error && !data) return <p className="text-accent">{error}</p>;
-  if (!data) return <p className="text-text-muted">Loading edit cards…</p>;
-  const macs = sortMacs(data.devices);
-  const mac = macs.find((d) => d.id === macId && d.online) ?? macs[0];
-  // Your latest clips, from the Mac doing the editing.
-  const files = data.files.filter((f) => !mac || !f.deviceId || f.deviceId === mac.id);
+  if (!data)
+    return (
+      <p className="flex items-center gap-2 text-text-muted">
+        <Spinner />
+        Loading edit cards…
+      </p>
+    );
 
   return (
     <div className="space-y-5">
       <MacBar devices={macs} mac={mac} onChoose={chooseMac} />
-      {mac && <FolderSetting projectId={projectId} folder={data.folder ?? ""} usual={mac.info.workdir} onSaved={(folder) => setData((d) => d && { ...d, folder })} />}
+      {mac && <FolderSetting projectId={projectId} folder={data.folder ?? ""} usual={mac.info.workdir} onSaved={setFolder} />}
       <StylePicker scope={projectId} />
       <details className="group rounded-xl border border-border bg-bg-card px-4 py-3 text-sm">
         <summary className="cursor-pointer font-medium">
@@ -100,9 +146,12 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
         projectId={projectId}
         sheets={sheets}
         onAdded={(cards) => {
-          setData((d) => d && { ...d, edits: [...d.edits.filter((e) => !cards.some((c) => c.id === e.id)), ...cards] });
+          add(cards);
           // One new card: open it, ready to pick the clips.
-          if (cards.length === 1) setOpen(cards[0].id);
+          if (cards.length === 1) {
+            if (panel) panel.onOpen(cards[0].id);
+            else setOpen(cards[0].id);
+          }
         }}
       />
       {data.edits.length === 0 ? (
@@ -118,12 +167,13 @@ export function Edits({ projectId, sheets, onTrials }: { projectId: string; shee
               files={files}
               mac={mac}
               devices={macs}
-              open={open === card.id}
-              onToggle={() => setOpen(open === card.id ? null : card.id)}
+              open={panel ? panel.openId === card.id : open === card.id}
+              inPanel={inPanel}
+              onToggle={() => (panel ? panel.onOpen(panel.openId === card.id ? null : card.id) : setOpen(open === card.id ? null : card.id))}
               onChange={replace}
-              onDelete={() => setData((d) => d && { ...d, edits: d.edits.filter((e) => e.id !== card.id) })}
+              onDelete={() => remove(card.id)}
               onTrials={onTrials}
-              onAdded={(c) => setData((d) => d && { ...d, edits: [...d.edits.filter((e) => e.id !== c.id), c] })}
+              onAdded={(c) => add([c])}
             />
           ))}
         </div>
@@ -193,18 +243,21 @@ function FolderSetting({ projectId, folder, usual, onSaved }: { projectId: strin
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(folder);
   const [error, setError] = useState("");
+  const [saving, run] = useBusy();
   const home = (p?: string) => (p ?? "").replace(/^\/Users\/[^/]+/, "~");
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    try {
-      const r = await call<{ folder: string }>("/api/hub/edits", "PATCH", { projectId, folder: value });
-      onSaved(r.folder);
-      setValue(r.folder);
-      setEditing(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    await run(async () => {
+      setError("");
+      try {
+        const r = await call<{ folder: string }>("/api/hub/edits", "PATCH", { projectId, folder: value });
+        onSaved(r.folder);
+        setValue(r.folder);
+        setEditing(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
   }
   if (!editing) {
     return (
@@ -237,7 +290,11 @@ function FolderSetting({ projectId, folder, usual, onSaved }: { projectId: strin
         </span>
       </label>
       <div className="flex items-center gap-3">
-        <button className="rounded-lg bg-accent px-3 py-1.5 font-medium text-on-accent hover:bg-accent-hover">Save</button>
+        <button disabled={saving} className="rounded-lg bg-accent px-3 py-1.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-70">
+          <Busy busy={saving} label="Saving…">
+            Save
+          </Busy>
+        </button>
         <button type="button" onClick={() => setEditing(false)} className="text-text-muted hover:text-text">
           Cancel
         </button>
@@ -254,24 +311,27 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [whole, setWhole] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, run] = useBusy();
+  // Which button is adding, so only that one says so.
+  const [adding, setAdding] = useState("");
   const [error, setError] = useState("");
-  async function add(body: Record<string, unknown>) {
-    setBusy(true);
-    setError("");
-    try {
-      const r = await call<{ edits: EditCard[] }>("/api/hub/edits", "POST", { projectId, ...body });
-      onAdded(r.edits);
-      setBrief("");
-      setTitle("");
-      setPasting(false);
-      setWriting(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+  async function add(which: string, body: Record<string, unknown>) {
+    await run(async () => {
+      setAdding(which);
+      setError("");
+      try {
+        const r = await call<{ edits: EditCard[] }>("/api/hub/edits", "POST", { projectId, ...body });
+        onAdded(r.edits);
+        setBrief("");
+        setTitle("");
+        setPasting(false);
+        setWriting(false);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
   }
+  const isAdding = (which: string) => busy && adding === which;
   return (
     <div className="space-y-3 rounded-2xl border border-border bg-bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -284,11 +344,20 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
                 </option>
               ))}
             </select>
-            <button type="button" disabled={busy || !sheetId} onClick={() => add({ sheetId })} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
-              Make edit cards
+            <button type="button" disabled={busy || !sheetId} onClick={() => add("sheet", { sheetId })} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+              <Busy busy={isAdding("sheet")} label="Adding…">
+                Make edit cards
+              </Busy>
             </button>
-            <button type="button" disabled={busy || !sheetId} onClick={() => add({ sheetId, whole: true })} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60">
-              Edit the whole sheet in one go
+            <button
+              type="button"
+              disabled={busy || !sheetId}
+              onClick={() => add("whole", { sheetId, whole: true })}
+              className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
+            >
+              <Busy busy={isAdding("whole")} label="Adding…">
+                Edit the whole sheet in one go
+              </Busy>
             </button>
           </>
         )}
@@ -317,7 +386,7 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void add({ title: title.trim(), brief });
+            void add("new", { title: title.trim(), brief });
           }}
           className="space-y-2"
         >
@@ -332,7 +401,9 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
           />
           <p className="text-xs text-text-dim">Next, pick its files on the card (videos, images, audio), then press Edit in CapCut.</p>
           <button disabled={busy || !brief.trim()} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
-            Add edit
+            <Busy busy={isAdding("new")} label="Adding…">
+              Add edit
+            </Busy>
           </button>
         </form>
       )}
@@ -370,8 +441,10 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
               It&apos;s a whole shoot sheet - edit every video in one go
             </label>
           </div>
-          <button type="button" disabled={busy || !brief.trim()} onClick={() => add({ brief, whole })} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
-            Add card
+          <button type="button" disabled={busy || !brief.trim()} onClick={() => add("paste", { brief, whole })} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+            <Busy busy={isAdding("paste")} label="Adding…">
+              Add card
+            </Busy>
           </button>
         </div>
       )}
@@ -381,11 +454,13 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
 }
 
 /** A stopped edit whose Claude Code session is on another Mac: carry on there (when it's on), or start again on this one. */
-function CarryOnElsewhere({ was, on, onCarryOn }: { was: Device | undefined; on: Device; onCarryOn: () => void }) {
+function CarryOnElsewhere({ was, on, busy, disabled, onCarryOn }: { was: Device | undefined; on: Device; busy: boolean; disabled: boolean; onCarryOn: () => void }) {
   if (!was) return <span className="text-xs text-text-dim">The Mac it was on isn&apos;t connected any more, so start it again on {on.name}.</span>;
   return was.online ? (
-    <button type="button" onClick={onCarryOn} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
-      Carry on where it stopped, on {was.name}
+    <button type="button" disabled={disabled} onClick={onCarryOn} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60">
+      <Busy busy={busy} label="Starting…">
+        Carry on where it stopped, on {was.name}
+      </Busy>
     </button>
   ) : (
     <span className="text-xs text-text-dim">
@@ -399,12 +474,31 @@ function looksLikeWholeSheet(text: string) {
   return new Set(text.match(/\bV\d{1,2}\b/g) ?? []).size >= 3;
 }
 
+function CodeBadge({ card }: { card: EditCard }) {
+  if (card.videoCode === WHOLE_SHEET) return <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">Whole sheet</span>;
+  return card.videoCode ? <span className="shrink-0 rounded-md bg-bg-elevated px-1.5 py-0.5 font-mono text-xs">{card.videoCode}</span> : null;
+}
+
+function StatusPill({ card }: { card: EditCard }) {
+  const tone =
+    card.status === "ready" || card.status === "done"
+      ? "bg-good-soft text-good"
+      : card.status === "needs_you" || card.status === "failed"
+        ? "bg-warn-soft text-warn"
+        : BUSY.has(card.status)
+          ? "bg-accent-soft text-accent"
+          : "bg-text/5 text-text-dim";
+  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{STATUS_LABEL[card.status]}</span>;
+}
+
+/** One edit card in the list: its summary row, opening in place - or, inPanel, in the right-hand panel, highlighted here while it's open there. */
 function Card({
   card,
   files,
   mac,
   devices,
   open,
+  inPanel,
   onToggle,
   onChange,
   onDelete,
@@ -416,18 +510,156 @@ function Card({
   mac: Device | undefined;
   devices: Device[];
   open: boolean;
+  inPanel: boolean;
   onToggle: () => void;
   onChange: (c: EditCard) => void;
   onDelete: () => void;
   onTrials?: () => void;
   onAdded: (c: EditCard) => void;
 }) {
+  const selected = open && inPanel;
+  return (
+    <article
+      id={`edit-${card.id}`}
+      aria-current={selected ? "true" : undefined}
+      className={`scroll-mt-24 rounded-2xl border bg-bg-card transition ${selected ? "border-accent ring-1 ring-accent" : "border-border"}`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl px-4 py-3 text-left ${inPanel && !selected ? "hover:bg-bg-elevated" : ""}`}
+        aria-expanded={open}
+        aria-controls={selected ? EDIT_PANEL_ID : undefined}
+      >
+        <CodeBadge card={card} />
+        <span className="min-w-0 flex-1 truncate font-medium">{card.title || "Untitled video"}</span>
+        <StatusPill card={card} />
+        {card.files.length > 0 && <span className="text-xs text-text-dim">{card.files.length} file{card.files.length === 1 ? "" : "s"}</span>}
+        {selected && (
+          <span className="text-xs font-medium text-accent" aria-hidden>
+            Open →
+          </span>
+        )}
+      </button>
+      {open && !inPanel && (
+        <div className="space-y-4 border-t border-border px-4 py-4">
+          <EditDetail card={card} files={files} mac={mac} devices={devices} onChange={onChange} onDelete={onDelete} onTrials={onTrials} onAdded={onAdded}>
+            <Conversation card={card} onChange={onChange} />
+          </EditDetail>
+        </div>
+      )}
+    </article>
+  );
+}
+
+export const EDIT_PANEL_ID = "edit-panel";
+
+/** An edit open in the right-hand panel, like a chat: its name and status at the top, files and actions, the
+    conversation with Claude on your Mac (kept scrolled to the latest), and the reply box at the bottom. */
+export function EditPanel({ store, id, onClose, onTrials }: { store: EditsData; id: string; onClose: () => void; onTrials?: () => void }) {
+  const card = store.data?.edits.find((e) => e.id === id);
+  if (!card) {
+    return (
+      <div id={EDIT_PANEL_ID} className="p-4 text-sm text-text-muted">
+        {store.data ? (
+          "This edit card isn't here any more."
+        ) : store.error ? (
+          <span className="text-accent">{store.error}</span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <Spinner />
+            Loading the edit…
+          </span>
+        )}
+      </div>
+    );
+  }
+  return <EditChat key={card.id} card={card} store={store} onClose={onClose} onTrials={onTrials} />;
+}
+
+function EditChat({ card, store, onClose, onTrials }: { card: EditCard; store: EditsData; onClose: () => void; onTrials?: () => void }) {
+  const convo = useConversation(card, store.replace);
+  // Follow new messages while you're at the bottom; scrolled up to read, it stays put.
+  const scroller = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  const count = convo.events.length;
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && count && stick.current) el.scrollTop = el.scrollHeight;
+  }, [count, card.status]);
+  return (
+    <div id={EDIT_PANEL_ID} className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-b border-border px-4 py-3">
+        <h2 className="flex min-w-0 items-center gap-2">
+          <CodeBadge card={card} />
+          <span className="min-w-0 flex-1 truncate font-semibold">{card.title || "Untitled video"}</span>
+          <StatusPill card={card} />
+        </h2>
+      </div>
+      <div
+        ref={scroller}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4"
+      >
+        <EditDetail
+          card={card}
+          files={store.files}
+          mac={store.mac}
+          devices={store.macs}
+          onChange={store.replace}
+          onDelete={() => {
+            store.remove(card.id);
+            onClose();
+          }}
+          onTrials={onTrials}
+          onAdded={(c) => store.add([c])}
+        >
+          <ConversationLog card={card} events={convo.events} chat />
+        </EditDetail>
+      </div>
+      {card.status !== "todo" && (
+        <div className="shrink-0 space-y-2 border-t border-border bg-bg-card px-4 py-3">
+          <ReplyBox card={card} convo={convo} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** An edit card opened up: its CapCut draft, files, what you can do with it and the video card. The conversation goes in children. */
+function EditDetail({
+  card,
+  files,
+  mac,
+  devices,
+  onChange,
+  onDelete,
+  onTrials,
+  onAdded,
+  children,
+}: {
+  card: EditCard;
+  files: DeviceFile[];
+  mac: Device | undefined;
+  devices: Device[];
+  onChange: (c: EditCard) => void;
+  onDelete: () => void;
+  onTrials?: () => void;
+  onAdded: (c: EditCard) => void;
+  children: React.ReactNode;
+}) {
   const [error, setError] = useState("");
   const [trialBusy, setTrialBusy] = useState(false);
   const [trialMade, setTrialMade] = useState(false);
+  // One action at a time; `doing` says which, so its button says what's happening.
+  const [working, work] = useBusy();
+  const [doing, setDoing] = useState("");
   const confirm = useConfirm();
   const api = `/api/hub/edits/${card.id}`;
-  async function act(fn: () => Promise<{ edit?: EditCard } | unknown>) {
+  async function apply(fn: () => Promise<{ edit?: EditCard } | unknown>) {
     setError("");
     try {
       const r = (await fn()) as { edit?: EditCard };
@@ -436,130 +668,149 @@ function Card({
       setError(e instanceof Error ? e.message : String(e));
     }
   }
-  const setFiles = (next: EditFile[]) => act(() => call(api, "PATCH", { files: next }));
+  const act = (what: string, fn: () => Promise<{ edit?: EditCard } | unknown>) =>
+    work(async () => {
+      setDoing(what);
+      await apply(fn);
+    });
+  const now = working ? doing : "";
+  // Picked files save quietly in the background (the picker says they're saving), so they don't hold up the buttons.
+  const setFiles = (next: EditFile[]) => apply(() => call(api, "PATCH", { files: next }));
   const ownClips = findsOwnClips(card.brief);
-  const tone =
-    card.status === "ready" || card.status === "done"
-      ? "bg-good-soft text-good"
-      : card.status === "needs_you" || card.status === "failed"
-        ? "bg-warn-soft text-warn"
-        : BUSY.has(card.status)
-          ? "bg-accent-soft text-accent"
-          : "bg-text/5 text-text-dim";
 
   return (
-    <article id={`edit-${card.id}`} className="scroll-mt-24 rounded-2xl border border-border bg-bg-card">
-      <button type="button" onClick={onToggle} className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left" aria-expanded={open}>
-        {card.videoCode === WHOLE_SHEET ? (
-          <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">Whole sheet</span>
+    <>
+      {card.draftName && (
+        <p className="rounded-xl bg-good-soft px-3 py-2 text-sm text-good">
+          {card.draftName.includes(", ") ? "Drafts" : "Draft"} in CapCut: <strong>{card.draftName}</strong>
+        </p>
+      )}
+
+      <ClipPicker
+        card={card}
+        files={files}
+        mac={mac}
+        busy={now}
+        setFiles={setFiles}
+        onPick={(mode) => act(`pick-${mode}`, () => call(`${api}/pick`, "POST", { mode, deviceId: mac?.id }))}
+        onCancelPick={() => act("cancel-pick", () => call(`${api}/pick`, "DELETE"))}
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        {BUSY.has(card.status) ? (
+          <button
+            type="button"
+            disabled={working}
+            onClick={() => act("stop", () => call(`${api}/stop`, "POST"))}
+            className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
+          >
+            <Busy busy={now === "stop"} label="Stopping…">
+              Stop
+            </Busy>
+          </button>
         ) : (
-          card.videoCode && <span className="rounded-md bg-bg-elevated px-1.5 py-0.5 font-mono text-xs">{card.videoCode}</span>
-        )}
-        <span className="min-w-0 flex-1 truncate font-medium">{card.title || "Untitled video"}</span>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{STATUS_LABEL[card.status]}</span>
-        {card.files.length > 0 && <span className="text-xs text-text-dim">{card.files.length} file{card.files.length === 1 ? "" : "s"}</span>}
-      </button>
-      {open && (
-        <div className="space-y-4 border-t border-border px-4 py-4">
-          {card.draftName && (
-            <p className="rounded-xl bg-good-soft px-3 py-2 text-sm text-good">
-              {card.draftName.includes(", ") ? "Drafts" : "Draft"} in CapCut: <strong>{card.draftName}</strong>
-            </p>
-          )}
-
-          <ClipPicker
-            card={card}
-            files={files}
-            mac={mac}
-            setFiles={setFiles}
-            onPick={(mode) => act(() => call(`${api}/pick`, "POST", { mode, deviceId: mac?.id }))}
-            onCancelPick={() => act(() => call(`${api}/pick`, "DELETE"))}
-          />
-
-          <div className="flex flex-wrap items-center gap-2">
-            {BUSY.has(card.status) ? (
-              <button type="button" onClick={() => act(() => call(`${api}/stop`, "POST"))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
-                Stop
-              </button>
-            ) : (
-              <Tooltip label={!mac ? "Connect your Mac first" : !card.files.length && !ownClips ? "Pick the files first" : null}>
-                <button
-                  type="button"
-                  disabled={(!card.files.length && !ownClips) || !mac}
-                  onClick={() => act(() => call(`${api}/run`, "POST", { fresh: card.status === "ready" || card.status === "done" || card.status === "failed", deviceId: mac?.id }))}
-                  className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
-                >
-                  {card.status !== "todo" ? "Edit again from scratch" : card.videoCode === WHOLE_SHEET ? "Edit all the videos in CapCut" : "Edit in CapCut"}
-                </button>
-              </Tooltip>
-            )}
-            {/* On the Mac it was on - or this one, if that Mac isn't connected any more (disconnected or replaced). */}
-            {card.status === "failed" && card.canCarryOn && mac && (card.deviceId === mac.id || !devices.some((d) => d.id === card.deviceId)) && (
-              <button
-                type="button"
-                onClick={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: mac.id }))}
-                className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent"
-              >
-                Carry on where it stopped
-              </button>
-            )}
-            {card.status === "editing" && <span className="text-xs text-text-dim">Stuck (say the helper restarted)? Press Stop - then you can carry on where it left off.</span>}
-            {card.status === "failed" && card.canCarryOn && mac && card.deviceId && card.deviceId !== mac.id && devices.some((d) => d.id === card.deviceId) && (
-              <CarryOnElsewhere was={devices.find((d) => d.id === card.deviceId)} on={mac} onCarryOn={() => act(() => call(`${api}/run`, "POST", { fresh: false, deviceId: card.deviceId }))} />
-            )}
-            {card.status === "ready" && (
-              <button type="button" onClick={() => act(() => call(api, "PATCH", { status: "done" }))} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-good hover:text-good">
-                Looks good - done
-              </button>
-            )}
-            {onTrials && (card.status === "ready" || card.status === "done") && card.videoCode !== WHOLE_SHEET && !/^TRIAL VERSIONS:/m.test(card.brief) && (
-              <Tooltip label="Claude writes 5 versions with different openings, and your Mac makes them from this draft, ready to post as trial reels">
-                <button
-                  type="button"
-                  disabled={trialBusy}
-                  onClick={async () => {
-                    if (trialMade) return onTrials();
-                    setTrialBusy(true);
-                    setError("");
-                    try {
-                      const r = await call<{ trial: { editId?: string } }>("/api/hub/studio/brand/trials", "POST", { kind: "edit", editId: card.id });
-                      if (r.trial.editId) onAdded((await call<{ edit: EditCard }>(`/api/hub/edits/${r.trial.editId}`, "GET")).edit);
-                      setTrialMade(true);
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : String(e));
-                    } finally {
-                      setTrialBusy(false);
-                    }
-                  }}
-                  className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
-                >
-                  {trialBusy ? "Writing 5 versions…" : trialMade ? "5 versions made - see Trial reels →" : "Make 5 trial versions"}
-                </button>
-              </Tooltip>
-            )}
-            <CopyButton text={card.brief} label="Copy everything" />
+          <Tooltip label={!mac ? "Connect your Mac first" : !card.files.length && !ownClips ? "Pick the files first" : null}>
             <button
               type="button"
-              onClick={async () => {
-                if (!(await confirm({ title: "Delete this edit card?", message: "The CapCut draft stays on your Mac.", confirmLabel: "Delete", danger: true }))) return;
-                void call(api, "DELETE").then(onDelete, (e: Error) => setError(e.message));
-              }}
-              className="ml-auto text-sm text-text-dim hover:text-accent"
+              disabled={(!card.files.length && !ownClips) || !mac || working}
+              onClick={() => act("run", () => call(`${api}/run`, "POST", { fresh: card.status === "ready" || card.status === "done" || card.status === "failed", deviceId: mac?.id }))}
+              className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
             >
-              Delete card
+              <Busy busy={now === "run"} label="Starting…">
+                {card.status !== "todo" ? "Edit again from scratch" : card.videoCode === WHOLE_SHEET ? "Edit all the videos in CapCut" : "Edit in CapCut"}
+              </Busy>
             </button>
-          </div>
-          {error && <p className="text-sm text-accent">{error}</p>}
+          </Tooltip>
+        )}
+        {/* On the Mac it was on - or this one, if that Mac isn't connected any more (disconnected or replaced). */}
+        {card.status === "failed" && card.canCarryOn && mac && (card.deviceId === mac.id || !devices.some((d) => d.id === card.deviceId)) && (
+          <button
+            type="button"
+            disabled={working}
+            onClick={() => act("carry", () => call(`${api}/run`, "POST", { fresh: false, deviceId: mac.id }))}
+            className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
+          >
+            <Busy busy={now === "carry"} label="Starting…">
+              Carry on where it stopped
+            </Busy>
+          </button>
+        )}
+        {card.status === "editing" && <span className="text-xs text-text-dim">Stuck (say the helper restarted)? Press Stop - then you can carry on where it left off.</span>}
+        {card.status === "failed" && card.canCarryOn && mac && card.deviceId && card.deviceId !== mac.id && devices.some((d) => d.id === card.deviceId) && (
+          <CarryOnElsewhere
+            was={devices.find((d) => d.id === card.deviceId)}
+            on={mac}
+            busy={now === "carry-there"}
+            disabled={working}
+            onCarryOn={() => act("carry-there", () => call(`${api}/run`, "POST", { fresh: false, deviceId: card.deviceId }))}
+          />
+        )}
+        {card.status === "ready" && (
+          <button
+            type="button"
+            disabled={working}
+            onClick={() => act("done", () => call(api, "PATCH", { status: "done" }))}
+            className="rounded-xl border border-border px-4 py-2 text-sm hover:border-good hover:text-good disabled:opacity-60"
+          >
+            <Busy busy={now === "done"} label="Saving…">
+              Looks good - done
+            </Busy>
+          </button>
+        )}
+        {onTrials && (card.status === "ready" || card.status === "done") && card.videoCode !== WHOLE_SHEET && !/^TRIAL VERSIONS:/m.test(card.brief) && (
+          <Tooltip label="Claude writes 5 versions with different openings, and your Mac makes them from this draft, ready to post as trial reels">
+            <button
+              type="button"
+              disabled={trialBusy}
+              onClick={async () => {
+                if (trialMade) return onTrials();
+                setTrialBusy(true);
+                setError("");
+                try {
+                  const r = await call<{ trial: { editId?: string } }>("/api/hub/studio/brand/trials", "POST", { kind: "edit", editId: card.id });
+                  if (r.trial.editId) onAdded((await call<{ edit: EditCard }>(`/api/hub/edits/${r.trial.editId}`, "GET")).edit);
+                  setTrialMade(true);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setTrialBusy(false);
+                }
+              }}
+              className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
+            >
+              <Busy busy={trialBusy} label="Writing 5 versions…">
+                {trialMade ? "5 versions made - see Trial reels →" : "Make 5 trial versions"}
+              </Busy>
+            </button>
+          </Tooltip>
+        )}
+        <CopyButton text={card.brief} label="Copy everything" />
+        <button
+          type="button"
+          disabled={working}
+          onClick={async () => {
+            if (!(await confirm({ title: "Delete this edit card?", message: "The CapCut draft stays on your Mac.", confirmLabel: "Delete", danger: true }))) return;
+            await act("delete", async () => {
+              await call(api, "DELETE");
+              onDelete();
+            });
+          }}
+          className="ml-auto text-sm text-text-dim hover:text-accent disabled:opacity-60"
+        >
+          <Busy busy={now === "delete"} label="Deleting…">
+            Delete card
+          </Busy>
+        </button>
+      </div>
+      {error && <p className="text-sm text-accent">{error}</p>}
 
-          <details className="rounded-xl border border-border">
-            <summary className="cursor-pointer px-3 py-2 text-sm font-medium">{card.videoCode === WHOLE_SHEET ? "Shoot sheet" : "Video card"}</summary>
-            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words border-t border-border px-3 py-2 font-sans text-sm text-text-muted">{card.brief}</pre>
-          </details>
+      <details className="rounded-xl border border-border">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium">{card.videoCode === WHOLE_SHEET ? "Shoot sheet" : "Video card"}</summary>
+        <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words border-t border-border px-3 py-2 font-sans text-sm text-text-muted">{card.brief}</pre>
+      </details>
 
-          <Conversation card={card} onChange={onChange} />
-        </div>
-      )}
-    </article>
+      {children}
+    </>
   );
 }
 
@@ -567,6 +818,7 @@ function ClipPicker({
   card,
   files,
   mac,
+  busy,
   setFiles,
   onPick,
   onCancelPick,
@@ -574,6 +826,8 @@ function ClipPicker({
   card: EditCard;
   files: DeviceFile[];
   mac: Device | undefined;
+  /** The card's action running now ("pick-files", "pick-folder", "cancel-pick"…), if any. */
+  busy: string;
   setFiles: (f: EditFile[]) => Promise<void>;
   onPick: (mode: "files" | "folder") => void;
   onCancelPick: () => void;
@@ -602,32 +856,54 @@ function ClipPicker({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium">
+        <h3 className="text-sm font-medium">
           Files <span className="font-normal text-text-dim">- videos, images and audio</span>
-        </p>
+        </h3>
         <button type="button" disabled={!files.length} onClick={() => setBrowsing(!browsing)} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50">
           {browsing ? "Hide your latest files" : "From your latest files"}
         </button>
         {card.pickRequested ? (
           <span className="flex items-center gap-2 text-xs text-accent">
             Look at your Mac - the {card.pickMode === "folder" ? "folder" : "file"} picker is open.
-            <button type="button" onClick={onCancelPick} className="text-text-dim underline">
-              Cancel
+            <button type="button" disabled={Boolean(busy)} onClick={onCancelPick} className="text-text-dim underline">
+              <Busy busy={busy === "cancel-pick"} label="Cancelling…">
+                Cancel
+              </Busy>
             </button>
           </span>
         ) : (
           <>
             <Tooltip label={mac?.online ? null : "Start the helper on your Mac first"}>
-              <button type="button" disabled={!mac?.online} onClick={() => onPick("files")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50">
-                Choose on my Mac…
+              <button
+                type="button"
+                disabled={!mac?.online || Boolean(busy)}
+                onClick={() => onPick("files")}
+                className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                <Busy busy={busy === "pick-files"} label="Asking your Mac…">
+                  Choose on my Mac…
+                </Busy>
               </button>
             </Tooltip>
             <Tooltip label={mac?.online ? null : "Start the helper on your Mac first"}>
-              <button type="button" disabled={!mac?.online} onClick={() => onPick("folder")} className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50">
-                Choose a folder…
+              <button
+                type="button"
+                disabled={!mac?.online || Boolean(busy)}
+                onClick={() => onPick("folder")}
+                className="rounded-lg border border-border px-3 py-1 text-xs hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                <Busy busy={busy === "pick-folder"} label="Asking your Mac…">
+                  Choose a folder…
+                </Busy>
               </button>
             </Tooltip>
           </>
+        )}
+        {mine && (
+          <span className="flex items-center gap-1.5 text-xs text-text-dim">
+            <Spinner />
+            Saving your picks…
+          </span>
         )}
       </div>
       {findsOwnClips(card.brief) && (
@@ -701,10 +977,12 @@ function ClipPicker({
   );
 }
 
-function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCard) => void }) {
+/** The conversation with Claude Code on the Mac: its messages (checked every few seconds while it's working) and your reply. */
+function useConversation(card: EditCard, onChange: (c: EditCard) => void) {
   const [events, setEvents] = useState<EditEvent[]>([]);
   const [reply, setReply] = useState("");
   const [error, setError] = useState("");
+  const [sending, run] = useBusy();
   const last = useRef(0);
   const live = BUSY.has(card.status) || card.status === "needs_you";
 
@@ -727,23 +1005,43 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
     return () => clearInterval(t);
   }, [load, live, card.status, onChange]);
 
-  async function send() {
-    setError("");
-    try {
-      await call(`/api/hub/edits/${card.id}/message`, "POST", { text: reply });
-      setReply("");
-      onChange({ ...card, status: "editing" });
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
+  const send = () =>
+    run(async () => {
+      setError("");
+      try {
+        await call(`/api/hub/edits/${card.id}/message`, "POST", { text: reply });
+        setReply("");
+        onChange({ ...card, status: "editing" });
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
 
+  return { events, reply, setReply, error, sending, send };
+}
+
+type Convo = ReturnType<typeof useConversation>;
+
+/** In place on a card: the messages, then the reply box. */
+function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCard) => void }) {
+  const convo = useConversation(card, onChange);
+  if (!convo.events.length && card.status === "todo") return null;
+  return (
+    <div className="space-y-3">
+      <ConversationLog card={card} events={convo.events} />
+      <ReplyBox card={card} convo={convo} />
+    </div>
+  );
+}
+
+/** The messages. chat: in the right-hand panel, which scrolls them itself (on a card they scroll in a box). */
+function ConversationLog({ card, events, chat = false }: { card: EditCard; events: EditEvent[]; chat?: boolean }) {
   if (!events.length && card.status === "todo") return null;
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium">With Claude on your Mac</p>
-      <ol className="max-h-[28rem] space-y-2 overflow-y-auto rounded-xl bg-bg-elevated p-3 text-sm">
+      <h3 className="text-sm font-medium">With Claude on your Mac</h3>
+      <ol className={`space-y-2 rounded-xl bg-bg-elevated p-3 text-sm ${chat ? "" : "max-h-[28rem] overflow-y-auto"}`}>
         {events.map((e, i) =>
           // A failed run repeats Claude's last message as the error: show it once.
           e.kind === "assistant" && events[i + 1]?.kind === "error" && events[i + 1].text === e.text ? null : e.kind === "tool" || e.kind === "status" ? (
@@ -768,8 +1066,22 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
             </li>
           ),
         )}
-        {BUSY.has(card.status) && <li className="text-xs text-accent">{card.status === "queued" ? "Waiting for your Mac to pick it up…" : "Working…"}</li>}
+        {BUSY.has(card.status) && (
+          <li className="flex items-center gap-2 text-xs text-accent">
+            <Spinner />
+            {card.status === "queued" ? "Waiting for your Mac to pick it up…" : "Working…"}
+          </li>
+        )}
       </ol>
+    </div>
+  );
+}
+
+/** Your reply to Claude (Enter sends), and what happens to feedback. */
+function ReplyBox({ card, convo }: { card: EditCard; convo: Convo }) {
+  const { reply, setReply, send, sending, error } = convo;
+  return (
+    <>
       {card.status !== "todo" && card.status !== "queued" && (
         <div className="flex gap-2">
           <TextBox
@@ -781,8 +1093,15 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
             placeholder={card.status === "needs_you" ? "Answer Claude…" : "Ask for a change, e.g. make the hook text bigger"}
             aria-label="Reply to Claude"
           />
-          <button type="button" disabled={!reply.trim()} onClick={send} className="self-end rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50">
-            Send
+          <button
+            type="button"
+            disabled={!reply.trim() || sending}
+            onClick={() => void send()}
+            className="self-end rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
+          >
+            <Busy busy={sending} label="Sending…">
+              Send
+            </Busy>
           </button>
         </div>
       )}
@@ -790,6 +1109,6 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
         <p className="text-xs text-text-dim">{CHAT_KEYS_HINT}. Feedback that should stick for future edits (&ldquo;captions are always too big&rdquo;) is saved to this job&apos;s editing notes.</p>
       )}
       {error && <p className="text-sm text-accent">{error}</p>}
-    </div>
+    </>
   );
 }
