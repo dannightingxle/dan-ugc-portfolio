@@ -356,12 +356,16 @@ function StyleForm({ start, onSave, onCancel }: { start?: Form; onSave: (f: Form
   );
 }
 
+const USED_BY_SHOWN = 8;
+
 function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Device | undefined; onChange: (s: Style) => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
   const [frames, setFrames] = useState<StyleFrame[] | null>(style.frameCount ? null : []);
   const [big, setBig] = useState<StyleFrame | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  // A style used by lots of jobs lists the first few until you ask for the rest.
+  const [allJobs, setAllJobs] = useState(false);
   const confirm = useConfirm();
   const framesApi = `${api}/frames`;
   const loadFrames = () =>
@@ -495,12 +499,19 @@ function StyleCard({ style, mac, onChange, onDelete }: { style: Style; mac: Devi
         {style.usedBy.length === 0 ? (
           <span className="text-text-dim">no jobs yet - pick it on a job&apos;s Edits tab</span>
         ) : (
-          style.usedBy.map((u) => (
-            <Link key={u.id} href={editsLink(u.id)} className="hover:text-accent">
-              {u.name}
-              {u.auto && <span className="text-text-dim"> (usual)</span>}
-            </Link>
-          ))
+          <>
+            {(allJobs ? style.usedBy : style.usedBy.slice(0, USED_BY_SHOWN)).map((u) => (
+              <Link key={u.id} href={editsLink(u.id)} className="hover:text-accent">
+                {u.name}
+                {u.auto && <span className="text-text-dim"> (usual)</span>}
+              </Link>
+            ))}
+            {style.usedBy.length > USED_BY_SHOWN && (
+              <button type="button" onClick={() => setAllJobs(!allJobs)} className="text-accent hover:underline">
+                {allJobs ? "Show fewer" : `+ ${style.usedBy.length - USED_BY_SHOWN} more`}
+              </button>
+            )}
+          </>
         )}
         <button
           type="button"
