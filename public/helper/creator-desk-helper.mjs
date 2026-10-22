@@ -31,13 +31,16 @@
   An edit can use any media you pick: videos, images (stills, logos, screenshots) and audio (voiceovers,
   music). Claude is told which is which.
 
-  It keeps itself up to date: when Creator Desk has a newer helper, it downloads it and restarts
-  between edits (set CDH_NO_UPDATE=1 to stop that).
+  It keeps itself up to date: Creator Desk says which helper is newest every time it checks in, so a
+  new one is downloaded and started as soon as no edit is running - in the same window, never needing a
+  new connect code (set CDH_NO_UPDATE=1 to stop that). It can also run in the background, with no
+  Terminal window: press "Run in the background" on Creator Desk's Mac helper page (or run
+  "autostart on"), and macOS starts it when you log in and again if it ever stops.
 
   Usage:
     node creator-desk-helper.mjs connect ABCD-EFGH     connect this Mac (code from Creator Desk)
     node creator-desk-helper.mjs                       run (keep the window open)
-    node creator-desk-helper.mjs autostart on|off      start by itself when you log in
+    node creator-desk-helper.mjs autostart on|off      run in the background, starting by itself when you log in
     node creator-desk-helper.mjs status                show what it can see
     node creator-desk-helper.mjs find "laptop"         try the B-roll search (Apple Photos and drives)
 
@@ -52,7 +55,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.10";
+const VERSION = "0.3.11";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -193,6 +196,8 @@ function info() {
     browser: BROWSER,
     // It can read your editing setup and take key frames for Creator Desk's edit styles.
     styles: true,
+    // It runs in the background (macOS starts it at login and keeps it going), not in a Terminal window.
+    background: !leavingBackground && fs.existsSync(PLIST),
     // It can copy your editing setup (CLAUDE.md files, editing skills, memory) between your Macs.
     setup: true,
   };
@@ -1368,17 +1373,21 @@ async function syncDownload(job) {
 
 const syncsSeen = new Set();
 let syncQueue = Promise.resolve(); // one sync at a time
+let syncing = 0; // syncs waiting or under way (an update or switch to the background waits for them)
 function queueSetupSync(s) {
   if (!s?.id || (s.phase !== "upload" && s.phase !== "download")) return;
   const key = `${s.id}:${s.phase}`;
   if (syncsSeen.has(key)) return;
   syncsSeen.add(key);
+  syncing++;
   syncQueue = syncQueue.then(async () => {
     try {
       await (s.phase === "upload" ? syncUpload(s) : syncDownload(s));
     } catch (e) {
       log("Couldn't sync your editing setup:", e.message);
       await send("/api/hub/helper/setup/done", { requestId: s.id, phase: s.phase, error: `The helper couldn't sync your editing setup: ${e.message}` }).catch((e2) => log("Couldn't tell Creator Desk:", e2.message));
+    } finally {
+      syncing--;
     }
   });
 }
@@ -1687,6 +1696,9 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
 }
 
 async function handleWork(work) {
+  // Creator Desk says which helper is newest, and whether you've asked for this one to run in the background (or not).
+  if (work.latest) latestHelper = work.latest;
+  if (work.background === true || work.background === false) switchBackground(work.background);
   // Edit styles: reading your setup and taking key frames go on alongside everything else.
   if (work.styleScan) handleStyleScan(work.styleScan).catch((e) => log("Couldn't read your editing setup:", e.message));
   for (const g of work.frameGrabs ?? []) queueFrameGrab(g);
@@ -1754,10 +1766,17 @@ const newer = (a, b) => {
 };
 
 let lastUpdateCheck = 0;
-// When Creator Desk has a newer helper: save it over this one and run it in this one's place.
+// The newest helper Creator Desk says there is (it says on every check-in), and the last one we tried to get.
+let latestHelper = "";
+let triedHelper = "";
+// When Creator Desk has a newer helper: save it over this one and run it in this one's place, as soon as no
+// edit is running. It's told the moment there's one; otherwise it looks every 6 hours. A failed try waits 10 minutes.
 async function selfUpdate() {
-  if (process.env.CDH_NO_UPDATE || running.size || Date.now() - lastUpdateCheck < 6 * 3_600_000) return false;
+  if (process.env.CDH_NO_UPDATE || running.size || syncing) return false;
+  const told = latestHelper && newer(latestHelper, VERSION) && (latestHelper !== triedHelper || Date.now() - lastUpdateCheck > 10 * 60_000);
+  if (!told && Date.now() - lastUpdateCheck < 6 * 3_600_000) return false;
   lastUpdateCheck = Date.now();
+  triedHelper = latestHelper;
   try {
     const res = await fetch(cfg.server.replace(/\/$/, "") + "/helper/creator-desk-helper.mjs", { headers: { "user-agent": `creator-desk-helper/${VERSION}` } });
     if (!res.ok) return false;
@@ -1768,13 +1787,20 @@ async function selfUpdate() {
     fs.writeFileSync(self + ".new", code);
     fs.renameSync(self + ".new", self);
     log(`Updated the helper to ${latest}. Restarting…`);
-    const child = spawn(process.execPath, process.argv.slice(1), { stdio: "inherit", env: process.env });
-    child.on("exit", (c) => process.exit(c ?? 0));
+    restart();
     return true;
   } catch (e) {
     log("Couldn't check for a newer helper:", e.message);
     return false;
   }
+}
+
+// Start the helper afresh in this one's place. In the background the Mac starts it again by itself;
+// in a Terminal window the new one carries on there (just the helper - never the connect code it may have started with).
+function restart() {
+  if (BACKGROUND) process.exit(0);
+  const child = spawn(process.execPath, [path.resolve(process.argv[1])], { stdio: "inherit", env: process.env });
+  child.on("exit", (c) => process.exit(c ?? 0));
 }
 
 async function loop() {
@@ -1808,6 +1834,13 @@ async function connect(code, server) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.token) {
+    // Started again with a code that's already been used (an older helper restarting after an update does
+    // this): this Mac is still connected, so carry on rather than stop.
+    const saved = load();
+    if (saved?.token && saved.server === server) {
+      console.log("This Mac is already connected to Creator Desk - carrying on.");
+      return;
+    }
     console.error(json.error || `Creator Desk said ${res.status}`);
     process.exit(1);
   }
@@ -1815,10 +1848,51 @@ async function connect(code, server) {
   console.log(`\nConnected "${name}" to Creator Desk.\n`);
 }
 
+// Running in the background: macOS starts the helper when you log in and again if it stops, with no Terminal window.
+const PLIST = path.join(os.homedir(), "Library", "LaunchAgents", "com.creatordesk.helper.plist");
+const LAUNCHCTL = process.env.CDH_LAUNCHCTL || "launchctl";
+const BACKGROUND = process.env.CDH_BACKGROUND === "1";
+
+// You switched running in the background on or off in Creator Desk. Done once no edit is running: switching on
+// hands over to the background helper and closes this one; switching off stops the background one (start it in
+// Terminal again when you want it).
+let switchingTo = null;
+let leavingBackground = false;
+function switchBackground(on) {
+  if (switchingTo === on) return;
+  switchingTo = on;
+  const go = async () => {
+    while (running.size || syncing) await sleep(2000);
+    if (on) {
+      if (process.platform !== "darwin" && !process.env.CDH_LAUNCHCTL) {
+        log("Running in the background only works on a Mac.");
+        switchingTo = null;
+        return;
+      }
+      autostart(true);
+      await report(true).catch(() => {});
+      log("The helper now runs in the background, and starts by itself when you log in. You can close this window.");
+      if (!BACKGROUND) process.exit(0);
+    } else {
+      log("Stopping the background helper. To start it again, open Terminal and run: node ~/.creator-desk/creator-desk-helper.mjs");
+      // Say so first: stopping the background helper can stop this one too.
+      leavingBackground = true;
+      await report(true).catch(() => {});
+      autostart(false);
+      if (BACKGROUND) process.exit(0);
+    }
+    switchingTo = null;
+  };
+  go().catch((e) => {
+    log("Couldn't switch running in the background:", e.message);
+    switchingTo = null;
+  });
+}
+
 function autostart(on) {
-  const plist = path.join(os.homedir(), "Library", "LaunchAgents", "com.creatordesk.helper.plist");
+  const plist = PLIST;
   if (!on) {
-    run("launchctl", ["unload", plist]);
+    run(LAUNCHCTL, ["unload", plist]);
     fs.rmSync(plist, { force: true });
     console.log("The helper won't start by itself any more.");
     return;
@@ -1829,7 +1903,7 @@ function autostart(on) {
 <plist version="1.0"><dict>
   <key>Label</key><string>com.creatordesk.helper</string>
   <key>ProgramArguments</key><array><string>${process.execPath}</string><string>${script}</string></array>
-  <key>EnvironmentVariables</key><dict><key>PATH</key><string>${process.env.PATH}</string></dict>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>${process.env.PATH}</string><key>CDH_BACKGROUND</key><string>1</string>${process.env.CDH_HOME ? `<key>CDH_HOME</key><string>${process.env.CDH_HOME}</string>` : ""}</dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>${path.join(HOME, "helper.log")}</string>
@@ -1838,8 +1912,8 @@ function autostart(on) {
 `;
   fs.mkdirSync(path.dirname(plist), { recursive: true });
   fs.writeFileSync(plist, xml);
-  run("launchctl", ["unload", plist]);
-  run("launchctl", ["load", plist]);
+  run(LAUNCHCTL, ["unload", plist]);
+  run(LAUNCHCTL, ["load", plist]);
   console.log(`The helper now starts by itself when you log in. Its log: ${path.join(HOME, "helper.log")}`);
 }
 

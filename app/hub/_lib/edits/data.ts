@@ -6,7 +6,7 @@ import { styleFor } from "./style-types";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { adminClient } from "../supabase/admin";
 import { BRAND_ID } from "../studio/brand-types";
-import { ALL_EDITS, DEFAULT_MAX_EDITS, type EditNote, type NotesChatMessage, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
+import { ALL_EDITS, DEFAULT_MAX_EDITS, LATEST_HELPER, type EditNote, type NotesChatMessage, type Device, type DeviceFile, type EditCard, type EditEvent, type EditFile, type EditStatus } from "./types";
 
 /* Edit cards, their conversations, and the Macs that run them. Every query is
    scoped to one user here; the tables themselves are server-only. */
@@ -197,7 +197,7 @@ async function replaceOldEntries(userId: string, deviceId: string, name: string)
   const ids = gone.map((d) => d.id as string);
   await db.from("hub_edits").update({ device_id: deviceId }).eq("user_id", userId).in("device_id", ids);
   const maxEdits = gone.map((d) => (d.info as Device["info"] | null)?.maxEdits).find(Boolean);
-  if (maxEdits) await setMaxEdits(userId, deviceId, maxEdits);
+  if (maxEdits) await setDeviceSettings(userId, deviceId, { maxEdits });
   await db.from("hub_devices").delete().eq("user_id", userId).in("id", ids);
 }
 
@@ -216,8 +216,8 @@ export async function touchDevice(deviceId: string, info?: Record<string, unknow
   let next = info;
   if (info) {
     const { data } = await adminClient().from("hub_devices").select("info").eq("id", deviceId).maybeSingle<{ info: Device["info"] | null }>();
-    const maxEdits = data?.info?.maxEdits;
-    next = { ...info, ...(maxEdits ? { maxEdits } : {}) };
+    const { maxEdits, backgroundWanted } = data?.info ?? {};
+    next = { ...info, ...(maxEdits ? { maxEdits } : {}), ...(backgroundWanted !== undefined ? { backgroundWanted } : {}) };
   }
   await adminClient()
     .from("hub_devices")
@@ -283,11 +283,12 @@ export async function saveNotes(userId: string, scope: string, patch: { notes?: 
 }
 
 /** How many edits one of your Macs runs at once. */
-export async function setMaxEdits(userId: string, deviceId: string, maxEdits: number) {
+/** Your settings for one Mac: how many edits it runs at once, and whether its helper runs in the background. */
+export async function setDeviceSettings(userId: string, deviceId: string, settings: Pick<Device["info"], "maxEdits" | "backgroundWanted">) {
   const db = adminClient();
   const { data } = await db.from("hub_devices").select("info").eq("user_id", userId).eq("id", deviceId).maybeSingle<{ info: Device["info"] | null }>();
   if (!data) return;
-  const { error } = await db.from("hub_devices").update({ info: { ...(data.info ?? {}), maxEdits } }).eq("user_id", userId).eq("id", deviceId);
+  const { error } = await db.from("hub_devices").update({ info: { ...(data.info ?? {}), ...settings } }).eq("user_id", userId).eq("id", deviceId);
   if (error) throw error;
 }
 
@@ -342,6 +343,10 @@ export async function listDeviceFiles(userId: string): Promise<DeviceFile[]> {
 
 /** What a Mac should do next: edits to start, clip pickers to open, replies to pass on, edits to stop.
     runningIds: the edits its helper is running right now (newer helpers say), so ones it dropped can be let go. */
+/** Whether to tell a Mac's helper to start (true) or stop (false) running in the background: only when that differs from what it does now. */
+const wantsBackground = (info: Device["info"] | null | undefined) =>
+  info?.backgroundWanted === undefined || info.backgroundWanted === Boolean(info.background) ? null : info.backgroundWanted;
+
 export async function workFor(auth: DeviceAuth, runningIds: string[] | null = null) {
   const db = adminClient();
   if (runningIds) await releaseDropped(auth, runningIds);
@@ -408,6 +413,9 @@ export async function workFor(auth: DeviceAuth, runningIds: string[] | null = nu
     }),
     // How many edits this Mac runs side by side.
     maxEdits: device.data?.info?.maxEdits ?? DEFAULT_MAX_EDITS,
+    // The newest helper, so it updates as soon as there is one; and whether you've asked it to run in the background (or not).
+    latest: LATEST_HELPER,
+    background: wantsBackground(device.data?.info),
   };
 }
 
