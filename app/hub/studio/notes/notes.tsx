@@ -9,6 +9,7 @@ import { isArchived, useProjects } from "../../_lib/store";
 import { input } from "../../projects/fields";
 import { CHAT_KEYS_HINT, chatKeys } from "../../_lib/chat-keys";
 import { call } from "../../projects/[id]/studio/studio";
+import { TextBox } from "../../_lib/text-box";
 
 /* Editing notes: how you want your videos edited, remembered for every future
    edit - like telling Claude Code to remember something. Feedback comes from
@@ -160,11 +161,11 @@ export function EditingNotes({ scope, compact = false }: { scope: string; compac
           </ol>
         )}
         <form onSubmit={send} className="space-y-2">
-          <textarea
+          <TextBox
             rows={3}
             className={input}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onValue={(v) => setMessage(v)}
             onKeyDown={chatKeys(() => void send(), setMessage)}
             placeholder="e.g. The captions are too big and sit too low - keep them smaller, centred, and never over my face"
             aria-label="Feedback for Claude"

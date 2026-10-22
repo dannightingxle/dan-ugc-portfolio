@@ -12,7 +12,7 @@ import { TechJobs } from "./studio/tech-jobs";
 import { Sparkline, StarButton, StatusPill, Thumb, compact, daysAgo, money, shortDate, useApi } from "./_lib/ui";
 import { useMoney } from "./_lib/money";
 
-/* Dashboard: projects and money first, then every starred ad with live numbers. */
+/* Dashboard: projects and money first, then the tech UGC jobs, then every starred ad with live numbers. */
 
 export default function HubHome() {
   const { stars, toggle } = useStars();
@@ -51,16 +51,20 @@ export default function HubHome() {
         <WelcomeBanner />
       </Suspense>
       <ImportLocal />
-      {studio && <TechJobs title="Tech UGC jobs" studioLink />}
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-serif text-4xl italic sm:text-5xl">Projects</h1>
             <p className="mt-2 text-text-muted">Your brand deals and what you&apos;re owed.</p>
           </div>
-          <Link href="/hub/projects" className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
-            Open board →
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/hub/projects?new=1" className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
+              + New job
+            </Link>
+            <Link href="/hub/projects" className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+              Open board →
+            </Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -174,6 +178,8 @@ export default function HubHome() {
           )}
         </div>
       </section>
+
+      {studio && <TechJobs title="Tech UGC jobs" studioLink boardLink />}
 
       <section className="space-y-5">
         <div>

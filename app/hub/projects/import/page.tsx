@@ -10,6 +10,7 @@ import { call } from "../[id]/studio/studio";
 import { input } from "../fields";
 import { type ClaudeProject, isTechProject, mapDocs, matchJob, projectToJob, readClaudeExport } from "../../_lib/claude-projects";
 import type { Project } from "../../_lib/store";
+import { TextBox } from "../../_lib/text-box";
 
 /* Bring jobs in from a Claude chat or a file, or whole Claude Projects from a
    Claude export: preview what will be added or filled in, then import. Only
@@ -89,11 +90,11 @@ export default function ImportPage() {
 
       {!progress && (
         <div className="space-y-3 rounded-2xl border border-border bg-bg-card p-4 sm:p-5">
-          <textarea
+          <TextBox
             rows={8}
             className={`${input} font-mono text-xs`}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onValue={(v) => setText(v)}
             placeholder={'[{ "brand": "Canva", "title": "...", "stage": "Delivered", ... }]'}
             aria-label="Jobs JSON"
           />

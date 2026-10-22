@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useFeature } from "../../account-provider";
 import { BRAND_ID } from "./brand-types";
 
@@ -156,13 +156,36 @@ export function useElapsed(since: string | undefined, live: boolean) {
 /** Edits that need a look: ready to check, waiting on an answer, or stopped. */
 export const editNeedsLook = (e: EditJob) => e.status === "ready" || e.status === "needs_you" || e.status === "failed";
 
+// A finished job or edit pops up for this long, then fades away (it stays in the Jobs list).
+const POP_MS = 15_000;
+const FADED = "cd-tray-faded";
+const taskKey = (t: Task) => `${t.id}:${t.finishedAt ?? t.startedAt}`;
+
 function TaskTray() {
   const { tasks, edits, cleared, clearEdit, dismiss } = useTasks();
   const path = usePathname();
+  const [faded, setFaded] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        setFaded(new Set(JSON.parse(localStorage.getItem(FADED) ?? "[]") as string[]));
+      } catch {}
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  const fade = useCallback((key: string) => {
+    setFaded((f) => {
+      const next = new Set(f).add(key);
+      try {
+        localStorage.setItem(FADED, JSON.stringify([...next].slice(-300)));
+      } catch {}
+      return next;
+    });
+  }, []);
   // The job's own page shows its result, so the tray leaves that one out.
   const here = path.startsWith("/hub/studio/brand") ? BRAND_ID : /^\/hub\/projects\/([^/]+)\/studio/.exec(path)?.[1];
-  const shown = tasks.filter((t) => t.status === "running" || t.projectId !== here);
-  const alerts = edits.filter((e) => editNeedsLook(e) && !cleared.has(editKey(e)) && e.projectId !== here);
+  const shown = tasks.filter((t) => t.status === "running" || (t.projectId !== here && !faded.has(taskKey(t))));
+  const alerts = edits.filter((e) => editNeedsLook(e) && !cleared.has(editKey(e)) && !faded.has(editKey(e)) && e.projectId !== here);
   if (!shown.length && !alerts.length) return null;
   return (
     <div
@@ -171,12 +194,51 @@ function TaskTray() {
       role="region"
       aria-label="Jobs running in the background"
     >
-      {shown.slice(0, 4).map((t) => (
-        <TaskRow key={t.id} task={t} onDismiss={() => dismiss(t.id)} />
-      ))}
+      {shown.slice(0, 4).map((t) =>
+        t.status === "running" ? (
+          <TaskRow key={t.id} task={t} onDismiss={() => dismiss(t.id)} />
+        ) : (
+          <FadeAway key={taskKey(t)} onGone={() => fade(taskKey(t))}>
+            <TaskRow task={t} onDismiss={() => dismiss(t.id)} />
+          </FadeAway>
+        ),
+      )}
       {alerts.slice(0, Math.max(0, 4 - shown.length)).map((e) => (
-        <EditAlert key={e.id} edit={e} onDismiss={() => clearEdit(e)} />
+        <FadeAway key={editKey(e)} onGone={() => fade(editKey(e))}>
+          <EditAlert edit={e} onDismiss={() => clearEdit(e)} />
+        </FadeAway>
       ))}
+    </div>
+  );
+}
+
+/** Shows for 15 seconds, then fades out and goes (held while the pointer is over it). */
+function FadeAway({ onGone, children }: { onGone: () => void; children: React.ReactNode }) {
+  const [fading, setFading] = useState(false);
+  const [held, setHeld] = useState(false);
+  const gone = useRef(onGone);
+  useEffect(() => {
+    gone.current = onGone;
+  });
+  useEffect(() => {
+    if (held) return;
+    const start = setTimeout(() => setFading(true), POP_MS);
+    const end = setTimeout(() => gone.current(), POP_MS + 1000);
+    return () => {
+      clearTimeout(start);
+      clearTimeout(end);
+    };
+  }, [held]);
+  return (
+    <div
+      onMouseEnter={() => {
+        setHeld(true);
+        setFading(false);
+      }}
+      onMouseLeave={() => setHeld(false)}
+      className={`transition-opacity duration-1000 ${fading ? "opacity-0" : "opacity-100"}`}
+    >
+      {children}
     </div>
   );
 }

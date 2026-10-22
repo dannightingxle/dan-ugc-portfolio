@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useAccount } from "./account-provider";
 import { browserClient } from "./_lib/supabase/browser";
 import { BRAND } from "./_lib/brand";
+import { TextBox } from "./_lib/text-box";
 
 /* "Feedback" button: a short message that lands in the hub_feedback table
    (read it in Supabase → Table editor). Without accounts it opens an email. */
@@ -61,13 +62,13 @@ function FeedbackDialog({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <form onSubmit={send} className="space-y-3">
-            <textarea
+            <TextBox
               autoFocus
               required
               maxLength={5000}
               rows={5}
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onValue={(v) => setMessage(v)}
               placeholder="Something broken, confusing, or missing? Tell us."
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
             />

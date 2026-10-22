@@ -10,6 +10,7 @@ import { call, CopyButton } from "./studio";
 import { Tooltip, useConfirm } from "../../../_lib/popups";
 import { EditingNotes } from "../../../studio/notes/notes";
 import { CHAT_KEYS_HINT, chatKeys } from "../../../_lib/chat-keys";
+import { TextBox } from "../../../_lib/text-box";
 
 /* Edit cards: one per video. Pick the clips (from your Mac's latest videos or
    its file picker), press Edit in CapCut, and the Creator Desk Helper on your
@@ -319,11 +320,11 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
           className="space-y-2"
         >
           <input className={input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's the video? e.g. Morning routine talking head" aria-label="What's the video?" maxLength={300} />
-          <textarea
+          <TextBox
             rows={5}
             className={input}
             value={brief}
-            onChange={(e) => setBrief(e.target.value)}
+            onValue={(v) => setBrief(v)}
             placeholder="How should it be edited? Say it the way you would in Claude Code: cut the pauses, captions in my usual style, hook text on screen, 30-40 seconds, B-roll of the gym from my Photos…"
             aria-label="How should it be edited?"
           />
@@ -335,13 +336,13 @@ function AddCards({ projectId, sheets, onAdded }: { projectId: string; sheets: S
       )}
       {pasting && (
         <div className="space-y-2">
-          <textarea
+          <TextBox
             rows={8}
             className={input}
             value={brief}
-            onChange={(e) => {
-              setBrief(e.target.value);
-              setWhole(looksLikeWholeSheet(e.target.value));
+            onValue={(v) => {
+              setBrief(v);
+              setWhole(looksLikeWholeSheet(v));
             }}
             placeholder={'One video: press "Copy everything" on its card and paste it here. A whole week: "Expand all", export the shoot sheet as Markdown, and paste or upload it.'}
             aria-label="Video card"
@@ -731,11 +732,11 @@ function Conversation({ card, onChange }: { card: EditCard; onChange: (c: EditCa
       </ol>
       {card.status !== "todo" && card.status !== "queued" && (
         <div className="flex gap-2">
-          <textarea
+          <TextBox
             rows={2}
             className={`${input} flex-1`}
             value={reply}
-            onChange={(e) => setReply(e.target.value)}
+            onValue={(v) => setReply(v)}
             onKeyDown={(e) => chatKeys(() => reply.trim() && void send(), setReply)(e)}
             placeholder={card.status === "needs_you" ? "Answer Claude…" : "Ask for a change, e.g. make the hook text bigger"}
             aria-label="Reply to Claude"

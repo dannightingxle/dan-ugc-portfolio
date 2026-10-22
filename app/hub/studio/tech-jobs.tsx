@@ -6,7 +6,7 @@ import { useMoney } from "../_lib/money";
 import { money, shortDate } from "../_lib/ui";
 
 /* Every live tech UGC job, busiest first, each opening straight into its Studio.
-   Shown on the dashboard and on the Studio home. */
+   Shown on the dashboard, the Studio home and the Projects board's Tech jobs view. */
 
 const ORDER: Project["techStage"][] = ["Active", "Warm-up", "Setup", "Account creation", "Negotiating", "On hold"];
 
@@ -16,7 +16,7 @@ function liveTechJobs(projects: Project[]) {
     .sort((a, b) => ORDER.indexOf(a.techStage) - ORDER.indexOf(b.techStage) || a.brand.localeCompare(b.brand));
 }
 
-export function TechJobs({ title, studioLink }: { title: string; studioLink?: boolean }) {
+export function TechJobs({ title, studioLink, boardLink, hideHeading }: { title: string; studioLink?: boolean; boardLink?: boolean; hideHeading?: boolean }) {
   const { projects } = useProjects();
   const ready = useDataReady();
   const jobs = liveTechJobs(projects);
@@ -31,7 +31,7 @@ export function TechJobs({ title, studioLink }: { title: string; studioLink?: bo
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold">{title}</h2>
+          {!hideHeading && <h2 className="text-lg font-semibold">{title}</h2>}
           {monthly > 0 && (
             <p className="text-sm text-text-muted">
               About <span className="font-semibold text-good">{format(monthly)}</span> a month from active jobs{mixed && ", at today's rates"}
@@ -42,6 +42,11 @@ export function TechJobs({ title, studioLink }: { title: string; studioLink?: bo
           {studioLink && (
             <Link href="/hub/studio" className="text-text-muted hover:text-accent">
               Studio →
+            </Link>
+          )}
+          {boardLink && (
+            <Link href="/hub/projects?view=tech" className="text-text-muted hover:text-accent">
+              Open board →
             </Link>
           )}
           <Link href="/hub/projects?new=tech" className="text-accent hover:underline">
