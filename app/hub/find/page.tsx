@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { Ad, Brand, DataSource, Paged } from "../_lib/types";
 import { useStars } from "../_lib/store";
-import { StarButton, StatusPill, Thumb, compact, useApi } from "../_lib/ui";
+import { Spinner, StarButton, StatusPill, Thumb, compact, useApi } from "../_lib/ui";
 
 /* Search a brand, browse its Meta ads, star the ones you're in. */
 
@@ -32,7 +32,12 @@ export default function FindAds() {
   const demoStart = useApi<Paged<Brand>>(demo ? `/api/hub/lookup?q=northmoor${extra}` : null);
   const shownBrand = brand ?? (!submitted && demo && demoStart.data ? demoStart.data.items[0] : null);
 
-  if (status.loading) return <p className="text-text-dim">Loading…</p>;
+  if (status.loading)
+    return (
+      <p className="flex items-center gap-2 text-text-dim">
+        <Spinner /> Loading…
+      </p>
+    );
   if (notConnected) return <ConnectTrendTrack onSample={() => setSample(true)} />;
 
   return (
@@ -64,7 +69,11 @@ export default function FindAds() {
 
       {submitted && !shownBrand && (
         <section className="space-y-3">
-          {brands.loading && <p className="text-text-dim">Searching…</p>}
+          {brands.loading && (
+            <p className="flex items-center gap-2 text-text-dim">
+              <Spinner /> Searching…
+            </p>
+          )}
           {brands.error && <p className="text-red-400">{brands.error}</p>}
           {brands.data?.items.length === 0 && <p className="text-text-dim">No brands found for “{submitted}”.</p>}
           <div className="grid gap-3 sm:grid-cols-2">
@@ -235,7 +244,11 @@ function BrandAds({ brand, sample, onBack }: { brand: Brand; sample: boolean; on
         ))}
       </div>
 
-      {page.loading && <p className="text-center text-text-dim">Loading ads…</p>}
+      {page.loading && (
+        <p className="flex items-center justify-center gap-2 text-text-dim">
+          <Spinner /> Loading ads…
+        </p>
+      )}
       {!page.loading && ads.length < total && (
         <div className="text-center">
           <button

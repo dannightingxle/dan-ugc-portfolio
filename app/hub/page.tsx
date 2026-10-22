@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import type { Ad, AdDetail, Brand, Paged, Source } from "./_lib/types";
 import { ImportLocal } from "./import-local";
 import { WelcomeBanner } from "./welcome-banner";
@@ -9,7 +9,7 @@ import { ExampleTag } from "./projects/fields";
 import { isArchived, isLost, paymentDue, useProjects, useStars, type StarredAd } from "./_lib/store";
 import { useFeature } from "./account-provider";
 import { JobsSwitch, TechJobs, useJobsView } from "./studio/tech-jobs";
-import { Sparkline, StarButton, StatusPill, Thumb, compact, daysAgo, money, shortDate, useApi } from "./_lib/ui";
+import { Busy, Sparkline, StarButton, StatusPill, Thumb, compact, daysAgo, money, shortDate, useApi, useBusy } from "./_lib/ui";
 import { useMoney } from "./_lib/money";
 import { YourTodos } from "./todos";
 
@@ -271,18 +271,17 @@ function TrackedAd({ ad, onUnstar }: { ad: StarredAd; onUnstar: () => void }) {
 function EmptyState() {
   const status = useApi<{ source: Source }>("/api/hub/status");
   const { toggle } = useStars();
-  const [busy, setBusy] = useState(false);
+  const [busy, run] = useBusy();
 
   // Demo only: star a few sample ads in one click.
-  async function addSamples() {
-    setBusy(true);
-    const brands: Paged<Brand> = await fetch("/api/hub/lookup?q=demo").then((r) => r.json());
-    for (const b of brands.items.slice(0, 3)) {
-      const ads: Paged<Ad> = await fetch(`/api/hub/advertisers/${b.id}/ads?status=active`).then((r) => r.json());
-      ads.items.slice(0, 2).forEach((a) => toggle(a));
-    }
-    setBusy(false);
-  }
+  const addSamples = () =>
+    run(async () => {
+      const brands: Paged<Brand> = await fetch("/api/hub/lookup?q=demo").then((r) => r.json());
+      for (const b of brands.items.slice(0, 3)) {
+        const ads: Paged<Ad> = await fetch(`/api/hub/advertisers/${b.id}/ads?status=active`).then((r) => r.json());
+        ads.items.slice(0, 2).forEach((a) => toggle(a));
+      }
+    });
 
   return (
     <div className="rounded-2xl border border-dashed border-border-strong p-10 text-center">
@@ -293,8 +292,10 @@ function EmptyState() {
           Find my ads
         </Link>
         {status.data?.source === "demo" && (
-          <button onClick={addSamples} disabled={busy} className="rounded-xl border border-border px-5 py-2.5 hover:border-accent disabled:opacity-60">
-            {busy ? "Adding…" : "Add sample ads"}
+          <button onClick={addSamples} disabled={busy} aria-busy={busy} className="rounded-xl border border-border px-5 py-2.5 hover:border-accent disabled:opacity-60">
+            <Busy busy={busy} label="Adding…">
+              Add sample ads
+            </Busy>
           </button>
         )}
       </div>

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { DEFAULT_MAX_EDITS, HELPER_FOR_BACKGROUND, HELPER_FOR_LIBRARY, HELPER_FOR_PARALLEL, LATEST_HELPER, MAX_EDITS_CHOICES, helperOlderThan, type Device } from "../../_lib/edits/types";
 import { call, CopyButton } from "../../projects/[id]/studio/studio";
 import { useConfirm } from "../../_lib/popups";
+import { Busy, Spinner, useBusy } from "../../_lib/ui";
 
 /* The Mac helper: what it does, what it needs, connecting a Mac with a one-time
    code, and the Macs already connected. */
@@ -35,7 +36,10 @@ function HelperState({ d, onBackground }: { d: Device; onBackground: (on: boolea
       {canBackground && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text-muted">
           {switching ? (
-            <span className="text-accent">{wanted ? "Moving to the background… (your Terminal window will say when you can close it)" : "Stopping the background helper…"}</span>
+            <span className="inline-flex items-center gap-1.5 text-accent">
+              <Spinner className="h-3 w-3" />
+              {wanted ? "Moving to the background… (your Terminal window will say when you can close it)" : "Stopping the background helper…"}
+            </span>
           ) : d.info.background ? (
             <>
               <span className="text-good">Runs in the background - no Terminal window needed, starts when you log in</span>
@@ -70,6 +74,8 @@ export function Helper() {
   const [code, setCode] = useState<{ code: string; expires: string; origin: string; at: number } | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
+  const [gettingCode, getCode] = useBusy();
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   // While a code is showing, look for the Mac coming online every few seconds.
   useEffect(() => {
@@ -86,25 +92,33 @@ export function Helper() {
     return () => clearInterval(t);
   }, [code]);
 
-  async function newCode() {
-    setError("");
-    try {
-      const r = await call<{ code: string; expires: string }>("/api/hub/edits/devices", "POST");
-      setConnected(false);
-      setCode({ ...r, origin: window.location.origin, at: Date.now() });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
+  const newCode = () =>
+    getCode(async () => {
+      setError("");
+      try {
+        const r = await call<{ code: string; expires: string }>("/api/hub/edits/devices", "POST");
+        setConnected(false);
+        setCode({ ...r, origin: window.location.origin, at: Date.now() });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
   async function disconnect(d: Device) {
     if (!(await confirm({ title: `Disconnect ${d.name}?`, message: "Its helper will stop getting work until you connect it again.", confirmLabel: "Disconnect", danger: true }))) return;
+    setDisconnecting(d.id);
     await call(`/api/hub/edits/devices?id=${d.id}`, "DELETE").catch((e: Error) => setError(e.message));
     setDevices((list) => list?.filter((x) => x.id !== d.id) ?? null);
+    setDisconnecting(null);
   }
 
   async function setBackground(d: Device, background: boolean) {
-    setDevices((list) => list?.map((x) => (x.id === d.id ? { ...x, info: { ...x.info, backgroundWanted: background } } : x)) ?? null);
-    await call("/api/hub/edits/devices", "PATCH", { id: d.id, background }).catch((e: Error) => setError(e.message));
+    const want = (wanted: boolean | undefined) => setDevices((list) => list?.map((x) => (x.id === d.id ? { ...x, info: { ...x.info, backgroundWanted: wanted } } : x)) ?? null);
+    want(background);
+    await call("/api/hub/edits/devices", "PATCH", { id: d.id, background }).catch((e: Error) => {
+      // Not sent: put the button back rather than keep saying it's switching.
+      want(d.info.backgroundWanted);
+      setError(e.message);
+    });
   }
 
   async function setMaxEdits(d: Device, maxEdits: number) {
@@ -131,7 +145,9 @@ export function Helper() {
       <section className="space-y-3 rounded-2xl border border-border bg-bg-card p-5">
         <h2 className="font-serif text-2xl">Your Macs</h2>
         {devices === null ? (
-          <p className="text-sm text-text-muted">Loading…</p>
+          <p className="flex items-center gap-2 text-sm text-text-muted">
+            <Spinner /> Loading…
+          </p>
         ) : devices.length === 0 ? (
           <p className="text-sm text-text-muted">None connected yet.</p>
         ) : (
@@ -204,8 +220,10 @@ export function Helper() {
                     </div>
                   )}
                 </div>
-                <button type="button" onClick={() => disconnect(d)} className="text-sm text-text-dim hover:text-accent">
-                  Disconnect
+                <button type="button" disabled={disconnecting === d.id} aria-busy={disconnecting === d.id} onClick={() => disconnect(d)} className="text-sm text-text-dim hover:text-accent disabled:opacity-60">
+                  <Busy busy={disconnecting === d.id} label="Disconnecting…">
+                    Disconnect
+                  </Busy>
                 </button>
               </li>
             ))}
@@ -234,8 +252,10 @@ export function Helper() {
           </ul>
         </div>
         {!code ? (
-          <button type="button" onClick={newCode} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
-            Get a connect code
+          <button type="button" onClick={newCode} disabled={gettingCode} aria-busy={gettingCode} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+            <Busy busy={gettingCode} label="Getting a code…">
+              Get a connect code
+            </Busy>
           </button>
         ) : (
           <div className="space-y-3">
@@ -246,7 +266,8 @@ export function Helper() {
               <code className="min-w-0 flex-1 break-all text-xs">{command}</code>
               <CopyButton text={command} label="Copy" />
             </div>
-            <p className={`text-sm ${connected ? "font-medium text-good" : "text-text-muted"}`}>
+            <p className={`flex items-start gap-2 text-sm ${connected ? "font-medium text-good" : "text-text-muted"}`}>
+              {!connected && <Spinner className="mt-[3px]" />}
               {connected ? "Connected. Leave that Terminal window open while you edit - or press Run in the background next to this Mac above, then close it." : "Waiting for your Mac…"}
             </p>
           </div>

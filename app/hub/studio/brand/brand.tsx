@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { compact, shortDate } from "../../_lib/ui";
+import { Spinner, compact, shortDate } from "../../_lib/ui";
 import { PLATFORM_LABEL, PLATFORMS, summarise, type BrandData, type Handle } from "../../_lib/studio/brand-types";
 import type { SheetSummary } from "../../_lib/studio/types";
 import { Field, Section, input } from "../../projects/fields";
@@ -78,7 +78,12 @@ export function BrandStudio() {
   }, [flush]);
 
   if (loadError) return <p className="text-accent">{loadError}</p>;
-  if (!brand) return <p className="text-text-muted">Opening…</p>;
+  if (!brand)
+    return (
+      <p className="flex items-center gap-2 text-text-muted">
+        <Spinner /> Opening…
+      </p>
+    );
 
   return (
     <div className="space-y-6">
@@ -86,7 +91,8 @@ export function BrandStudio() {
         <Link href="/hub/studio" className="text-sm text-text-dim hover:text-text">
           ← Studio
         </Link>
-        <span className={`text-xs ${saveState === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+        <span className={`flex items-center gap-1.5 text-xs ${saveState === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+          {saveState === "saving" && <Spinner className="h-3 w-3" />}
           {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
         </span>
       </div>

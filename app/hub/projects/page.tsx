@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { BOARD_STAGES, TECH_STAGES, addExampleProject, isArchived, isLost, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
-import { money, shortDate } from "../_lib/ui";
+import { Busy, Spinner, money, shortDate } from "../_lib/ui";
 import { useAccount, useFeature } from "../account-provider";
 import { CurrencySelect, ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
 import { JobsSwitch, TechJobs, useJobsView } from "../studio/tech-jobs";
@@ -61,6 +61,12 @@ function Board() {
       </div>
 
       {studio && <JobsSwitch view={view} onChange={choose} deals={dealCount} tech={techCount} />}
+
+      {!ready && (
+        <p className="flex items-center gap-2 text-sm text-text-dim">
+          <Spinner /> Loading your projects…
+        </p>
+      )}
 
       {ready && projects.length === 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-border-strong bg-bg-card p-5">
@@ -179,9 +185,13 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
   const [p, setP] = useState(() => newProject(tech ? { techStage: "Setup", stage: "Filming", feeCurrency: currency } : { feeCurrency: currency }));
   const [fee, setFee] = useState("");
   const [perDay, setPerDay] = useState("");
+  // Saved straight away; the job's page can take a moment to open, so say so (and don't add it twice).
+  const [creating, setCreating] = useState(false);
 
   function create(e: React.FormEvent) {
     e.preventDefault();
+    if (creating) return;
+    setCreating(true);
     const project = p.techStage ? { ...p, perVideo: parseMoney(fee), videosPerDay: parseMoney(perDay) } : { ...p, fee: parseMoney(fee) };
     save(project);
     // A tech job's next step is its Studio: paste the brief and set it up.
@@ -252,8 +262,10 @@ function QuickAdd({ tech, onClose }: { tech: boolean; onClose: () => void }) {
             ))}
           </select>
         </Field>
-        <button className="w-full rounded-xl bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover">
-          {p.techStage && studio ? "Create and set it up in Studio →" : "Create and add the brief →"}
+        <button disabled={creating} aria-busy={creating} className="w-full rounded-xl bg-accent py-2.5 font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+          <Busy busy={creating} label="Creating…">
+            {p.techStage && studio ? "Create and set it up in Studio →" : "Create and add the brief →"}
+          </Busy>
         </button>
       </form>
     </div>

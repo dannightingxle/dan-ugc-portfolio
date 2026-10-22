@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AUDIENCES, AUDIENCE_LABEL, FEATURES, type Audience, type FeatureKey } from "../_lib/features-list";
+import { Busy, useBusy } from "../_lib/ui";
 
 /* Who sees each staged feature, and who's in the beta group. Changes apply
    straight away (within about 30 seconds for people already signed in). */
@@ -18,6 +19,8 @@ export function Rollout({ audiences: initial, beta: initialBeta }: { audiences: 
   const [beta, setBeta] = useState(initialBeta);
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [adding, add] = useBusy();
+  const [removing, setRemoving] = useState<string | null>(null);
 
   return (
     <section className="space-y-3">
@@ -65,16 +68,18 @@ export function Rollout({ audiences: initial, beta: initialBeta }: { audiences: 
         </div>
         <form
           className="flex gap-2"
-          onSubmit={async (e) => {
+          onSubmit={(e) => {
             e.preventDefault();
-            setError("");
-            try {
-              const r = await send("/api/hub/admin/beta", "POST", { email });
-              setBeta([...new Set([r.email as string, ...beta])]);
-              setEmail("");
-            } catch (err) {
-              setError((err as Error).message);
-            }
+            void add(async () => {
+              setError("");
+              try {
+                const r = await send("/api/hub/admin/beta", "POST", { email });
+                setBeta((list) => [...new Set([r.email as string, ...list])]);
+                setEmail("");
+              } catch (err) {
+                setError((err as Error).message);
+              }
+            });
           }}
         >
           <input
@@ -85,7 +90,11 @@ export function Rollout({ audiences: initial, beta: initialBeta }: { audiences: 
             placeholder="name@example.com"
             className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
           />
-          <button className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">Add</button>
+          <button disabled={adding} aria-busy={adding} className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+            <Busy busy={adding} label="Adding…">
+              Add
+            </Busy>
+          </button>
         </form>
         {beta.length > 0 && (
           <ul className="divide-y divide-border text-sm">
@@ -94,15 +103,21 @@ export function Rollout({ audiences: initial, beta: initialBeta }: { audiences: 
                 <span className="min-w-0 truncate">{b}</span>
                 <button
                   type="button"
+                  disabled={removing === b}
+                  aria-busy={removing === b}
                   onClick={async () => {
                     setError("");
+                    setRemoving(b);
                     await send("/api/hub/admin/beta", "DELETE", { email: b })
-                      .then(() => setBeta(beta.filter((x) => x !== b)))
+                      .then(() => setBeta((list) => list.filter((x) => x !== b)))
                       .catch((e: Error) => setError(e.message));
+                    setRemoving(null);
                   }}
-                  className="text-xs text-text-dim hover:text-accent"
+                  className="text-xs text-text-dim hover:text-accent disabled:opacity-60"
                 >
-                  Remove
+                  <Busy busy={removing === b} label="Removing…">
+                    Remove
+                  </Busy>
                 </button>
               </li>
             ))}

@@ -10,6 +10,7 @@ import { CurrencySelect, Field, Section, input } from "../projects/fields";
 import type { Currency } from "../_lib/currencies";
 import { BillingSection, DataSection, DeleteSection, TrendTrackSection } from "./sections";
 import { FeedbackButton } from "../feedback";
+import { Busy, Spinner, useBusy } from "../_lib/ui";
 import Link from "next/link";
 
 /* The signed-in creator's account: plan and billing, profile, TrendTrack,
@@ -27,6 +28,7 @@ export default function AccountPage() {
 
 function Account() {
   const { enabled, user, billing } = useAccount();
+  const [signingOut, signOut] = useBusy();
   const params = useSearchParams();
   const resetting = params.get("reset") === "1";
   const { projects } = useProjects();
@@ -62,13 +64,19 @@ function Account() {
       <Section title="Sign out">
         <button
           type="button"
-          onClick={async () => {
-            await browserClient().auth.signOut();
-            window.location.href = "/hub/login";
-          }}
-          className="rounded-lg border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent"
+          disabled={signingOut}
+          aria-busy={signingOut}
+          onClick={() =>
+            signOut(async () => {
+              await browserClient().auth.signOut();
+              window.location.href = "/hub/login";
+            })
+          }
+          className="rounded-lg border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent disabled:opacity-60"
         >
-          Sign out
+          <Busy busy={signingOut} label="Signing out…">
+            Sign out
+          </Busy>
         </button>
       </Section>
       <Section title="Help us improve">
@@ -90,14 +98,18 @@ function Account() {
 function ProfileSection({ name: initial, email }: { name: string; email: string }) {
   const [name, setName] = useState(initial);
   const [status, setStatus] = useState("");
+  const [saving, save] = useBusy();
   return (
     <Section title="Profile">
       <form
         className="space-y-3"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
-          const { error } = await browserClient().auth.updateUser({ data: { name } });
-          setStatus(error ? error.message : "Saved.");
+          void save(async () => {
+            setStatus("");
+            const { error } = await browserClient().auth.updateUser({ data: { name } });
+            setStatus(error ? error.message : "Saved.");
+          });
         }}
       >
         <Field label="Name">
@@ -107,7 +119,11 @@ function ProfileSection({ name: initial, email }: { name: string; email: string 
           <input className={input} value={email} disabled />
         </Field>
         <div className="flex items-center gap-3">
-          <button className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">Save</button>
+          <button disabled={saving} aria-busy={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+            <Busy busy={saving} label="Saving…">
+              Save
+            </Busy>
+          </button>
           {status && <span className="text-sm text-text-muted">{status}</span>}
         </div>
       </form>
@@ -118,15 +134,19 @@ function ProfileSection({ name: initial, email }: { name: string; email: string 
 function PasswordSection({ highlight }: { highlight?: boolean }) {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
+  const [saving, save] = useBusy();
   return (
     <Section title={highlight ? "Set a new password" : "Password"}>
       <form
         className="flex flex-wrap gap-2"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
-          const { error } = await browserClient().auth.updateUser({ password });
-          setStatus(error ? error.message : "Password updated.");
-          if (!error) setPassword("");
+          void save(async () => {
+            setStatus("");
+            const { error } = await browserClient().auth.updateUser({ password });
+            setStatus(error ? error.message : "Password updated.");
+            if (!error) setPassword("");
+          });
         }}
       >
         <input
@@ -140,7 +160,11 @@ function PasswordSection({ highlight }: { highlight?: boolean }) {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="New password (8+ characters)"
         />
-        <button className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">Update</button>
+        <button disabled={saving} aria-busy={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60">
+          <Busy busy={saving} label="Updating…">
+            Update
+          </Busy>
+        </button>
       </form>
       {status && <p className="text-sm text-text-muted">{status}</p>}
     </Section>
@@ -166,7 +190,12 @@ function CurrencySection({ value }: { value: Currency }) {
           }}
         />
       </Field>
-      {status && <p className="text-sm text-text-muted">{status}</p>}
+      {status && (
+        <p className="flex items-center gap-2 text-sm text-text-muted">
+          {status === "Saving…" && <Spinner />}
+          {status}
+        </p>
+      )}
     </Section>
   );
 }

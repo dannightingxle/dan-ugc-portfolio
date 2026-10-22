@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { useAccount } from "./account-provider";
 import { importLocalData, localDataToImport, useDataReady } from "./_lib/store";
 import { browserClient } from "./_lib/supabase/browser";
+import { Busy } from "./_lib/ui";
 
 const noop = () => () => {};
 
@@ -36,9 +37,12 @@ export function ImportLocal() {
           }
           setBusy(false);
         }}
+        aria-busy={busy}
         className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover disabled:opacity-60"
       >
-        {busy ? "Adding…" : "Add to my account"}
+        <Busy busy={busy} label="Adding…">
+          Add to my account
+        </Busy>
       </button>
       {error && <p className="w-full text-sm text-accent">{error}</p>}
     </div>
