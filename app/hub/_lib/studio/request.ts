@@ -78,6 +78,8 @@ export const WorkspaceBody = z.object({
     .object({ at: z.string().max(40), moreOf: z.array(z.string().max(2_000)).max(30), lessOf: z.array(z.string().max(2_000)).max(30), nextWeek: text(10_000) })
     .nullable()
     .default(null),
+  // Left out by pages opened before it was saved: the saved one is kept.
+  filmingOn: z.string().max(300).optional(),
   updatedAt: z.string().max(40).nullable().default(null),
 });
 

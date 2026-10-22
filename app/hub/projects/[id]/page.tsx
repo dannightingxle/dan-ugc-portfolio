@@ -24,6 +24,7 @@ import {
 import { compact, money, shortDate } from "../../_lib/ui";
 import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "../fields";
 import { useConfirm } from "../../_lib/popups";
+import { TextBox } from "../../_lib/text-box";
 
 /* One project: dates, payment, contact, the full brief, links and notes.
    Every change saves straight away - there's no save button. */
@@ -112,10 +113,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           placeholder="Brand"
           className="w-full bg-transparent text-sm font-medium uppercase tracking-widest text-accent outline-none placeholder:text-text-dim"
         />
-        <textarea
+        <TextBox
           rows={1}
           value={project.title}
-          onChange={(e) => set("title", e.target.value.replace(/\n/g, " "))}
+          onValue={(v) => set("title", v.replace(/\n/g, " "))}
           placeholder="What's the job?"
           className="w-full resize-none bg-transparent font-serif text-3xl leading-tight outline-none [field-sizing:content] placeholder:text-text-dim sm:text-4xl"
         />
@@ -258,11 +259,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </div>
             <DueLine project={project} />
             <Field label="Payment notes">
-              <textarea
+              <TextBox
                 rows={2}
                 className={input}
                 value={project.paymentNotes}
-                onChange={(e) => set("paymentNotes", e.target.value)}
+                onValue={(v) => set("paymentNotes", v)}
                 placeholder="e.g. 50% upfront, usage fee extra, pay via bank transfer…"
               />
             </Field>
@@ -331,14 +332,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               </Field>
             </div>
             <Field label="Key messages / talking points">
-              <textarea rows={4} className={input} value={project.keyMessages} onChange={(e) => set("keyMessages", e.target.value)} placeholder="What the brand wants people to take away" />
+              <TextBox rows={4} className={input} value={project.keyMessages} onValue={(v) => set("keyMessages", v)} placeholder="What the brand wants people to take away" />
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Do's">
-                <textarea rows={4} className={input} value={project.dos} onChange={(e) => set("dos", e.target.value)} placeholder="e.g. Show the product in the first 3s…" />
+                <TextBox rows={4} className={input} value={project.dos} onValue={(v) => set("dos", v)} placeholder="e.g. Show the product in the first 3s…" />
               </Field>
               <Field label="Don'ts">
-                <textarea rows={4} className={input} value={project.donts} onChange={(e) => set("donts", e.target.value)} placeholder="e.g. No competitor mentions…" />
+                <TextBox rows={4} className={input} value={project.donts} onValue={(v) => set("donts", v)} placeholder="e.g. No competitor mentions…" />
               </Field>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -357,21 +358,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <Links items={project.links} onChange={(l) => set("links", l)} />
 
           <Section title="Notes">
-            <textarea
+            <TextBox
               rows={6}
               className={input}
               value={project.notes}
-              onChange={(e) => set("notes", e.target.value)}
+              onValue={(v) => set("notes", v)}
               placeholder="Anything else: feedback from the brand, ideas, what went well…"
             />
           </Section>
 
           <Section title="Script" action={<span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">Scripting tool coming soon</span>}>
-            <textarea
+            <TextBox
               rows={6}
               className={input}
               value={project.script}
-              onChange={(e) => set("script", e.target.value)}
+              onValue={(v) => set("script", v)}
               placeholder="Rough script or ideas for now. A proper script and shot-list builder is on the way."
             />
           </Section>

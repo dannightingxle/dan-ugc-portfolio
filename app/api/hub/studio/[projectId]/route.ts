@@ -23,10 +23,11 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/hub/studio/[
     projectId,
     WorkspaceBody,
     async ({ user, body }) => {
-      const saved = body.template === undefined || body.account.profiles === undefined ? await getWorkspace(user.id, projectId) : null;
+      const saved = body.template === undefined || body.account.profiles === undefined || body.filmingOn === undefined ? await getWorkspace(user.id, projectId) : null;
       return saveWorkspace(user.id, projectId, {
         ...body,
         template: body.template ?? saved!.template,
+        filmingOn: body.filmingOn ?? saved!.filmingOn,
         // A row still being typed (no handle yet) isn't saved.
         account: { ...body.account, profiles: (body.account.profiles ?? saved!.account.profiles).map((p) => ({ platform: p.platform, handle: cleanHandle(p.handle) })).filter((p) => p.handle) },
       });

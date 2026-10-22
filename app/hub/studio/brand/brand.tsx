@@ -12,6 +12,7 @@ import { useFeature } from "../../account-provider";
 import { BRAND_ID } from "../../_lib/studio/brand-types";
 import { IdeasTab } from "./ideas";
 import { TrialsTab } from "./trials";
+import { TextBox } from "../../_lib/text-box";
 
 /* Personal brand: your accounts and the creators you track, their latest
    stats, an inbox of ideas found in their posts, and a weekly plan + shoot
@@ -162,11 +163,11 @@ export function BrandStudio() {
         <div className="space-y-5">
           <Section title="Winners">
             <p className="text-sm text-text-muted">Your best posts and why they worked. Add to it as things take off.</p>
-            <textarea rows={10} className={input} value={brand.winners} onChange={(e) => edit({ ...brand, winners: e.target.value })} />
+            <TextBox rows={10} className={input} value={brand.winners} onValue={(v) => edit({ ...brand, winners: v })} />
           </Section>
           <Section title="Script bank">
             <p className="text-sm text-text-muted">Every hook and angle already planned, newest first. New plans never reuse these.</p>
-            <textarea rows={14} className={input} value={brand.scriptBank} onChange={(e) => edit({ ...brand, scriptBank: e.target.value })} />
+            <TextBox rows={14} className={input} value={brand.scriptBank} onValue={(v) => edit({ ...brand, scriptBank: v })} />
           </Section>
         </div>
       )}
@@ -284,7 +285,7 @@ function WeekTab({
             </Field>
           </div>
           <Field label="Anything to steer this week?" hint="A launch, a trip, a theme, what flopped… Optional.">
-            <textarea rows={2} className={input} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <TextBox rows={2} className={input} value={notes} onValue={(v) => setNotes(v)} />
           </Field>
           <FilePicker accept="image/png,image/jpeg,image/webp" label="Analytics screenshots (optional)" onChange={setUploads} />
           <ActionButton busy={plan.busy} seconds={plan.seconds} label="Plan my week" busyLabel="Planning your week… usually 1-3 minutes ·" />
@@ -415,11 +416,11 @@ function SetupTab({ brand, edit }: { brand: BrandData; edit: (b: BrandData) => v
     <div className="space-y-5">
       <Section title="About your brand">
         <p className="text-sm text-text-muted">Who you are, your niche and content pillars, who you&apos;re talking to, your goals and your voice. Every plan starts from this.</p>
-        <textarea
+        <TextBox
           rows={8}
           className={input}
           value={brand.about}
-          onChange={(e) => edit({ ...brand, about: e.target.value })}
+          onValue={(v) => edit({ ...brand, about: v })}
           placeholder="UK UGC creator and ex performance marketer. Pillars: behind the scenes of UGC, how to land brand deals, paid social tips. Talking to people who want to start UGC. Goal: grow the Skool community. Voice: casual, direct, a bit dry."
         />
       </Section>
@@ -440,7 +441,7 @@ function SetupTab({ brand, edit }: { brand: BrandData; edit: (b: BrandData) => v
       />
       <Section title="Standing notes">
         <p className="text-sm text-text-muted">Anything every plan should know (posting days, things to avoid, a series you&apos;re running).</p>
-        <textarea rows={3} className={input} value={brand.notes} onChange={(e) => edit({ ...brand, notes: e.target.value })} />
+        <TextBox rows={3} className={input} value={brand.notes} onValue={(v) => edit({ ...brand, notes: v })} />
       </Section>
     </div>
   );

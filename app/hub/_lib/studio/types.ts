@@ -38,8 +38,13 @@ export type Workspace = {
   /** profiles: the job's TikTok / Instagram accounts, for the Accounts page. */
   account: { handles: string; checks: Record<string, boolean>; notes: string; profiles: Profile[] };
   lastReview: { at: string; moreOf: string[]; lessOf: string[]; nextWeek: string } | null;
+  /** When you film this job's videos ("" = the usual days), for the shoot sheet. */
+  filmingOn: string;
   updatedAt: string | null;
 };
+
+/** When you film, unless a job says otherwise. */
+export const DEFAULT_FILMING = "Monday, Wednesday and Thursday afternoons";
 
 export function emptyWorkspace(): Workspace {
   return {
@@ -51,6 +56,7 @@ export function emptyWorkspace(): Workspace {
     couldntOpen: [],
     account: { handles: "", checks: {}, notes: "", profiles: [] },
     lastReview: null,
+    filmingOn: "",
     updatedAt: null,
   };
 }

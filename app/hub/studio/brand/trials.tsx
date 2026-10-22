@@ -6,6 +6,7 @@ import type { BrandData, Trial } from "../../_lib/studio/brand-types";
 import { Field, Section, input } from "../../projects/fields";
 import { ActionButton, CopyButton, call, useAction } from "../../projects/[id]/studio/studio";
 import { useConfirm } from "../../_lib/popups";
+import { TextBox } from "../../_lib/text-box";
 
 /* Trial reels: five versions of one reel, each opening differently, made into
    CapCut drafts on your Mac and posted as Instagram trial reels (they go to
@@ -80,7 +81,7 @@ export function TrialsTab({ brand, onBrand, goEdits, goWeek }: { brand: BrandDat
             )
           ) : (
             <Field label="The reel" hint="Its script, or the video card from a shoot sheet (Copy everything).">
-              <textarea rows={6} className={input} value={text} onChange={(e) => setText(e.target.value)} />
+              <TextBox rows={6} className={input} value={text} onValue={(v) => setText(v)} />
             </Field>
           )}
           <ActionButton busy={write.busy} seconds={write.seconds} label="Write 5 versions" busyLabel="Writing 5 versions… usually 1-2 minutes ·" />

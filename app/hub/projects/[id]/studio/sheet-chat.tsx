@@ -6,6 +6,7 @@ import { useConfirm } from "../../../_lib/popups";
 import type { ChatMessage, ChatSummary, SheetChat } from "../../../_lib/studio/chats";
 import { input } from "../../fields";
 import { CHAT_KEYS_HINT, chatKeys } from "../../../_lib/chat-keys";
+import { TextBox } from "../../../_lib/text-box";
 
 /* A shoot sheet as a chat, like one in a Claude Project: what you asked for,
    what Claude made or why it couldn't, and your replies - changes to the
@@ -115,11 +116,11 @@ export function ChatView({
       <form onSubmit={send} className="space-y-2">
         <label className="block">
           <span className="sr-only">Reply to Claude</span>
-          <textarea
+          <TextBox
             rows={3}
             className={input}
             value={reply}
-            onChange={(e) => setReply(e.target.value)}
+            onValue={(v) => setReply(v)}
             onKeyDown={chatKeys(() => void send(), setReply)}
             aria-label="Reply to Claude"
             placeholder={

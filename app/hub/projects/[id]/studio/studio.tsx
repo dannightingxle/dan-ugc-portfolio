@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjects } from "../../../_lib/store";
 import { shortDate } from "../../../_lib/ui";
-import { ACCOUNT_CHECKS, FILES, type Profile, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
+import { ACCOUNT_CHECKS, DEFAULT_FILMING, FILES, type Profile, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
 import { Field, Section, input } from "../../fields";
 import { useFeature } from "../../../account-provider";
 import { Edits } from "./edits";
@@ -15,6 +15,7 @@ import { weekDataBlock } from "../../../_lib/studio/custom-template";
 import { cleanHandle } from "../../../_lib/studio/brand-types";
 import { useConfirm } from "../../../_lib/popups";
 import { type Task, type TaskKind, useElapsed, useTask, useTasks } from "../../../_lib/studio/tasks-client";
+import { TextBox } from "../../../_lib/text-box";
 
 /* Studio: everything a Claude Project held for this job, plus the weekly
    shoot sheet, the Friday review and the account checklist. Edits save by
@@ -65,6 +66,9 @@ export function Studio({ projectId }: { projectId: string }) {
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const editsOn = useFeature("edits");
   const accountsOn = useFeature("accounts");
+  // On a wide screen the shoot sheet chat sits on the right, beside whichever tab is open.
+  const wide = useWide();
+  const shown: Tab = wide && tab === "week" ? (editsOn ? "edits" : "setup") : tab;
 
   useEffect(() => {
     call<{ workspace: Workspace; sheets: SheetSummary[]; claude: boolean }>(api, "GET")
@@ -115,53 +119,77 @@ export function Studio({ projectId }: { projectId: string }) {
   if (!ws) return <p className="text-text-muted">Opening Studio…</p>;
 
   const name = project?.brand || "This job";
+  const week = (
+    <WeekTab api={api} ws={ws} edit={edit} sheets={sheets} setSheets={setSheets} onWorkspace={setWs} goSetup={() => setTab("setup")} goEdits={editsOn ? () => setTab("edits") : undefined} />
+  );
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href={`/hub/projects/${projectId}`} className="text-sm text-text-dim hover:text-text">
-          ← {name}
-        </Link>
-        <span className={`text-xs ${saveState === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
-          {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
-        </span>
-      </div>
-      <div>
-        <p className="text-sm font-medium uppercase tracking-widest text-accent">{name}</p>
-        <h1 className="font-serif text-4xl">Studio</h1>
-        {project?.title && <p className="mt-1 text-text-muted">{project.title}</p>}
-      </div>
+    <div className={wide ? "relative left-1/2 grid w-[min(1600px,calc(100vw-5rem))] -translate-x-1/2 grid-cols-[minmax(0,1fr)_minmax(380px,30%)] items-start gap-6" : ""}>
+      <div className="min-w-0 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href={`/hub/projects/${projectId}`} className="text-sm text-text-dim hover:text-text">
+            ← {name}
+          </Link>
+          <span className={`text-xs ${saveState === "error" ? "font-medium text-accent" : "text-text-dim"}`}>
+            {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
+          </span>
+        </div>
+        <div>
+          <p className="text-sm font-medium uppercase tracking-widest text-accent">{name}</p>
+          <h1 className="font-serif text-4xl">Studio</h1>
+          {project?.title && <p className="mt-1 text-text-muted">{project.title}</p>}
+        </div>
 
-      {!claude && (
-        <p className="rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
-          Claude isn&apos;t switched on yet: add <code>ANTHROPIC_API_KEY</code> in Vercel (Production) and redeploy. You can still edit everything here.
-        </p>
+        {!claude && (
+          <p className="rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
+            Claude isn&apos;t switched on yet: add <code>ANTHROPIC_API_KEY</code> in Vercel (Production) and redeploy. You can still edit everything here.
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-1" role="tablist">
+          {TABS.filter(([key]) => (key !== "edits" || editsOn) && !(wide && key === "week")).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={shown === key}
+              onClick={() => setTab(key)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm transition ${shown === key ? "bg-accent text-on-accent" : "text-text-muted hover:bg-bg-elevated"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {shown === "week" && week}
+        {shown === "setup" && <SetupTab api={api} ws={ws} edit={edit} onWorkspace={setWs} />}
+        {shown === "files" && <FilesTab ws={ws} edit={edit} />}
+        {shown === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
+        {shown === "account" && <AccountTab ws={ws} edit={edit} stats={accountsOn} />}
+        {shown === "edits" && editsOn && <Edits projectId={projectId} sheets={sheets} />}
+      </div>
+      {wide && (
+        <aside aria-label="Shoot sheet chat" className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg p-1">
+          {week}
+        </aside>
       )}
-
-      <div className="flex flex-wrap gap-1" role="tablist">
-        {TABS.filter(([key]) => key !== "edits" || editsOn).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm transition ${tab === key ? "bg-accent text-on-accent" : "text-text-muted hover:bg-bg-elevated"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "week" && (
-        <WeekTab api={api} ws={ws} sheets={sheets} setSheets={setSheets} onWorkspace={setWs} goSetup={() => setTab("setup")} goEdits={editsOn ? () => setTab("edits") : undefined} />
-      )}
-      {tab === "setup" && <SetupTab api={api} ws={ws} edit={edit} onWorkspace={setWs} />}
-      {tab === "files" && <FilesTab ws={ws} edit={edit} />}
-      {tab === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
-      {tab === "account" && <AccountTab ws={ws} edit={edit} stats={accountsOn} />}
-      {tab === "edits" && editsOn && <Edits projectId={projectId} sheets={sheets} />}
     </div>
   );
+}
+
+/** Wide enough to show the shoot sheet chat beside the tabs. */
+function useWide() {
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia("(min-width: 1360px)");
+    const on = () => setWide(q.matches);
+    const t = setTimeout(on, 0);
+    q.addEventListener("change", on);
+    return () => {
+      clearTimeout(t);
+      q.removeEventListener("change", on);
+    };
+  }, []);
+  return wide;
 }
 
 /* ---- Running a Claude action: a button that shows how long it's been going ---- */
@@ -295,6 +323,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
 function WeekTab({
   api,
   ws,
+  edit,
   sheets,
   setSheets,
   onWorkspace,
@@ -303,6 +332,7 @@ function WeekTab({
 }: {
   api: string;
   ws: Workspace;
+  edit: (w: Workspace) => void;
   sheets: SheetSummary[];
   setSheets: (s: SheetSummary[]) => void;
   onWorkspace: (w: Workspace) => void;
@@ -310,7 +340,8 @@ function WeekTab({
   goEdits?: () => void;
 }) {
   const [videos, setVideos] = useState(7);
-  const [filmingOn, setFilmingOn] = useState("Monday, Wednesday and Thursday afternoons");
+  // Saved with the job, so it's the same next week.
+  const filmingOn = ws.filmingOn || DEFAULT_FILMING;
   const [lastWeek, setLastWeek] = useState("");
   const [trending, setTrending] = useState("");
   const [weekBrief, setWeekBrief] = useState("");
@@ -393,20 +424,20 @@ function WeekTab({
                 <input type="number" min={1} max={21} className={input} value={videos} onChange={(e) => setVideos(Math.max(1, Math.min(21, Number(e.target.value) || 1)))} />
               </Field>
               <Field label="Filming">
-                <input className={input} value={filmingOn} onChange={(e) => setFilmingOn(e.target.value)} />
+                <input className={input} value={ws.filmingOn || DEFAULT_FILMING} onChange={(e) => edit({ ...ws, filmingOn: e.target.value })} aria-label="Filming" />
               </Field>
             </div>
             <Field
               label="This week's brief"
               hint="What the brand sent for this week: formats, notes, references, links. Notion pages and Google Docs shared by link are read in full, and reference videos (uploaded to the page, or TikTok and Instagram links) are watched frame by frame. Pages that need you logged in are read in Chrome on your Mac while the Creator Desk Helper is running. It's used for this week's sheet only - the project brief on the Files tab stays as it is."
             >
-              <textarea rows={5} className={input} value={weekBrief} onChange={(e) => setWeekBrief(e.target.value)} placeholder="Paste what the brand sent, or the link to it…" />
+              <TextBox rows={5} className={input} value={weekBrief} onValue={(v) => setWeekBrief(v)} placeholder="Paste what the brand sent, or the link to it…" />
             </Field>
             <Field label="How last week went" hint="What did best, what flopped. Or leave it for the Friday review to cover.">
-              <textarea rows={2} className={input} value={lastWeek} onChange={(e) => setLastWeek(e.target.value)} placeholder="The 'Pingo Laughs' restaurant one hit 40k, the SAY IT!!! ones stalled under 1k…" />
+              <TextBox rows={2} className={input} value={lastWeek} onValue={(v) => setLastWeek(v)} placeholder="The 'Pingo Laughs' restaurant one hit 40k, the SAY IT!!! ones stalled under 1k…" />
             </Field>
             <Field label="Trending in the niche (optional)" hint="Describe 2-3 videos doing well (hook, format, length) and they'll be adapted for the app.">
-              <textarea rows={2} className={input} value={trending} onChange={(e) => setTrending(e.target.value)} />
+              <TextBox rows={2} className={input} value={trending} onValue={(v) => setTrending(v)} />
             </Field>
             <FilePicker accept="image/png,image/jpeg,image/webp,application/pdf" label="Screenshots or PDFs (optional)" onChange={setUploads} />
             <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
@@ -470,7 +501,7 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
         </p>
         <form onSubmit={run} className="space-y-4">
           <Field label="Everything you have on the job">
-            <textarea rows={10} className={input} value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Paste the brief, links, emails, rates…" />
+            <TextBox rows={10} className={input} value={material} onValue={(v) => setMaterial(v)} placeholder="Paste the brief, links, emails, rates…" />
           </Field>
           <FilePicker accept="application/pdf,image/png,image/jpeg,image/webp" label="PDFs or screenshots (optional)" onChange={setUploads} />
           <div className="grid gap-3 sm:grid-cols-2">
@@ -521,7 +552,7 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
 
       <Section title="Project instructions">
         <p className="text-sm text-text-muted">How Claude works on this job: the job, the rules from the brief, how you film, your voice and what to hand back.</p>
-        <textarea rows={18} className={`${input} font-mono text-xs leading-relaxed`} value={ws.instructions} onChange={(e) => edit({ ...ws, instructions: e.target.value })} />
+        <TextBox rows={18} className={`${input} font-mono text-xs leading-relaxed`} value={ws.instructions} onValue={(v) => edit({ ...ws, instructions: v })} />
       </Section>
     </div>
   );
@@ -535,11 +566,11 @@ function FilesTab({ ws, edit }: { ws: Workspace; edit: (w: Workspace) => void })
       {FILES.map((f) => (
         <Section key={f.key} title={f.label} action={<span className="text-xs text-text-dim">{ws.files[f.key].length.toLocaleString()} characters</span>}>
           <p className="text-sm text-text-muted">{f.hint}</p>
-          <textarea
+          <TextBox
             rows={f.key === "brief" || f.key === "scriptBank" ? 14 : 8}
             className={`${input} text-sm leading-relaxed`}
             value={ws.files[f.key]}
-            onChange={(e) => edit({ ...ws, files: { ...ws.files, [f.key]: e.target.value } })}
+            onValue={(v) => edit({ ...ws, files: { ...ws.files, [f.key]: v } })}
           />
         </Section>
       ))}
@@ -611,7 +642,7 @@ function ReviewTab({ api, ws, onWorkspace }: { api: string; ws: Workspace; onWor
           className="space-y-4"
         >
           <Field label="This week's numbers">
-            <textarea rows={6} className={input} value={numbers} onChange={(e) => setNumbers(e.target.value)} placeholder="V1 restaurant mix-up: 42k views, 61% retention, 300 likes…" />
+            <TextBox rows={6} className={input} value={numbers} onValue={(v) => setNumbers(v)} placeholder="V1 restaurant mix-up: 42k views, 61% retention, 300 likes…" />
           </Field>
           <FilePicker accept="image/png,image/jpeg,image/webp" label="Analytics screenshots" onChange={setUploads} />
           <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label="Run the review" busyLabel="Reviewing the week… ·" />
@@ -660,7 +691,7 @@ function AccountTab({ ws, edit, stats }: { ws: Workspace; edit: (w: Workspace) =
     <div className="space-y-5">
       <Section title="Accounts">
         <Field label="Handles" hint="Every account this job posts from, one per line.">
-          <textarea rows={3} className={input} value={a.handles} onChange={(e) => set({ handles: e.target.value })} placeholder={"TikTok @danlearnsmarkets\nInstagram @danlearnsmarkets"} />
+          <TextBox rows={3} className={input} value={a.handles} onValue={(v) => set({ handles: v })} placeholder={"TikTok @danlearnsmarkets\nInstagram @danlearnsmarkets"} />
         </Field>
       </Section>
       {stats && <TrackedProfiles profiles={a.profiles} handles={a.handles} onChange={(profiles) => set({ profiles })} />}
@@ -678,7 +709,7 @@ function AccountTab({ ws, edit, stats }: { ws: Workspace; edit: (w: Workspace) =
         <p className="text-xs text-text-dim">Once live: 10 minutes of engagement before and after every post - the first hour decides most of the reach.</p>
       </Section>
       <Section title="Notes">
-        <textarea rows={4} className={input} value={a.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Feed test results, first-video views, phone used for verification…" />
+        <TextBox rows={4} className={input} value={a.notes} onValue={(v) => set({ notes: v })} placeholder="Feed test results, first-video views, phone used for verification…" />
       </Section>
     </div>
   );

@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { BOARD_STAGES, TECH_STAGES, addExampleProject, isArchived, isLost, newProject, useDataReady, useProjects, type Project } from "../_lib/store";
 import { money, shortDate } from "../_lib/ui";
 import { useAccount, useFeature } from "../account-provider";
 import { CurrencySelect, ExampleTag, Field, PaymentPill, input, parseMoney } from "./fields";
+import { TechJobs } from "../studio/tech-jobs";
 
-/* Project board: every brand deal from pitch to paid. */
+/* Project board: brand deals from pitch to paid, or (with Studio) the tech UGC jobs as cards. */
+
+const VIEW_KEY = "cd-board-view";
 
 export default function ProjectsPage() {
   return (
@@ -25,9 +28,31 @@ function Board() {
   const studio = useFeature("studio");
   const editsOn = useFeature("edits");
   // ?new=1 opens the add form; ?new=tech opens it set up for a tech UGC job.
-  const [adding, setAdding] = useState(params.get("new") === "1" || params.get("new") === "tech");
-  const active = projects.filter((p) => !isArchived(p));
-  const archived = projects.filter(isArchived).sort((a, b) => a.brand.localeCompare(b.brand));
+  const [adding, setAdding] = useState<"" | "deal" | "tech">(params.get("new") === "tech" ? "tech" : params.get("new") === "1" ? "deal" : "");
+  // Brand deals on the board, or tech UGC jobs as cards (?view=tech; remembered in this browser).
+  const asked = params.get("view") === "tech" || params.get("new") === "tech" ? "tech" : params.get("view") === "deals" ? "deals" : null;
+  const [view, setView] = useState<"deals" | "tech">(asked ?? "deals");
+  useEffect(() => {
+    if (asked) return;
+    const t = setTimeout(() => {
+      try {
+        if (localStorage.getItem(VIEW_KEY) === "tech") setView("tech");
+      } catch {}
+    }, 0);
+    return () => clearTimeout(t);
+  }, [asked]);
+  const choose = (v: "deals" | "tech") => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {}
+  };
+  const tech = studio && view === "tech";
+  const inView = (p: Project) => !studio || (tech ? Boolean(p.techStage) : !p.techStage);
+  const active = projects.filter((p) => !isArchived(p) && inView(p));
+  const archived = projects.filter((p) => isArchived(p) && inView(p)).sort((a, b) => a.brand.localeCompare(b.brand));
+  const techCount = projects.filter((p) => p.techStage && !isArchived(p)).length;
+  const dealCount = projects.filter((p) => !p.techStage && !isArchived(p)).length;
 
   return (
     <div className="space-y-6">
@@ -47,11 +72,33 @@ function Board() {
               Import
             </Link>
           )}
-          <button onClick={() => setAdding(true)} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
-            + New project
+          <button onClick={() => setAdding(tech ? "tech" : "deal")} className="rounded-xl bg-accent px-5 py-2.5 font-medium text-on-accent hover:bg-accent-hover">
+            {tech ? "+ New tech job" : studio ? "+ New brand deal" : "+ New project"}
           </button>
         </div>
       </div>
+
+      {studio && (
+        <div role="tablist" aria-label="Which jobs" className="inline-flex rounded-xl border border-border bg-bg-card p-1 text-sm">
+          {(
+            [
+              ["deals", "Brand deals", dealCount],
+              ["tech", "Tech jobs", techCount],
+            ] as const
+          ).map(([v, label, n]) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => choose(v)}
+              className={`rounded-lg px-4 py-1.5 transition ${view === v ? "bg-accent font-medium text-on-accent" : "text-text-muted hover:text-text"}`}
+            >
+              {label} <span className={view === v ? "opacity-80" : "text-text-dim"}>{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {ready && projects.length === 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-border-strong bg-bg-card p-5">
@@ -69,24 +116,28 @@ function Board() {
         </div>
       )}
 
-      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6">
-        {BOARD_STAGES.map((stage) => {
-          const items = active.filter((p) => p.stage === stage);
-          return (
-            <div key={stage} className="w-64 shrink-0 space-y-2">
-              <div className="flex items-baseline justify-between px-1">
-                <h2 className="text-sm font-medium">{stage}</h2>
-                <span className="text-xs text-text-dim">{items.length}</span>
+      {tech ? (
+        <TechJobs title="Tech jobs" hideHeading />
+      ) : (
+        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6">
+          {BOARD_STAGES.map((stage) => {
+            const items = active.filter((p) => p.stage === stage);
+            return (
+              <div key={stage} className="w-64 shrink-0 space-y-2">
+                <div className="flex items-baseline justify-between px-1">
+                  <h2 className="text-sm font-medium">{stage}</h2>
+                  <span className="text-xs text-text-dim">{items.length}</span>
+                </div>
+                <div className="min-h-24 space-y-2 rounded-xl bg-bg-elevated p-2">
+                  {items.map((p) => (
+                    <ProjectCard key={p.id} p={p} />
+                  ))}
+                </div>
               </div>
-              <div className="min-h-24 space-y-2 rounded-xl bg-bg-elevated p-2">
-                {items.map((p) => (
-                  <ProjectCard key={p.id} p={p} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {ready && projects.length > 0 && (
         <details className="group rounded-2xl border border-border bg-bg-card">
@@ -111,7 +162,7 @@ function Board() {
         </details>
       )}
 
-      {adding && <QuickAdd tech={params.get("new") === "tech"} onClose={() => setAdding(false)} />}
+      {adding && <QuickAdd tech={adding === "tech"} onClose={() => setAdding("")} />}
     </div>
   );
 }
