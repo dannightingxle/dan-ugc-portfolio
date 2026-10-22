@@ -69,7 +69,19 @@ export function useEditsData(projectId: string, enabled = true) {
 
   const replace = useCallback((card: EditCard) => setData((d) => d && { ...d, edits: d.edits.map((e) => (e.id === card.id ? card : e)) }), []);
   const remove = useCallback((id: string) => setData((d) => d && { ...d, edits: d.edits.filter((e) => e.id !== id) }), []);
-  const add = useCallback((cards: EditCard[]) => setData((d) => d && { ...d, edits: [...d.edits.filter((e) => !cards.some((c) => c.id === e.id)), ...cards] }), []);
+  // New cards go to the top straight away, as they will be once the list is checked again (newest first,
+  // with the rest of the same shoot sheet's cards kept beside them).
+  const add = useCallback(
+    (cards: EditCard[]) =>
+      setData((d) => {
+        if (!d) return d;
+        const sheets = new Set(cards.map((c) => c.sheetId).filter(Boolean));
+        const rest = d.edits.filter((e) => !cards.some((c) => c.id === e.id));
+        const sameSheet = rest.filter((e) => e.sheetId && sheets.has(e.sheetId));
+        return { ...d, edits: [...cards, ...sameSheet, ...rest.filter((e) => !sameSheet.includes(e))] };
+      }),
+    [],
+  );
   const setFolder = useCallback((folder: string) => setData((d) => d && { ...d, folder }), []);
 
   const macs = data ? sortMacs(data.devices) : [];
