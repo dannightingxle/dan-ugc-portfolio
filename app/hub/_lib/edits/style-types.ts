@@ -37,6 +37,8 @@ export const FRAME_DATA = /^data:image\/(jpeg|png);base64,[A-Za-z0-9+/]+=*$/;
 
 /** The oldest helper that can read your Mac's editing setup and grab key frames. */
 export const HELPER_FOR_STYLES = "0.3.8";
+/** The oldest helper that can carry your editing setup's files between your Macs (see setup-types.ts). */
+export const HELPER_FOR_SETUP = "0.3.9";
 
 /** A request to your Mac: read its editing setup ("scan") or grab frames from a video you pick ("grab"). */
 export type StyleRequest = {
