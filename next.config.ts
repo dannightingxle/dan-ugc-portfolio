@@ -43,13 +43,15 @@ const nextConfig: NextConfig = {
     ];
   },
   async redirects() {
-    if (!appHost) return [];
-    return [appHost, `www.${appHost}`].map((host) => ({
+    // A short link to share for the Creator Desk waitlist.
+    const waitlist = ["/creatordesk", "/creator-desk"].map((source) => ({ source, destination: "/hub/welcome", permanent: false }));
+    if (!appHost) return waitlist;
+    return [...waitlist, ...[appHost, `www.${appHost}`].map((host) => ({
       source: "/:path((?!hub|api|_next).*)",
       has: [{ type: "host" as const, value: host }],
       destination: "/hub",
       permanent: false,
-    }));
+    }))];
   },
 };
 

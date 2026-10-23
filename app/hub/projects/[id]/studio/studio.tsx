@@ -68,6 +68,14 @@ export function Studio({ projectId }: { projectId: string }) {
   const accountsOn = useFeature("accounts");
   // On a wide screen the shoot sheet chat sits on the right, beside whichever tab is open.
   const wide = useWide();
+  // Tell the pop-ups the chat panel is on the right, so they keep clear of its reply box.
+  useEffect(() => {
+    if (!wide) return;
+    document.documentElement.dataset.sidePanel = "1";
+    return () => {
+      delete document.documentElement.dataset.sidePanel;
+    };
+  }, [wide]);
   const shown: Tab = wide && tab === "week" ? (editsOn ? "edits" : "setup") : tab;
 
   // On a wide screen an edit card opens on the right too, like a chat (?edit=<id> in the address, so links open it there).
