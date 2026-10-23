@@ -37,14 +37,19 @@ export default async function Admin() {
     admin.from("hub_beta_members").select("email").order("added_at", { ascending: false }),
     admin.from("hub_feedback").select("message, created_at").eq("page", "waitlist").order("created_at", { ascending: false }).limit(500),
   ]);
-  // Waitlist entries (see /api/hub/waitlist) store name, email and handle as JSON in the message.
+  // Waitlist entries (see /api/hub/waitlist) store first name, last name and email as JSON in the message
+  // (early ones: name, email and handle).
   const waitlistEntries = (waitlist.data ?? []).map((w) => {
-    let e: { name?: string; email?: string; handle?: string } = {};
+    let e: { firstName?: string; lastName?: string; name?: string; email?: string; handle?: string } = {};
     try {
       e = JSON.parse(w.message);
     } catch {}
-    return { name: e.name ?? "", email: e.email ?? w.message, handle: e.handle ?? "", at: w.created_at as string };
+    const [first = "", ...rest] = (e.name ?? "").split(" ");
+    return { firstName: e.firstName ?? first, lastName: e.lastName ?? rest.join(" "), email: e.email ?? w.message, handle: e.handle ?? "", at: w.created_at as string };
   });
+  // The whole list as a spreadsheet, for an email tool on launch day.
+  const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const waitlistCsv = ["First name,Last name,Email,Joined", ...waitlistEntries.map((w) => [w.firstName, w.lastName, w.email, w.at.slice(0, 10)].map(cell).join(","))].join("\n");
   // The database enforces the paywall (and counts founder spots) using hub_config, which this deploy keeps in step.
   const outOfStep = config.data && (config.data.enforce_billing !== billingEnabled || (billingEnabled && config.data.live_mode !== STRIPE_LIVE));
   const checks = await setupChecks(!outOfStep);
@@ -157,13 +162,23 @@ export default async function Admin() {
               {waitlistEntries.map((w, i) => (
                 <div key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5">
                   <span>
-                    <strong>{w.name}</strong> · {w.email}
+                    <strong>
+                      {w.firstName} {w.lastName}
+                    </strong>{" "}
+                    · {w.email}
                     {w.handle && <span className="text-text-muted"> · {w.handle}</span>}
                   </span>
                   <span className="text-xs text-text-dim">{new Date(w.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</span>
                 </div>
               ))}
             </div>
+            <a
+              href={`data:text/csv;charset=utf-8,${encodeURIComponent(waitlistCsv)}`}
+              download="creator-desk-waitlist.csv"
+              className="inline-block rounded-lg border border-border px-3 py-1.5 text-sm hover:border-accent hover:text-accent"
+            >
+              Download the list (CSV)
+            </a>
             <details className="text-sm">
               <summary className="cursor-pointer text-text-muted">All emails, to copy</summary>
               <textarea readOnly className="mt-2 h-24 w-full rounded-lg border border-border bg-bg p-2 text-xs" value={waitlistEntries.map((w) => w.email).join(", ")} />

@@ -187,14 +187,15 @@ function TaskTray() {
   const shown = tasks.filter((t) => t.projectId !== here && (t.status === "running" || !faded.has(taskKey(t))));
   // Out of the way while you type: a pop-up over a text box would take the click (and the paste) meant for it.
   const typing = useTyping();
+  const sidePanel = useSidePanel();
   const alerts = edits.filter((e) => editNeedsLook(e) && !cleared.has(editKey(e)) && !faded.has(editKey(e)) && e.projectId !== here);
   if (!shown.length && !alerts.length) return null;
-  // Bottom left on bigger screens: the right is where the chat panels and their reply boxes are.
+  // Bottom right - or bottom left while a Studio page has its chat panel (and reply box) on the right.
   return (
     <div
       aria-live="polite"
       hidden={typing}
-      className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 space-y-2 sm:inset-x-auto sm:left-5 sm:w-80 md:bottom-5"
+      className={`fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 space-y-2 sm:inset-x-auto sm:w-80 md:bottom-5 ${sidePanel ? "sm:left-5" : "sm:right-5"}`}
       role="region"
       aria-label="Jobs running in the background"
     >
@@ -214,6 +215,20 @@ function TaskTray() {
       ))}
     </div>
   );
+}
+
+/** Whether the page has a chat panel down the right (a Studio page on a wide screen says so on <html>). */
+function useSidePanel() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const html = document.documentElement;
+    const check = () => setOn(html.dataset.sidePanel === "1");
+    check();
+    const watch = new MutationObserver(check);
+    watch.observe(html, { attributes: true, attributeFilter: ["data-side-panel"] });
+    return () => watch.disconnect();
+  }, []);
+  return on;
 }
 
 /** Whether you're typing in a text box (or any field you can type in) right now. */
