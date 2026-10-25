@@ -199,12 +199,19 @@ function Tile({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* Creator Desk's logo (its app icon: three lines on blue), as a card thumbnail. */
+/* Creator Desk's logo - "C" in navy and "D" in blue on a blue desk - as a card thumbnail. */
 function CreatorDeskLogo() {
   return (
-    <svg viewBox="0 0 64 64" className="size-16 shrink-0" aria-hidden="true">
-      <rect width="64" height="64" rx="16" fill="#2563eb" />
-      <path d="M18 22h28M18 32h20M18 42h28" stroke="#fff" strokeWidth="6" strokeLinecap="round" />
+    <svg viewBox="0 0 100 100" className="size-16 shrink-0" role="img" aria-label="Creator Desk logo">
+      <rect width="100" height="100" rx="18" fill="#f7f9fc" />
+      {/* C: a thick ring, open on the right */}
+      <path d="M48.4 31.9A18 18 0 1 0 48.4 56.1L42.1 50.4A9.5 9.5 0 1 1 42.1 37.6Z" fill="#0f172a" />
+      {/* D: an upright and a half-round, with its counter cut out */}
+      <path d="M52 26H64A18 18 0 0 1 64 62H52ZM61.5 35.5V52.5H64A8.5 8.5 0 0 0 64 35.5Z" fill="#2563eb" fillRule="evenodd" />
+      {/* The desk */}
+      <rect x="17" y="67" width="66" height="6" rx="3" fill="#2563eb" />
+      <rect x="22" y="69" width="6" height="12" rx="3" fill="#2563eb" />
+      <rect x="72" y="69" width="6" height="12" rx="3" fill="#2563eb" />
     </svg>
   );
 }
