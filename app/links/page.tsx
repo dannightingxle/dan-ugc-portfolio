@@ -6,7 +6,7 @@ import { OFFER } from "../mentorship/offer";
 
 export const metadata: Metadata = {
   title: "Dan Nightingale — Links",
-  description: "UGC creator. My portfolio, the free A to Z of UGC, the Anyone Can Create mentorship and socials.",
+  description: "UGC creator. My portfolio, the free A to Z of UGC, Creator Desk, the Anyone Can Create mentorship and socials.",
   openGraph: {
     title: "Dan Nightingale — Links",
     description: "My portfolio, the free A to Z of UGC, the Anyone Can Create mentorship and socials.",
@@ -52,6 +52,13 @@ const LINKS: LinkItem[] = [
         </span>
       </Tile>
     ),
+  },
+  {
+    label: "Creator Desk",
+    note: "The app I built to run my UGC business: brand deals, what you're owed, shoot sheets and edits, all in one place. Opening soon.",
+    href: "/creatordesk",
+    tag: "Join the waitlist",
+    thumb: <CreatorDeskLogo />,
   },
   {
     label: "Anyone Can Create Mentorship",
@@ -189,6 +196,16 @@ function Tile({ children }: { children: React.ReactNode }) {
     >
       {children}
     </span>
+  );
+}
+
+/* Creator Desk's logo (its app icon: three lines on blue), as a card thumbnail. */
+function CreatorDeskLogo() {
+  return (
+    <svg viewBox="0 0 64 64" className="size-16 shrink-0" aria-hidden="true">
+      <rect width="64" height="64" rx="16" fill="#2563eb" />
+      <path d="M18 22h28M18 32h20M18 42h28" stroke="#fff" strokeWidth="6" strokeLinecap="round" />
+    </svg>
   );
 }
 
