@@ -55,7 +55,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.11";
+const VERSION = "0.3.12";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -1435,7 +1435,7 @@ function promptFor(edit, broll = "") {
     `- Make a new CapCut draft (never overwrite one) named "${name}", adding v2, v3 if that name is taken.`,
     "- If CapCut being open stops the draft saving, say so and stop. I'll close it and reply.",
     ...RESOURCEFUL,
-    REMEMBER,
+    rememberLine(edit),
     "- If you need something from me, ask one clear question and stop.",
     "- Finish with a short summary of what you did and, on its own line, DRAFT: <the draft name>.",
   ].join("\n");
@@ -1472,7 +1472,7 @@ function styleLines(edit) {
   return [
     "",
     `My edit style for this video - ${style.name}${style.summary ? `: ${style.summary}` : ""}`,
-    "(This is the saved copy of how I edit these, so every Mac edits them the same way. My CLAUDE.md files and skills on this Mac still apply alongside it.)",
+    "(This is the saved copy of how I edit these, kept in Creator Desk so every Mac edits them the same way. My CLAUDE.md files and skills on this Mac still apply alongside it, but where they disagree with this style, this style wins - it's the up-to-date one.)",
     ...(style.rules.length ? ["Style rules:", ...style.rules.map((r) => `- ${r}`)] : []),
   ];
 }
@@ -1489,9 +1489,18 @@ function notesLines(edit) {
   return ["", `My editing notes - follow these on every edit unless the card says otherwise (where two clash, the later one wins)${overStyle}:`, ...edit.notes.map((n) => `- ${n}`)];
 }
 
-// Lasting feedback gets saved to the editing notes, the way you'd tell Claude Code to remember something.
-const REMEMBER =
-  "- When I give you feedback on how you edit in general, not just a change to this one video (how captions should look, pacing, text style), apply it, then add a line `NOTE: <the rule, in one line>` so it's saved to my editing notes for this job, or `NOTE FOR ALL: <the rule>` if it's for all my edits. Only for lasting feedback.";
+// Lasting feedback is saved in Creator Desk (the edit style, or the editing notes), never only in files on this Mac,
+// so every Mac follows it - the way you'd tell Claude Code to remember something.
+function rememberLine(edit) {
+  const style = styleOf(edit);
+  return [
+    "- When I give you feedback on how you edit in general, not just a change to this one video (fonts, how captions look, pacing, text style), apply it, then save it with one line per rule:",
+    ...(style ? [`  - \`NOTE FOR STYLE: <the rule, in one line>\` for a change to my "${style.name}" edit style (a font, caption look, colours, layout) - it updates that style for every video in it, on every Mac.`] : []),
+    "  - `NOTE: <the rule, in one line>` for something just for this job's videos.",
+    "  - `NOTE FOR ALL: <the rule, in one line>` for something for all my edits.",
+    "  Only for lasting feedback. These lines are how it's remembered: don't also write it into CLAUDE.md, memory or skill files on this Mac - those stay on this one Mac.",
+  ].join("\n");
+}
 
 /** Where Claude Code starts for a job: its own folder if it's on this Mac, else the usual one. */
 function whereFor(folder) {
@@ -1565,7 +1574,7 @@ function wholeSheetPrompt(edit, clips) {
     `- Make a new CapCut draft for each video (never overwrite one), named "${prefix}V1", "${prefix}V2" and so on, adding v2, v3 if a name is taken.`,
     "- If CapCut being open stops a draft saving, say so and stop. I'll close it and reply.",
     ...RESOURCEFUL,
-    REMEMBER,
+    rememberLine(edit),
     "- Finish with a short summary, then one line per draft you made: DRAFT: <the draft name>.",
   ].join("\n");
 }
@@ -1666,8 +1675,11 @@ function startClaude(editId, prompt, sessionId, cwd = cwdFor.get(editId) || cfg.
     // "DRAFT: none (not created yet)" isn't a draft.
     const drafts = [...finalText.matchAll(/^\s*DRAFT:\s*(.+?)\s*$/gm)].map((m) => m[1]).filter((d) => !/^(none|n\/a|no draft|not (yet )?created|-)\b/i.test(d.replace(/[*_`"']/g, "")));
     const draft = drafts.join(", ");
-    // Feedback Claude was asked to remember, for this job or all edits.
-    const notes = [...finalText.matchAll(/^\s*NOTE( FOR ALL)?:\s*(.+?)\s*$/gm)].map((m) => ({ text: m[2].replace(/^[`"']|[`"']$/g, "").slice(0, 500), all: Boolean(m[1]) })).slice(0, 10);
+    // Feedback Claude was asked to remember: for this job, all edits, or the edit style.
+    const notes = [...finalText.matchAll(/^\s*[-*]?\s*`?NOTE( FOR ALL| FOR STYLE)?:\s*(.+?)\s*$/gm)]
+      .map((m) => ({ text: m[2].replace(/^[`"']+|[`"']+$/g, "").slice(0, 500), all: m[1] === " FOR ALL", style: m[1] === " FOR STYLE" }))
+      .filter((n) => n.text)
+      .slice(0, 10);
     let status;
     if (cancelled.has(editId)) {
       cancelled.delete(editId);

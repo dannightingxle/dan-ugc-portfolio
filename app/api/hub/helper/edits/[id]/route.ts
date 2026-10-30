@@ -1,8 +1,10 @@
+import { after } from "next/server";
 import { z } from "zod";
 import { addEvents, addNotes, claimEdit, getEdit, markDelivered, updateEdit } from "../../../../../hub/_lib/edits/data";
 import { helperApi } from "../../../../../hub/_lib/edits/helper-auth";
 import { ALL_EDITS, EDIT_STATUSES } from "../../../../../hub/_lib/edits/types";
 import { MAX_PICKED } from "../../../../../hub/_lib/edits/request";
+import { addStyleRules } from "../../../../../hub/_lib/edits/styles";
 
 /* The helper's updates on one edit: claim it, report progress and Claude's
    messages, say which replies it passed on, hand back picked clips, and pass
@@ -17,8 +19,8 @@ const Body = z.object({
   pickDone: z.boolean().optional(),
   events: z.array(z.object({ kind: z.enum(["status", "assistant", "tool", "error", "done"]), text: z.string().max(20_000) })).max(200).default([]),
   delivered: z.array(z.number().int()).max(200).default([]),
-  /** Feedback on how to edit that Claude was asked to remember (NOTE: lines). */
-  notes: z.array(z.object({ text: z.string().trim().min(1).max(500), all: z.boolean().default(false) })).max(10).default([]),
+  /** Feedback on how to edit that Claude was asked to remember: for this job (NOTE:), all edits (NOTE FOR ALL:) or the job's edit style (NOTE FOR STYLE:). */
+  notes: z.array(z.object({ text: z.string().trim().min(1).max(500), all: z.boolean().default(false), style: z.boolean().default(false) })).max(10).default([]),
 });
 
 export async function POST(request: Request, ctx: RouteContext<"/api/hub/helper/edits/[id]">) {
@@ -54,8 +56,27 @@ export async function POST(request: Request, ctx: RouteContext<"/api/hub/helper/
     await markDelivered(auth, b.delivered);
     // Remembered for next time: for this job, or for every edit.
     for (const all of [false, true]) {
-      const added = await addNotes(auth.userId, all ? ALL_EDITS : edit.project_id, b.notes.filter((n) => n.all === all).map((n) => n.text), "edit");
+      const added = await addNotes(auth.userId, all ? ALL_EDITS : edit.project_id, b.notes.filter((n) => !n.style && n.all === all).map((n) => n.text), "edit");
       if (added.length) await addEvents(id, [{ kind: "status", text: `Saved to your editing notes for ${all ? "all your edits" : "this job"}: ${added.map((n) => n.text).join(" · ")}` }]);
+    }
+    // Changes to the job's edit style: Claude folds them into the style, so every Mac and job in it follows them (after answering the Mac).
+    const forStyle = b.notes.filter((n) => n.style).map((n) => n.text);
+    if (forStyle.length) {
+      after(async () => {
+        try {
+          const saved = await addStyleRules(auth.userId, edit.project_id, forStyle);
+          if (saved) {
+            await addEvents(id, [{ kind: "status", text: `Saved to your "${saved.name}" edit style, for every Mac: ${saved.added.join(" · ")}` }]);
+          } else {
+            // No style for this job yet: kept as a note for the job instead.
+            const added = await addNotes(auth.userId, edit.project_id, forStyle, "edit");
+            if (added.length) await addEvents(id, [{ kind: "status", text: `Saved to your editing notes for this job (it has no edit style yet): ${added.map((n) => n.text).join(" · ")}` }]);
+          }
+        } catch (e) {
+          console.error("Creator Desk: couldn't save feedback to the edit style", e);
+          await addNotes(auth.userId, edit.project_id, forStyle, "edit").catch(() => {});
+        }
+      });
     }
     return { ok: true };
   });

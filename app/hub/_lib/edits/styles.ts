@@ -172,6 +172,66 @@ export async function scopeStyle(userId: string, scope: string, pickedId: string
   return { style: style && { id: style.id, name: style.name, kind: style.kind }, auto, usual: defaultKind({ personal: scope === BRAND_ID, tech }), styles: styles.map((s) => ({ id: s.id, name: s.name, kind: s.kind })) };
 }
 
+// ---------------------------------------------------------------- feedback from an edit
+
+const FOLD_SYSTEM = `You keep a video creator's edit style up to date. The style is a list of editing rules, one line each, starting with what it's about ("Captions:", "Text:", "Fonts:", "B-roll:", "Cuts:", "Music:"…).
+
+While editing a video, the creator just gave feedback that should change the style from now on. Return the complete updated list of rules:
+- Add each new rule, in the same one-line form.
+- Where a new rule changes or contradicts an existing one (a different font, size, colour, position or timing), rewrite or replace that existing rule so the list never says two different things.
+- Keep every other rule exactly as it is, word for word, in the same order.
+Never drop a rule the feedback doesn't touch, and never invent one.`;
+
+const Folded = z.object({ rules: z.array(z.string()) });
+
+/** The style a job (or the personal brand) uses: the one picked for it, or the first of its usual kind. */
+async function styleOfScope(userId: string, scope: string, styles: Stored[]) {
+  let tech = false;
+  if (scope !== BRAND_ID) {
+    const { data } = await adminClient().from("hub_projects").select("data").eq("user_id", userId).eq("id", scope).maybeSingle<{ data: { techStage?: string } }>();
+    tech = Boolean(data?.data?.techStage);
+  }
+  const cfgs = await cfgRows(userId);
+  return styleFor(styles, cfgs.find((c) => c.scope === scope)?.styleId, { personal: scope === BRAND_ID, tech }).style;
+}
+
+/** Feedback from an edit for its style (NOTE FOR STYLE: lines): Claude folds it into that style's rules, here in the cloud,
+    so every Mac and every job in that style follows it from the next edit on. Changed here, the style is yours: reading a Mac
+    again won't put an old rule back. Null when the job has no style to change. */
+export async function addStyleRules(userId: string, scope: string, texts: string[]): Promise<{ name: string; added: string[] } | null> {
+  const added = cleanRules(texts);
+  if (!added.length) return null;
+  const style = await styleOfScope(userId, scope, await listStyles(userId));
+  if (!style) return null;
+  let rules: string[];
+  try {
+    const folded = await ask({
+      system: FOLD_SYSTEM,
+      content: [
+        {
+          type: "text",
+          text: [`Style: ${style.name}`, `Its rules now:\n${style.rules.map((r) => `- ${r}`).join("\n") || "(none yet)"}`, `The creator's new feedback for this style:\n${added.map((r) => `- ${r}`).join("\n")}`].join("\n\n"),
+        },
+      ],
+      schema: Folded,
+      effort: "low",
+    });
+    rules = cleanRules(folded.rules);
+    if (!rules.length) throw new Error("no rules came back");
+  } catch (e) {
+    // Claude couldn't tidy it in: the new rules go on the end (where two clash, the later one wins).
+    console.warn("Creator Desk: couldn't fold feedback into a style, adding it as is", e);
+    rules = cleanRules([...style.rules.slice(0, MAX_RULES - added.length), ...added]);
+  }
+  // Saved on the latest list, in case anything else changed meanwhile.
+  const latest = await listStyles(userId);
+  const i = latest.findIndex((s) => s.id === style.id);
+  if (i < 0) return null;
+  latest[i] = { ...latest[i], rules, source: "you", updatedAt: new Date().toISOString() };
+  await saveStyles(userId, latest);
+  return { name: latest[i].name, added };
+}
+
 // ---------------------------------------------------------------- asking your Mac
 
 type ReqRow = { project_id: string; data: Omit<StyleRequest, "id"> };
