@@ -10,6 +10,7 @@ import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from 
 import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
 import { socialVideoKind, videoBlocks, watchVideos } from "./videos";
 import { readOnMac } from "../edits/mac-reads";
+import { type Unread, type WebPages, cleanLink, readWebPages } from "./web-pages";
 import type { Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
 import { canUse } from "../features";
@@ -49,15 +50,55 @@ function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockPara
   });
 }
 
-/** Other links (a brand's portal, a page behind a login): read in your own browser through your Mac's helper when it's running, else left for Claude's web fetch. */
+/** Other links: ordinary public pages are read here; ones that need a login (or won't load here) are read in your own
+    browser through your Mac's helper when it's running; anything left is for Claude's web fetch, with why it wasn't read. */
 async function readOtherLinks(userId: string, text: string, linked: LinkedPages, progress: Progress) {
-  const rest = otherLinks(text, linked.pages);
-  const forMac = rest.filter((u) => !socialVideoKind(u));
-  if (forMac.length) progress("Checking for pages to read on your Mac");
-  const mac = await readOnMac(userId, forMac).catch(() => null);
-  if (!mac) return { rest, failed: [] as string[] };
-  linked.pages.push(...mac.pages);
-  return { rest: rest.filter((u) => !mac.read.has(u)), failed: mac.failed };
+  const rest = otherLinks(text, linked.pages).map(cleanLink);
+  const web = await readWebPages(rest.filter((u) => !socialVideoKind(u)));
+  linked.pages.push(...web.pages);
+  const read = new Set(web.pages.map((p) => p.url));
+  let unread = web.unread;
+  let failed: string[] = [];
+  if (unread.length) progress("Checking for pages to read on your Mac");
+  const mac = await readOnMac(userId, unread.map((u) => u.url)).catch(() => null);
+  if (mac) {
+    linked.pages.push(...mac.pages);
+    mac.read.forEach((u) => read.add(u));
+    failed = mac.failed;
+    // The Mac's own reason is shown for the ones it couldn't read either.
+    unread = unread.filter((u) => !mac.read.has(u.url) && !mac.failed.some((f) => f.startsWith(`${u.url} `)));
+  }
+  return { rest: [...new Set(rest)].filter((u) => !read.has(u)), failed, unread };
+}
+
+/** For Claude: links Creator Desk couldn't read itself, and why, to try with web fetch. */
+function unreadLine(unread: Unread[], where: string) {
+  return (
+    unread.length > 0 &&
+    `Links ${where} that Creator Desk couldn't read for you (open them with web fetch if you need them; if you can't either, list them in couldntOpen with this reason):\n${unread.map((u) => `- ${u.url} - ${u.why}`).join("\n")}`
+  );
+}
+
+// Pages linked in the job's notes: how many are read for each sheet, and how much of each.
+const NOTES_PAGES = 4;
+const NOTES_PAGE_CHARS = 15_000;
+
+/** Web pages linked in the job's brief and app notes (the app's site, case studies), read so Claude has them as text. */
+async function readNotesPages(ws: Workspace, already: string[], progress: Progress): Promise<WebPages> {
+  const links = [...new Set(otherLinks([ws.files.brief, ws.files.appNotes].join("\n"), []).map(cleanLink))]
+    .filter((u) => !socialVideoKind(u) && !already.includes(u))
+    .slice(0, NOTES_PAGES);
+  if (!links.length) return { pages: [], unread: [] };
+  progress("Reading the pages in the job's notes");
+  return readWebPages(links, NOTES_PAGE_CHARS);
+}
+
+/** The job's notes' pages for Claude, as read just now. */
+function notesText(notes: WebPages) {
+  return [
+    notes.pages.length > 0 && `Pages linked in the job's notes, read for you just now (no need to open them again):\n\n${linkedPagesText(notes.pages)}`,
+    unreadLine(notes.unread, "in the job's notes"),
+  ];
 }
 
 const today = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -69,7 +110,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
   // Public Notion pages and Google Docs are read here (Claude's web fetch only sees their loading screen).
   progress("Reading the linked pages");
   const linked = await readLinkedPages(input.material);
-  const { rest, failed: macFailed } = await readOtherLinks(user.id, input.material, linked, progress);
+  const { rest, failed: macFailed, unread } = await readOtherLinks(user.id, input.material, linked, progress);
   progress("Watching the reference videos");
   // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at.
   const watched = await watchVideos(input.material, linked.pages);
@@ -89,6 +130,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
           job.notes && `My notes from the tracker:\n${job.notes}`,
           `How I film: ${input.filming || "solo, phone on a tripod, at home and around town, second phone for app shots"}.`,
           `My voice: ${input.voice || "casual, direct, a bit dry"}.`,
+          unreadLine(unread, "in the material"),
         ]
           .filter(Boolean)
           .join("\n\n"),
@@ -116,11 +158,11 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
 async function readBrief(userId: string, text: string, alsoWatch: string, progress: Progress) {
   progress("Reading the linked pages");
   const linked = await readLinkedPages(text);
-  const { rest, failed: macFailed } = await readOtherLinks(userId, text, linked, progress);
+  const { rest, failed: macFailed, unread } = await readOtherLinks(userId, text, linked, progress);
   // Reference videos in the brief (or what's trending), as frames Claude can look at.
   progress("Watching the reference videos");
   const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages);
-  return { linked, rest, watched, failed: [...linked.failed, ...macFailed, ...watched.failed] };
+  return { linked, rest, unread, watched, failed: [...linked.failed, ...macFailed, ...watched.failed] };
 }
 
 /** Claude writes the sheet: in the job's own template (from its Claude Project) when it has one, else the Creator Desk sheet. */
@@ -167,6 +209,7 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
   // Public Notion pages and Google Docs in it are read here and sent with it.
   const followUps = (input.followUps ?? []).join("\n\n");
   const read = await readBrief(user.id, [input.weekBrief, followUps].join("\n"), input.trending, progress);
+  const notes = await readNotesPages(ws, [...read.linked.pages.map((p) => p.url), ...read.rest], progress);
   const weekBrief = [input.weekBrief.trim(), linkedPagesText(read.linked.pages)].filter(Boolean).join("\n\n");
 
   const ask_ = weekBrief
@@ -183,6 +226,8 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
         ask_,
         // Web fetch opens links that are in the request itself.
         read.rest.length > 0 && `Links in this week's brief: ${read.rest.join(" ")}`,
+        unreadLine(read.unread, "in this week's brief"),
+        ...notesText(notes),
         `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
         input.lastWeek && `How last week went: ${input.lastWeek}`,
         input.trending && `Doing well in the niche right now - adapt these for the app:\n${input.trending}`,
@@ -194,7 +239,7 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
     },
   ];
   const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  const made = await writeSheet(job.brand, ws, content, read.rest.length > 0, date, progress);
+  const made = await writeSheet(job.brand, ws, content, read.rest.length + notes.unread.length > 0, date, progress);
 
   // This week's brief is kept with the sheet it was for.
   progress("Saving the sheet and its edit cards");
@@ -211,6 +256,7 @@ export async function reviseShootSheet(user: HubUser, projectId: string, chat: S
   const job = await projectBasics(user.id, projectId);
   const ws = await getWorkspace(user.id, projectId);
   const read = await readBrief(user.id, reply, "", progress);
+  const notes = await readNotesPages(ws, [...read.linked.pages.map((p) => p.url), ...read.rest], progress);
   const { weekBrief, custom, ...data } = row.data as CustomSheet & { weekBrief?: string };
   const current = custom ? { header: custom.header, ...data } : data;
   const conversation = chat.messages.map((m) => `${m.role === "you" ? "Me" : "You"}: ${m.text}`).join("\n\n");
@@ -226,6 +272,8 @@ export async function reviseShootSheet(user: HubUser, projectId: string, chat: S
         `My reply:\n<reply>\n${reply}\n</reply>`,
         read.linked.pages.length > 0 && `Pages linked in my reply:\n${linkedPagesText(read.linked.pages)}`,
         read.rest.length > 0 && `Links in my reply: ${read.rest.join(" ")}`,
+        unreadLine(read.unread, "in my reply"),
+        ...notesText(notes),
         `Today is ${today()}. Make the changes I'm asking for and give me the whole sheet back, with everything I haven't asked to change kept as it is. If I've just added context, use it where it fits. oneLine: one sentence on what you changed. scriptBankEntry: the hooks for the sheet as it now stands.`,
       ]
         .filter(Boolean)
@@ -234,7 +282,7 @@ export async function reviseShootSheet(user: HubUser, projectId: string, chat: S
   ];
   // The sheet keeps the date it was made for.
   const date = row.title.split(" · ").at(-1) ?? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  const made = await writeSheet(job.brand, ws, content, read.rest.length > 0, date, progress);
+  const made = await writeSheet(job.brand, ws, content, read.rest.length + notes.unread.length > 0, date, progress);
 
   progress("Saving the sheet and its edit cards");
   await updateSheet(user.id, row.id, made.title, weekBrief ? { ...made.sheet, weekBrief } : made.sheet);
