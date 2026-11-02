@@ -33,7 +33,8 @@ export default async function HubLayout({ children }: { children: React.ReactNod
           <TasksProvider>
             <HubNav />
             <JobChangeNote />
-            <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 sm:px-6 md:pb-24">
+            {/* The bottom bar (on a phone) and any pop-ups sit over the foot of the page: leave room for both. */}
+            <main className="mx-auto w-full max-w-6xl px-4 pb-[calc(7rem+var(--tray-h,0px))] pt-6 sm:px-6 md:pb-[calc(6rem+var(--tray-h,0px))]">
               <AccessGate>{children}</AccessGate>
             </main>
           </TasksProvider>
