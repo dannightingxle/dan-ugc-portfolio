@@ -11,6 +11,7 @@ import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPa
 import { socialVideoKind, videoBlocks, watchVideos } from "./videos";
 import { readOnMac } from "../edits/mac-reads";
 import { applySetup, suggestedHandles } from "./new-job";
+import { uploadedLinks } from "./pdf-links";
 import { type Unread, type WebPages, cleanLink, readWebPages } from "./web-pages";
 import type { Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
@@ -34,7 +35,7 @@ async function projectBasics(userId: string, projectId: string) {
 }
 
 /** Everything Claude knows about the job: like a Claude Project's instructions + files. */
-function workspaceContext(name: string, ws: Workspace) {
+export function workspaceContext(name: string, ws: Workspace) {
   const parts = [`# Job: ${name}`, "## Project instructions", ws.instructions || "(not set up yet)"];
   for (const f of FILES) parts.push(`## File: ${f.label.toLowerCase().replace(" ", "-")}`, ws.files[f.key].trim() || "(empty)");
   if (ws.account.handles) parts.push("## Accounts", ws.account.handles);
@@ -55,10 +56,16 @@ function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockPara
     browser through your Mac's helper when it's running; anything left is for Claude's web fetch, with why it wasn't read. */
 async function readOtherLinks(userId: string, text: string, linked: LinkedPages, progress: Progress) {
   const rest = otherLinks(text, linked.pages).map(cleanLink);
-  const web = await readWebPages(rest.filter((u) => !socialVideoKind(u)));
+  // Web pages the pages read link to (the app's site, its store pages) are read too, after what was pasted -
+  // only for what they add: one that won't open is left out rather than reported.
+  const pasted = new Set(rest);
+  const inPages = otherLinks(linked.pages.map((p) => p.text).join("\n"), linked.pages)
+    .map(cleanLink)
+    .filter((u) => !pasted.has(u) && !socialVideoKind(u));
+  const web = await readWebPages([...new Set([...rest.filter((u) => !socialVideoKind(u)), ...inPages])]);
   linked.pages.push(...web.pages);
   const read = new Set(web.pages.map((p) => p.url));
-  let unread = web.unread;
+  let unread = web.unread.filter((u) => pasted.has(u.url));
   let failed: string[] = [];
   if (unread.length) progress("Checking for pages to read on your Mac");
   const mac = await readOnMac(userId, unread.map((u) => u.url)).catch(() => null);
@@ -110,8 +117,10 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
   const job = await projectBasics(user.id, projectId);
   // Public Notion pages and Google Docs are read here (Claude's web fetch only sees their loading screen).
   progress("Reading the linked pages");
-  const linked = await readLinkedPages(input.material);
-  const { rest, failed: macFailed, unread } = await readOtherLinks(user.id, input.material, linked, progress);
+  // Links in uploaded PDFs (a Notion page saved as a PDF links every sub-page) are read like pasted ones.
+  const links = [input.material, uploadedLinks(input.uploads)].filter(Boolean).join("\n");
+  const linked = await readLinkedPages(links);
+  const { rest, failed: macFailed, unread } = await readOtherLinks(user.id, links, linked, progress);
   progress("Watching the reference videos");
   // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at.
   const watched = await watchVideos(input.material, linked.pages);
@@ -215,7 +224,7 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
   // This week's brief from the brand is for this sheet only: the project brief (Files tab) never changes here.
   // Public Notion pages and Google Docs in it are read here and sent with it.
   const followUps = (input.followUps ?? []).join("\n\n");
-  const read = await readBrief(user.id, [input.weekBrief, followUps].join("\n"), input.trending, progress);
+  const read = await readBrief(user.id, [input.weekBrief, followUps, uploadedLinks(input.uploads)].join("\n"), input.trending, progress);
   const notes = await readNotesPages(ws, [...read.linked.pages.map((p) => p.url), ...read.rest], progress);
   const weekBrief = [input.weekBrief.trim(), linkedPagesText(read.linked.pages)].filter(Boolean).join("\n\n");
 

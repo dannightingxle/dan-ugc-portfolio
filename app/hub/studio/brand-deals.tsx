@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { STAGES, isArchived, useDataReady, useProjects, type Project } from "../_lib/store";
 import { shortDate } from "../_lib/ui";
+import { JobMenu } from "./job-menu";
 
 /* Every live brand deal (a job that isn't tech UGC), soonest due first, each
    opening straight into its Studio - to add its files and make its edits. */
@@ -39,14 +40,17 @@ export function BrandDeals() {
           {deals.map((p) => {
             const late = Boolean(p.due && p.due < today && p.stage !== "Delivered");
             return (
-              <Link key={p.id} href={`/hub/projects/${p.id}/studio`} className="min-w-0 rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong">
-                <div className="flex items-center justify-between gap-2">
+              <div key={p.id} className="relative min-w-0">
+              <Link href={`/hub/projects/${p.id}/studio`} className="block h-full min-w-0 rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong">
+                <div className="flex items-center justify-between gap-2 pr-7">
                   <p className="truncate font-medium">{p.brand || "Untitled"}</p>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${p.stage === "Filming" || p.stage === "Scripting" ? "bg-accent-soft font-medium text-accent" : "bg-text/5 text-text-dim"}`}>{p.stage}</span>
                 </div>
                 {p.title && <p className="truncate text-sm text-text-muted">{p.title}</p>}
                 {p.due && <p className={`mt-2 text-xs ${late ? "font-medium text-warn" : "text-text-dim"}`}>{late ? `Was due ${shortDate(p.due)}` : `Due ${shortDate(p.due)}`}</p>}
               </Link>
+              <JobMenu project={p} />
+              </div>
             );
           })}
         </div>

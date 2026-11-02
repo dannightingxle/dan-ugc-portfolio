@@ -61,8 +61,8 @@ async function fillTracker(userId: string, projectId: string, job: IntakeResult[
 }
 
 /** The setup steps as one-off to-dos for the job, in order, with a date where the material gives a timeline. Ones already there aren't added twice. */
-async function addSetupTodos(userId: string, projectId: string, steps: IntakeResult["setupSteps"]) {
-  if (!steps.length) return 0;
+export async function addSetupTodos(userId: string, projectId: string, steps: IntakeResult["setupSteps"]): Promise<Todo[]> {
+  if (!steps.length) return [];
   const todos = await getTodos(userId);
   const have = new Set(todos.filter((t) => t.projectId === projectId).map((t) => t.text.trim().toLowerCase()));
   const start = Date.now();
@@ -81,8 +81,9 @@ async function addSetupTodos(userId: string, projectId: string, steps: IntakeRes
     const createdAt = new Date(start + i).toISOString();
     added.push({ id: randomUUID(), text, projectId, repeat: "", due, count: null, left: null, submittedAt: "", doneAt: "", prevDue: "", createdAt });
   }
-  if (added.length) await saveTodos(userId, [...todos, ...added.slice(0, 30)]);
-  return added.length;
+  const kept = added.slice(0, 30);
+  if (kept.length) await saveTodos(userId, [...todos, ...kept]);
+  return kept;
 }
 
 /** After setup: the tracker's empty fields, and the setup steps as to-dos (with to-dos switched on). */

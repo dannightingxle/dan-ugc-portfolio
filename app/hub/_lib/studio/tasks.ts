@@ -10,7 +10,7 @@ import { StudioError, studioErrorMessage } from "./claude";
    latest run is one row in hub_workspaces under "task:<project>:<kind>" (a
    project_id no real job can have). */
 
-export type TaskKind = "intake" | "week" | "review";
+export type TaskKind = "intake" | "week" | "review" | "assist";
 export type TaskStatus = "running" | "done" | "failed";
 export type Task = {
   id: string;
@@ -37,7 +37,7 @@ const STALE_MS = (JOB_SECONDS + 30) * 1000;
 // A running job says it's alive every 30s; silence for this long means the server running it stopped.
 const BEAT_MS = 30_000;
 const SILENT_MS = 100_000;
-const KINDS: TaskKind[] = ["intake", "week", "review"];
+const KINDS: TaskKind[] = ["intake", "week", "review", "assist"];
 const rowId = (projectId: string, kind: TaskKind) => `task:${projectId}:${kind}`;
 
 function fromRow(projectId: string, data: Partial<Task> | null): Task | null {

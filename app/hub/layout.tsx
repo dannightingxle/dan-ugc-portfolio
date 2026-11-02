@@ -11,6 +11,7 @@ import { featuresFor } from "./_lib/features";
 import { Analytics } from "@vercel/analytics/next";
 import { Popups } from "./_lib/popups";
 import { TasksProvider } from "./_lib/studio/tasks-client";
+import { JobChangeNote } from "./studio/job-menu";
 import "./hub.css";
 
 /* Font used by hub.css. */
@@ -31,6 +32,7 @@ export default async function HubLayout({ children }: { children: React.ReactNod
         <Popups>
           <TasksProvider>
             <HubNav />
+            <JobChangeNote />
             <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 sm:px-6 md:pb-24">
               <AccessGate>{children}</AccessGate>
             </main>
