@@ -16,7 +16,8 @@ import type { LinkedPage } from "./linked-pages";
    Instagram links in the brief (downloaded through Apify). */
 
 export type VideoFrame = { at: number; data: string };
-export type WatchedVideo = { label: string; url: string; seconds: number; caption: string; transcript: string; frames: VideoFrame[] };
+/** A reference video: watched as frames, or (past the ones watched, or when its file won't download) known by its caption, transcript and views. */
+export type WatchedVideo = { label: string; url: string; seconds: number; caption: string; transcript: string; frames: VideoFrame[]; views?: number };
 export type Watched = { videos: WatchedVideo[]; failed: string[] };
 
 const MAX_VIDEOS = 4;
@@ -28,9 +29,11 @@ const FRAME_SIZE = 768;
 const HEADERS = { "user-agent": "Mozilla/5.0 (compatible; CreatorDesk/1.0; +https://www.dannightingxle.com)" };
 const APIFY_BASE = process.env.APIFY_API_BASE || "https://api.apify.com";
 
-type Source = { label: string; url: string; download?: string; caption?: string; transcript?: string; subtitles?: string };
+type Source = { label: string; url: string; download?: string; caption?: string; transcript?: string; subtitles?: string; seconds?: number; views?: number };
 
 // ---------------------------------------------------------------- finding them
+
+const LINK = /https?:\/\/[^\s<>"'`)\]]+/gi;
 
 /** A TikTok or Instagram video link (not a profile, search or hashtag page). */
 export function socialVideoKind(raw: string): "tiktok" | "instagram" | null {
@@ -47,7 +50,39 @@ export function socialVideoKind(raw: string): "tiktok" | "instagram" | null {
   return null;
 }
 
-const LINK = /https?:\/\/[^\s<>"'`)\]]+/gi;
+// Instagram's own pages, which look like profile links.
+const IG_PAGES = new Set(["p", "reel", "reels", "tv", "explore", "stories", "accounts", "direct", "about", "legal", "developer", "web", "s", "invites", "challenge"]);
+
+/** A TikTok or Instagram profile link ("tiktok.com/@name", "instagram.com/name"): the account it's for. */
+export function socialAccount(raw: string): { platform: "tiktok" | "instagram"; handle: string } | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.replace(/^www\.|^m\./, "");
+  const tt = /^\/@([\w.]+)\/?$/.exec(url.pathname);
+  if (host === "tiktok.com" && tt) return { platform: "tiktok", handle: tt[1].toLowerCase() };
+  const ig = /^\/([\w.]+)\/?$/.exec(url.pathname);
+  if (host === "instagram.com" && ig && !IG_PAGES.has(ig[1].toLowerCase())) return { platform: "instagram", handle: ig[1].toLowerCase() };
+  return null;
+}
+
+/** The TikTok and Instagram accounts linked in the text and pages, each once, in order. */
+export function findAccounts(text: string, pages: LinkedPage[], max: number) {
+  const out: { platform: "tiktok" | "instagram"; handle: string; url: string }[] = [];
+  for (const raw of [text, ...pages.map((p) => p.text)].join("\n").match(LINK) ?? []) {
+    const url = raw.replace(/[.,;:!?]+$/, "");
+    const a = socialAccount(url);
+    if (a && !out.some((o) => o.platform === a.platform && o.handle === a.handle)) out.push({ ...a, url });
+  }
+  return out.slice(0, max);
+}
+
+/** Links Claude's web fetch can't do anything with: TikTok and Instagram videos and profiles (they need the app or a login). Creator Desk looks those up itself. */
+export const socialLink = (url: string) => Boolean(socialVideoKind(url) || socialAccount(url));
+
 
 /** The videos to watch: files uploaded into the linked pages first, then TikTok and Instagram links in the order they appear. */
 export function findVideos(text: string, pages: LinkedPage[]) {
@@ -150,23 +185,40 @@ async function download(url: string, file: string) {
 
 // ---------------------------------------------------------------- watching
 
-/** Download each video and turn it into timed frames (and captions where the platform has them). */
-export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_VIDEOS): Promise<Watched> {
+/** Download each video and turn it into timed frames (and captions where the platform has them). Past the first `max`, up to
+    `alsoDescribe` more are looked up for their caption, what's said in them and their views, without frames - so a brief
+    with a long list of references has every one of them read, not just the first few. */
+export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_VIDEOS, alsoDescribe = 0): Promise<Watched> {
   const { uploads, social } = findVideos(text, pages);
   const failed: string[] = [];
   const sources: Source[] = uploads.slice(0, max);
-  const wanted = social.slice(0, max - sources.length);
+  const toWatch = Math.max(0, max - sources.length);
+  const wanted = social.slice(0, toWatch + alsoDescribe);
+  const described: WatchedVideo[] = [];
+  const asDescribed = (s: Source): WatchedVideo => ({ label: s.label, url: s.url, seconds: s.seconds ?? 0, caption: s.caption ?? "", transcript: s.transcript ?? "", frames: [], views: s.views });
   if (wanted.length && !apifyEnabled) {
     failed.push(...wanted.map((s) => `${s.url} - Creator Desk needs Apify connected to download TikTok and Instagram videos.`));
   } else if (wanted.length) {
-    const got = await fetchSocialVideos(wanted);
-    for (const s of wanted) {
+    const got = await fetchSocialVideos(wanted, wanted.length > MAX_VIDEOS ? 180 : 90);
+    const later: Source[] = [];
+    for (const [i, s] of wanted.entries()) {
       const v: SocialVideo | undefined = got.videos[s.url];
-      if (v?.download) sources.push({ label: v.label, url: s.url, download: v.download, caption: v.caption, transcript: v.transcript, subtitles: v.subtitles });
-      else failed.push(`${s.url} - ${got.problem || "couldn't download that video to look at it (private, removed, or not a video)"}. Its link still works on the sheet.`);
+      if (!v) {
+        failed.push(`${s.url} - ${got.problem || "couldn't download that video to look at it (private, removed, or not a video)"}. Its link still works on the sheet.`);
+        continue;
+      }
+      const source: Source = { label: v.label, url: s.url, download: v.download, caption: v.caption, transcript: v.transcript, subtitles: v.subtitles, seconds: v.seconds, views: v.views };
+      if (i < toWatch && v.download) sources.push(source);
+      else later.push(source);
     }
+    // What's said in the ones not watched, from the platform's captions where there are some.
+    described.push(...(await Promise.all(later.map(async (s) => asDescribed({ ...s, transcript: s.transcript || (s.subtitles ? await subtitles(s.subtitles) : "") })))));
   }
-  if (!sources.length) return { videos: [], failed };
+  const skipped = social.slice(toWatch + alsoDescribe);
+  if (alsoDescribe > 0 && skipped.length) {
+    failed.push(...skipped.map((s) => `${s.url} - not looked at: Creator Desk looks at the first ${toWatch + alsoDescribe} reference videos in the material.`));
+  }
+  if (!sources.length) return { videos: described, failed };
 
   const dir = await mkdtemp(path.join(tmpdir(), "cd-video-"));
   const perVideo = Math.min(MAX_FRAMES_PER_VIDEO, Math.floor(MAX_FRAMES / sources.length));
@@ -178,40 +230,65 @@ export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_V
           const [, transcript] = await Promise.all([download(s.download ?? s.url, file), s.transcript || (s.subtitles ? subtitles(s.subtitles) : "")]);
           const got = await framesOf(file, perVideo);
           if (!got) throw new Error("the file isn't a video Creator Desk can read");
-          return { label: s.label, url: s.url, seconds: got.seconds, caption: s.caption ?? "", transcript, frames: got.frames };
+          return { label: s.label, url: s.url, seconds: got.seconds, caption: s.caption ?? "", transcript, frames: got.frames, views: s.views };
         } catch (e) {
+          // A TikTok or Instagram video whose file won't download is still known by its caption and what's said in it.
+          if (s.caption || s.transcript || s.subtitles) {
+            return asDescribed({ ...s, transcript: s.transcript || (s.subtitles ? await subtitles(s.subtitles) : "") });
+          }
           const why = e instanceof Error && !/fetch failed|aborted|timeout/i.test(e.message) ? e.message : "the video didn't download";
           failed.push(`${s.url} - ${why}. Its link still works on the sheet.`);
           return null;
         }
       }),
     );
-    return { videos: watched.filter((v): v is WatchedVideo => Boolean(v)), failed };
+    return { videos: [...watched.filter((v): v is WatchedVideo => Boolean(v)), ...described], failed };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
+const viewsText = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+
 /** The videos for Claude: for each, what it is and what's said, then its frames in order, each with its time. */
 export function videoBlocks(w: Watched) {
-  return w.videos.flatMap((v, n) => [
-    {
-      type: "text" as const,
-      text: [
-        `Reference video ${n + 1}: ${v.label}`,
-        `Link: ${v.url}`,
-        `Length: ${Math.round(v.seconds)}s. Below are ${v.frames.length} frames in order, each after its time${v.frames.length > 1 && v.frames[1].at - v.frames[0].at === 1 ? " (one per second)" : ""}.`,
-        v.caption && `Caption: ${v.caption}`,
-        v.transcript ? `What's said (from the platform's captions):\n${v.transcript}` : "There's no transcript for this one: you can't hear it, so go by the frames and any words on screen.",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    },
-    ...v.frames.flatMap((f) => [
-      { type: "text" as const, text: `Video ${n + 1} at ${timeLabel(f.at)}` },
-      { type: "image" as const, source: { type: "base64" as const, media_type: "image/jpeg" as const, data: f.data } },
+  // Numbered among the ones with frames, so "Video 2 at 0:03" matches "Reference video 2".
+  const withFrames = w.videos.filter((v) => v.frames.length);
+  const without = w.videos.filter((v) => !v.frames.length);
+  const facts = (v: WatchedVideo) => [`Link: ${v.url}`, v.seconds || v.views ? [v.seconds && `Length: ${Math.round(v.seconds)}s`, v.views && `${viewsText(v.views)} views`].filter(Boolean).join(" · ") : ""];
+  return [
+    ...withFrames.flatMap((v, n) => [
+      {
+        type: "text" as const,
+        text: [
+          `Reference video ${n + 1}: ${v.label}`,
+          ...facts(v),
+          `Below are ${v.frames.length} frames in order, each after its time${v.frames.length > 1 && v.frames[1].at - v.frames[0].at === 1 ? " (one per second)" : ""}.`,
+          v.caption && `Caption: ${v.caption}`,
+          v.transcript ? `What's said (from the platform's captions):\n${v.transcript}` : "There's no transcript for this one: you can't hear it, so go by the frames and any words on screen.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+      ...v.frames.flatMap((f) => [
+        { type: "text" as const, text: `Video ${n + 1} at ${timeLabel(f.at)}` },
+        { type: "image" as const, source: { type: "base64" as const, media_type: "image/jpeg" as const, data: f.data } },
+      ]),
     ]),
-  ]);
+    ...(without.length
+      ? [
+          {
+            type: "text" as const,
+            text: [
+              `${withFrames.length ? "More reference videos" : "Reference videos"}, looked up just now (not watched frame by frame - go by the caption, what's said and the views; they were opened fine, so they never go in couldntOpen):`,
+              ...without.map((v) =>
+                [`\n- ${v.label}`, ...facts(v), v.caption && `Caption: ${v.caption}`, v.transcript ? `What's said:\n${v.transcript}` : "No transcript for this one."].filter(Boolean).join("\n  "),
+              ),
+            ].join("\n"),
+          },
+        ]
+      : []),
+  ];
 }
 
 /** The platform's captions for a video, as timed lines; nothing if they won't load. */
