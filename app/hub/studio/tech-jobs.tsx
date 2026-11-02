@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { isArchived, techMonthly, useDataReady, useProjects, type Project } from "../_lib/store";
 import { useMoney } from "../_lib/money";
 import { money, shortDate } from "../_lib/ui";
+import { JobMenu } from "./job-menu";
 
 /* Every live tech UGC job, busiest first, each opening straight into its Studio.
    Shown on the dashboard, the Studio home and the Projects board's Tech jobs view. */
@@ -73,12 +74,12 @@ export function TechJobs({ title, studioLink, boardLink, hideHeading, hideNew }:
           {jobs.map((p) => {
             const chase = Boolean(p.chaseOn && p.chaseOn <= today);
             return (
+              <div key={p.id} className="relative min-w-0">
               <Link
-                key={p.id}
                 href={`/hub/projects/${p.id}/studio`}
-                className={`min-w-0 rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong ${p.techStage === "On hold" ? "opacity-60" : ""}`}
+                className={`block h-full min-w-0 rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong ${p.techStage === "On hold" ? "opacity-60" : ""}`}
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 pr-7">
                   <p className="truncate font-medium">{p.brand || "Untitled"}</p>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${p.techStage === "Active" ? "bg-accent-soft font-medium text-accent" : "bg-text/5 text-text-dim"}`}>
                     {p.techStage}
@@ -99,6 +100,8 @@ export function TechJobs({ title, studioLink, boardLink, hideHeading, hideNew }:
                   </p>
                 )}
               </Link>
+              <JobMenu project={p} />
+              </div>
             );
           })}
         </div>

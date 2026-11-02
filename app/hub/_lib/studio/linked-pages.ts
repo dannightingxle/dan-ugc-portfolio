@@ -12,7 +12,8 @@ export type LinkedPage = { url: string; title: string; text: string; files: Page
 export type PageImage = { name: string; mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; data: string };
 export type LinkedPages = { pages: LinkedPage[]; images: PageImage[]; failed: string[] };
 
-const MAX_LINKS = 5;
+// Notion pages and Google Docs read from what you paste (a setup guide is often a handful of separate pages).
+const MAX_LINKS = 12;
 // A Notion brief with its sub-pages can run long: the setup docs are what the whole job is built from.
 const MAX_CHARS = 120_000;
 // Sub-pages (and Notion pages linked from the page) read with it: how many, and how deep.

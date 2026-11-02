@@ -30,5 +30,19 @@ export function TextBox({ value, onValue, ...props }: Props) {
     }, 400);
     return () => clearInterval(t);
   }, []);
-  return <textarea ref={box} defaultValue={value} onInput={sync} onKeyUp={sync} onBlur={sync} onPaste={() => setTimeout(sync, 0)} {...props} />;
+  // A paste that doesn't land (it happens now and then, with dictation apps especially): put it in ourselves.
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    const text = e.clipboardData.getData("text/plain");
+    const before = el.value;
+    const [start, end] = [el.selectionStart, el.selectionEnd];
+    setTimeout(() => {
+      if (text && el.value === before && el.isConnected) {
+        el.setRangeText(text, start, end, "end");
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      sync();
+    }, 50);
+  };
+  return <textarea ref={box} defaultValue={value} onInput={sync} onKeyUp={sync} onBlur={sync} onPaste={onPaste} {...props} />;
 }

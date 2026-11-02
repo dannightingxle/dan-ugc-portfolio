@@ -198,10 +198,15 @@ export function Studio({ projectId }: { projectId: string }) {
             {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save - check your connection" : "Saved automatically"}
           </span>
         </div>
-        <div>
-          <p className="text-sm font-medium uppercase tracking-widest text-accent">{name}</p>
-          <h1 className="font-serif text-4xl">Studio</h1>
-          {project?.title && <p className="mt-1 text-text-muted">{project.title}</p>}
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-widest text-accent">{name}</p>
+            <h1 className="font-serif text-4xl">Studio</h1>
+            {project?.title && <p className="mt-1 text-text-muted">{project.title}</p>}
+          </div>
+          <Link href={`/hub/projects/${projectId}`} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+            Job details <span className="text-text-dim">· pay, stage, contact</span>
+          </Link>
         </div>
 
         {!claude && (
