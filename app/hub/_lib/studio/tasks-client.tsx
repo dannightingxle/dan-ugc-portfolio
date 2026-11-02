@@ -13,7 +13,7 @@ import { reloadProject } from "../store";
    and anything that needs a look; the Jobs button in the top bar lists the
    lot, so work across several clients can run side by side. */
 
-export type TaskKind = "intake" | "week" | "review";
+export type TaskKind = "intake" | "week" | "review" | "assist";
 export type Task = {
   id: string;
   projectId: string;
@@ -33,10 +33,10 @@ export type Task = {
 /** An edit on your Mac that's going, or waiting on you. */
 export type EditJob = { id: string; projectId: string; brand: string; title: string; videoCode: string; status: "queued" | "editing" | "needs_you" | "ready" | "failed"; updatedAt: string };
 
-export const LABEL: Record<TaskKind, string> = { intake: "Setting up the job", week: "Shoot sheet", review: "Friday review" };
-export const TAB: Record<TaskKind, string> = { intake: "setup", week: "week", review: "review" };
+export const LABEL: Record<TaskKind, string> = { intake: "Setting up the job", week: "Shoot sheet", review: "Friday review", assist: "Claude answered" };
+export const TAB: Record<TaskKind, string> = { intake: "setup", week: "week", review: "review", assist: "setup" };
 /** The job's page for a task (a shoot sheet opens at its chat). */
-export const taskHref = (t: Task) => `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}${t.ref ? `&chat=${t.ref}` : ""}`;
+export const taskHref = (t: Task) => `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}${t.ref ? `&chat=${t.ref}` : ""}${t.kind === "assist" ? "&assist=1" : ""}`;
 const POLL_MS = 4000;
 // With nothing going, a slower check picks up edits started elsewhere.
 const IDLE_POLL_MS = 30_000;
@@ -76,7 +76,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/hub/studio/tasks", { cache: "no-store" });
       if (!res.ok) return;
       const json = (await res.json()) as { tasks: Task[]; edits?: EditJob[] };
-      const done = json.tasks.filter((t) => t.kind === "intake" && t.status === "done" && t.finishedAt).map((t) => `${t.projectId}|${t.finishedAt}`);
+      const done = json.tasks.filter((t) => (t.kind === "intake" || t.kind === "assist") && t.status === "done" && t.finishedAt).map((t) => `${t.projectId}|${t.finishedAt}`);
       if (setupsDone.current) for (const key of done) if (!setupsDone.current.has(key)) void reloadProject(key.split("|")[0]);
       setupsDone.current = new Set([...(setupsDone.current ?? []), ...done]);
       setTasks(json.tasks);

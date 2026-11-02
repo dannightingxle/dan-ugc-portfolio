@@ -35,7 +35,7 @@ async function projectBasics(userId: string, projectId: string) {
 }
 
 /** Everything Claude knows about the job: like a Claude Project's instructions + files. */
-function workspaceContext(name: string, ws: Workspace) {
+export function workspaceContext(name: string, ws: Workspace) {
   const parts = [`# Job: ${name}`, "## Project instructions", ws.instructions || "(not set up yet)"];
   for (const f of FILES) parts.push(`## File: ${f.label.toLowerCase().replace(" ", "-")}`, ws.files[f.key].trim() || "(empty)");
   if (ws.account.handles) parts.push("## Accounts", ws.account.handles);

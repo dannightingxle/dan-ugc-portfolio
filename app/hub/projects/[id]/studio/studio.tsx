@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useProjects } from "../../../_lib/store";
+import { reloadProject, useProjects } from "../../../_lib/store";
+import { JobAssistant } from "./assistant";
 import { Busy, Spinner, shortDate, useBusy } from "../../../_lib/ui";
 import { ACCOUNT_CHECKS, DEFAULT_FILMING, FILES, type Profile, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
 import { Field, Section, input } from "../../fields";
@@ -80,7 +81,10 @@ export function Studio({ projectId }: { projectId: string }) {
 
   // On a wide screen an edit card opens on the right too, like a chat (?edit=<id> in the address, so links open it there).
   // panelEdit is the edit with a tab in the panel; editOpen says whether it's showing, or the shoot sheet chat is.
-  const linkedEdit = useSearchParams().get("edit");
+  const params = useSearchParams();
+  const linkedEdit = params.get("edit");
+  // Ask Claude: open from the header, "Answer these with Claude", or a link (?assist=1, from its pop-up).
+  const [assist, setAssist] = useState<{ open: boolean; prefill?: string }>(() => ({ open: params.get("assist") === "1" }));
   const [panelEdit, setPanelEdit] = useState<string | null>(linkedEdit);
   const [editOpen, setEditOpen] = useState(Boolean(linkedEdit));
   const [seenEdit, setSeenEdit] = useState(linkedEdit);
@@ -172,6 +176,16 @@ export function Studio({ projectId }: { projectId: string }) {
       })
       .catch(() => {});
   }, [finished, flush, api]);
+  // Ask Claude changed the job: its files and lists (your unsaved typing goes first), and its details.
+  const assistChanged = useCallback(() => {
+    void flush()
+      .then(() => call<{ workspace: Workspace }>(api, "GET"))
+      .then((r) => {
+        if (!pending.current) setWs(r.workspace);
+      })
+      .catch(() => {});
+    void reloadProject(projectId);
+  }, [flush, api, projectId]);
 
   if (loadError) return <p className="text-accent">{loadError}</p>;
   if (!ws)
@@ -204,9 +218,22 @@ export function Studio({ projectId }: { projectId: string }) {
             <h1 className="font-serif text-4xl">Studio</h1>
             {project?.title && <p className="mt-1 text-text-muted">{project.title}</p>}
           </div>
-          <Link href={`/hub/projects/${projectId}`} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
-            Job details <span className="text-text-dim">· pay, stage, contact</span>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/hub/projects/${projectId}`} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+              Job details <span className="text-text-dim">· pay, stage, contact</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setAssist((a) => ({ open: !a.open }))}
+              aria-pressed={assist.open}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3l1.9 4.6 4.6 1.9-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z" />
+              </svg>
+              Ask Claude
+            </button>
+          </div>
         </div>
 
         {!claude && (
@@ -231,7 +258,7 @@ export function Studio({ projectId }: { projectId: string }) {
         </div>
 
         {shown === "week" && week}
-        {shown === "setup" && <SetupTab api={api} ws={ws} edit={edit} onWorkspace={setWs} />}
+        {shown === "setup" && <SetupTab api={api} ws={ws} edit={edit} onWorkspace={setWs} onAsk={(prefill) => setAssist({ open: true, prefill })} />}
         {shown === "files" && <FilesTab ws={ws} edit={edit} />}
         {shown === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
         {shown === "account" && <AccountTab ws={ws} edit={edit} stats={accountsOn} />}
@@ -239,7 +266,19 @@ export function Studio({ projectId }: { projectId: string }) {
           <EditsList store={edits} projectId={projectId} sheets={sheets} panel={panelOn ? { openId: editShown ? panelEdit : null, onOpen: (id) => (id ? openEdit(id) : closeEdit()) } : undefined} />
         )}
       </div>
-      {wide && (
+      {wide && assist.open && (
+        <aside aria-label="Ask Claude" className="sticky top-20 flex h-[calc(100vh-6rem)] flex-col overflow-hidden rounded-2xl border border-accent/30 bg-bg">
+          <JobAssistant projectId={projectId} brand={name} tab={shown} prefill={assist.prefill} onChanged={assistChanged} onClose={() => setAssist({ open: false })} />
+        </aside>
+      )}
+      {!wide && assist.open && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={(e) => e.target === e.currentTarget && setAssist({ open: false })}>
+          <aside aria-label="Ask Claude" className="flex h-full w-full max-w-md flex-col bg-bg shadow-2xl">
+            <JobAssistant projectId={projectId} brand={name} tab={shown} prefill={assist.prefill} onChanged={assistChanged} onClose={() => setAssist({ open: false })} />
+          </aside>
+        </div>
+      )}
+      {wide && !assist.open && (
         <aside
           aria-label={editShown ? "Edit chat" : "Shoot sheet chat"}
           className={`sticky top-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-bg ${editShown ? "h-[calc(100vh-6rem)]" : "max-h-[calc(100vh-6rem)]"}`}
@@ -592,7 +631,7 @@ function WeekTab({
 
 /* ---- Set up ---- */
 
-function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; edit: (w: Workspace) => void; onWorkspace: (w: Workspace) => void }) {
+function SetupTab({ api, ws, edit, onWorkspace, onAsk }: { api: string; ws: Workspace; edit: (w: Workspace) => void; onWorkspace: (w: Workspace) => void; onAsk: (prefill: string) => void }) {
   const [material, setMaterial] = useState("");
   const [filming, setFilming] = useState("solo, phone on a tripod, at home and around town, second phone filming app screens over my shoulder");
   const [voice, setVoice] = useState("casual, direct, a bit dry");
@@ -638,7 +677,14 @@ function SetupTab({ api, ws, edit, onWorkspace }: { api: string; ws: Workspace; 
       </Section>
 
       {(ws.clientQuestions.length > 0 || ws.needsDan.length > 0 || ws.couldntOpen.length > 0) && (
-        <Section title="To sort out">
+        <Section
+          title="To sort out"
+          action={
+            <button type="button" onClick={() => onAsk("Here's what I know so far: ")} className="rounded-lg bg-accent-soft px-3 py-1 text-xs font-medium text-accent hover:bg-accent hover:text-on-accent">
+              Answer these with Claude
+            </button>
+          }
+        >
           {ws.clientQuestions.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
