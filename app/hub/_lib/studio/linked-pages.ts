@@ -13,7 +13,11 @@ export type PageImage = { name: string; mediaType: "image/png" | "image/jpeg" | 
 export type LinkedPages = { pages: LinkedPage[]; images: PageImage[]; failed: string[] };
 
 const MAX_LINKS = 5;
-const MAX_CHARS = 60_000;
+// A Notion brief with its sub-pages can run long: the setup docs are what the whole job is built from.
+const MAX_CHARS = 120_000;
+// Sub-pages (and Notion pages linked from the page) read with it: how many, and how deep.
+const MAX_SUBPAGES = 15;
+const SUBPAGE_DEPTH = 2;
 // Images Claude looks at: enough for a brief's photos, well inside a request's size limit.
 const MAX_IMAGES = 12;
 const MAX_IMAGE_BYTES = 3_500_000;
@@ -92,6 +96,29 @@ function richText(rich: Rich | undefined): string {
     .join("");
 }
 
+/** Other Notion pages a block's text points at: page mentions, and links to Notion pages (relative or on notion.so / notion.site). */
+function linkedPageIds(rich: Rich | undefined): string[] {
+  const ids: string[] = [];
+  for (const [text, marks] of rich ?? []) {
+    for (const m of marks ?? []) {
+      if (text === "‣" && m[0] === "p" && typeof m[1] === "string") ids.push(m[1]);
+      if (m[0] === "a" && typeof m[1] === "string") {
+        let url: URL | null = null;
+        try {
+          url = new URL(m[1], "https://www.notion.so");
+        } catch {}
+        if (url && NOTION_HOST.test(url.hostname)) {
+          const id = notionPageId(url);
+          if (id) ids.push(id);
+        }
+      }
+    }
+  }
+  return ids;
+}
+
+const asUuid = (id: string) => (/^[0-9a-f]{32}$/i.test(id) ? `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}` : id).toLowerCase();
+
 /** A Notion page's blocks as plain text (headings, lists, tables, toggles, columns, media). */
 /** A database's rows as text, keyed by the database block's id (filled in by readNotion). */
 type Databases = Record<string, string>;
@@ -107,6 +134,12 @@ export function renderNotion(recordMap: RecordMap, pageId: string, databases: Da
   const lines: string[] = [];
   const files: PageFile[] = [];
   const seen = new Set<string>();
+  // Pages inside this one (and Notion pages it links to), to read after it: never its parents.
+  const subPages: { id: string; title: string }[] = [];
+  const addSub = (id: string, title: string) => {
+    const uuid = asUuid(id);
+    if (uuid !== asUuid(pageId) && !subPages.some((p) => p.id === uuid)) subPages.push({ id: uuid, title });
+  };
   const spaceOf = (id: string, b: Block) => blocks[id]?.spaceId ?? (b as { space_id?: string }).space_id ?? "";
 
   const walk = (id: string, depth: number) => {
@@ -115,6 +148,7 @@ export function renderNotion(recordMap: RecordMap, pageId: string, databases: Da
     seen.add(id);
     const text = richText(b.properties?.title);
     const indent = "  ".repeat(Math.max(0, depth - 1));
+    for (const linked of linkedPageIds(b.properties?.title)) addSub(linked, "linked page");
     const source = b.properties?.source?.[0]?.[0] ?? (typeof b.format?.display_source === "string" ? b.format.display_source : "");
     switch (b.type) {
       case "header":
@@ -174,10 +208,20 @@ export function renderNotion(recordMap: RecordMap, pageId: string, databases: Da
       case "page":
         if (depth > 0) {
           lines.push(`(sub-page: ${text})`);
+          addSub(id, text || "Untitled");
           return;
         }
         lines.push(`# ${text}`);
         break;
+      case "alias": {
+        // A "link to page" block.
+        const target = (b.format?.alias_pointer as { id?: string } | undefined)?.id;
+        if (target) {
+          lines.push("(linked page)");
+          addSub(target, "linked page");
+        }
+        return;
+      }
       case "collection_view":
       case "collection_view_page":
         lines.push(databases[id] ?? "(a database that couldn't be read - open the page to see it)");
@@ -190,6 +234,7 @@ export function renderNotion(recordMap: RecordMap, pageId: string, databases: Da
 
   walk(pageId, 0);
   return {
+    subPages,
     title: richText(page.properties?.title) || "Notion page",
     text: lines
       .join("\n")
@@ -220,7 +265,33 @@ async function loadNotion(id: string): Promise<RecordMap> {
   return recordMap;
 }
 
+/** A Notion page, then the pages inside it and the Notion pages it links to (a couple of levels down), each as its own section. */
 async function readNotion(id: string): Promise<{ title: string; text: string; files: PageFile[] }> {
+  const root = await readNotionPage(id);
+  const parts = [root.text];
+  const files = [...root.files];
+  const seen = new Set([asUuid(id)]);
+  let level = root.subPages;
+  let read = 0;
+  for (let depth = 1; depth <= SUBPAGE_DEPTH && level.length && read < MAX_SUBPAGES; depth++) {
+    const batch = level.filter((p) => !seen.has(p.id)).slice(0, MAX_SUBPAGES - read);
+    batch.forEach((p) => seen.add(p.id));
+    read += batch.length;
+    const got = await Promise.all(batch.map((p) => readNotionPage(p.id).catch(() => null)));
+    const next: typeof level = [];
+    got.forEach((page, i) => {
+      // One that isn't public (or is empty) is just left as its title in the parent.
+      if (!page) return;
+      parts.push(`## Sub-page: ${page.title || batch[i].title}\n\n${page.text.replace(/^# .*\n?/, "").trim()}`);
+      files.push(...page.files);
+      next.push(...page.subPages);
+    });
+    level = next;
+  }
+  return { title: root.title, text: parts.join("\n\n"), files };
+}
+
+async function readNotionPage(id: string): Promise<{ title: string; text: string; files: PageFile[]; subPages: { id: string; title: string }[] }> {
   const recordMap = await loadNotion(id);
   // Databases in the page (a formats table, a content calendar…): their rows, and the pages of the live ones.
   const databases: Databases = {};

@@ -64,9 +64,20 @@ export default function HubHome() {
             <p className="mt-2 text-text-muted">{tech ? "Your tech UGC jobs, busiest first." : "Your brand deals and what you're owed."}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href={tech ? "/hub/projects?new=tech" : "/hub/projects?new=1"} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
-              {tech ? "+ New tech job" : "+ New job"}
-            </Link>
+            {tech ? (
+              <>
+                <Link href="/hub/studio/new-job" className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
+                  + New job from its brief
+                </Link>
+                <Link href="/hub/projects?new=tech" className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
+                  + Add by hand
+                </Link>
+              </>
+            ) : (
+              <Link href="/hub/projects?new=1" className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
+                + New job
+              </Link>
+            )}
             <Link href={tech ? "/hub/projects?view=tech" : "/hub/projects?view=deals"} className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent">
               Open board →
             </Link>
