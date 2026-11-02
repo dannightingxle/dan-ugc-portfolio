@@ -36,6 +36,8 @@ export type Workspace = {
   clientQuestions: string[];
   needsDan: string[];
   couldntOpen: string[];
+  /** What the last set up read itself: each page or doc (with the pages inside it), so it's clear what Claude had. */
+  read: { title: string; url: string; parts: string[] }[];
   /** profiles: the job's TikTok / Instagram accounts, for the Accounts page. */
   account: { handles: string; checks: Record<string, boolean>; notes: string; profiles: Profile[] };
   lastReview: { at: string; moreOf: string[]; lessOf: string[]; nextWeek: string } | null;
@@ -55,6 +57,7 @@ export function emptyWorkspace(): Workspace {
     clientQuestions: [],
     needsDan: [],
     couldntOpen: [],
+    read: [],
     account: { handles: "", checks: {}, notes: "", profiles: [] },
     lastReview: null,
     filmingOn: "",

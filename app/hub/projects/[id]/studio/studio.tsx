@@ -676,6 +676,29 @@ function SetupTab({ api, ws, edit, onWorkspace, onAsk }: { api: string; ws: Work
         </form>
       </Section>
 
+      {ws.read.length > 0 && (
+        <Section title="What set up read">
+          <p className="text-sm text-text-muted">The pages and docs Creator Desk opened itself and gave Claude in full.</p>
+          <ul className="space-y-2" aria-label="Pages set up read">
+            {ws.read.map((r) => (
+              <li key={r.url} className="text-sm">
+                <span className="mr-1.5 text-good" aria-hidden>
+                  ✓
+                </span>
+                <a href={r.url} target="_blank" rel="noreferrer" className="font-medium hover:text-accent hover:underline">
+                  {r.title}
+                </a>
+                {r.parts.length > 0 && (
+                  <span className="block pl-5 text-xs text-text-muted">
+                    and the {r.parts.length === 1 ? "page" : `${r.parts.length} pages`} inside it: {r.parts.join(" · ")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {(ws.clientQuestions.length > 0 || ws.needsDan.length > 0 || ws.couldntOpen.length > 0) && (
         <Section
           title="To sort out"

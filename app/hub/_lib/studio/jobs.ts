@@ -162,6 +162,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     clientQuestions: result.clientQuestions,
     needsDan: result.needsDan,
     couldntOpen: couldntOpenOnce(linked.failed, macFailed, watched.failed, result.couldntOpen),
+    read: linked.pages.map((p) => ({ title: p.title, url: p.url, parts: [...p.text.matchAll(/^## Sub-page: (.+)$/gm)].map((m) => m[1].trim()).slice(0, 50) })),
     ...(handles && { account: { ...ws.account, handles } }),
   });
   await applySetup(user, projectId, result, input.material);
