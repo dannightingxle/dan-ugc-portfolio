@@ -8,7 +8,8 @@ import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } fro
 import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
 import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
 import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPages, readableLinks } from "./linked-pages";
-import { socialVideoKind, videoBlocks, watchVideos } from "./videos";
+import { findAccounts, socialLink, videoBlocks, watchVideos } from "./videos";
+import { apifyEnabled, pullPosts } from "./apify";
 import { readOnMac } from "../edits/mac-reads";
 import { applySetup, suggestedHandles } from "./new-job";
 import { uploadedLinks } from "./pdf-links";
@@ -57,7 +58,8 @@ function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockPara
     Then the links inside every page read are followed too. */
 async function readOtherLinks(userId: string, text: string, linked: LinkedPages, progress: Progress) {
   const rest = otherLinks(text, linked.pages).map(cleanLink);
-  const web = await readWebPages(rest.filter((u) => !socialVideoKind(u)));
+  // TikTok and Instagram links are looked up through Apify (below), not read as web pages: they need the app or a login.
+  const web = await readWebPages(rest.filter((u) => !socialLink(u)));
   linked.pages.push(...web.pages);
   const read = new Set(web.pages.map((p) => p.url));
   let unread = web.unread;
@@ -72,7 +74,7 @@ async function readOtherLinks(userId: string, text: string, linked: LinkedPages,
     unread = unread.filter((u) => !mac.read.has(u.url) && !mac.failed.some((f) => f.startsWith(`${u.url} `)));
   }
   failed.push(...(await followPageLinks(text, linked, progress)));
-  return { rest: [...new Set(rest)].filter((u) => !read.has(u)), failed, unread };
+  return { rest: [...new Set(rest)].filter((u) => !read.has(u) && !socialLink(u)), failed, unread };
 }
 
 /** The links inside the pages read - a Notion guide's sub-pages listed on a page your Mac read, the app's site, its store
@@ -94,7 +96,7 @@ async function followPageLinks(text: string, linked: LinkedPages, progress: Prog
   const have = new Set(linked.pages.map((p) => cleanLink(p.url)));
   const web = otherLinks(linked.pages.map((p) => p.text).join("\n"), linked.pages)
     .map(cleanLink)
-    .filter((u) => !pasted.has(u) && !have.has(u) && !socialVideoKind(u));
+    .filter((u) => !pasted.has(u) && !have.has(u) && !socialLink(u));
   if (web.length) linked.pages.push(...(await readWebPages([...new Set(web)])).pages);
   return failed;
 }
@@ -114,7 +116,7 @@ const NOTES_PAGE_CHARS = 15_000;
 /** Web pages linked in the job's brief and app notes (the app's site, case studies), read so Claude has them as text. */
 async function readNotesPages(ws: Workspace, already: string[], progress: Progress): Promise<WebPages> {
   const links = [...new Set(otherLinks([ws.files.brief, ws.files.appNotes].join("\n"), []).map(cleanLink))]
-    .filter((u) => !socialVideoKind(u) && !already.includes(u))
+    .filter((u) => !socialLink(u) && !already.includes(u))
     .slice(0, NOTES_PAGES);
   if (!links.length) return { pages: [], unread: [] };
   progress("Reading the pages in the job's notes");
@@ -133,6 +135,45 @@ const today = () => new Date().toLocaleDateString("en-GB", { weekday: "long", da
 
 /* ---- Set up a job ---- */
 
+// Setting a job up reads every reference: the first few videos are watched frame by frame, this many more are looked
+// up for their caption, what's said and their views, and the accounts linked to study get their latest posts.
+const SETUP_MORE_VIDEOS = 16;
+const SETUP_ACCOUNTS = 15;
+const POSTS_PER_ACCOUNT = 6;
+const SHOWN_PER_ACCOUNT = 4;
+
+const compact = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+
+/** The TikTok and Instagram accounts linked in the material (creators to study, other apps' creators), with their latest posts. */
+async function studyAccounts(text: string, pages: LinkedPages["pages"]): Promise<{ text: string; failed: string[] }> {
+  const accounts = findAccounts(text, pages, SETUP_ACCOUNTS);
+  if (!accounts.length) return { text: "", failed: [] };
+  if (!apifyEnabled) return { text: "", failed: accounts.map((a) => `${a.url} - Creator Desk needs Apify connected to look at TikTok and Instagram accounts.`) };
+  const { posts, problems } = await pullPosts([], accounts.map((a) => ({ platform: a.platform, handle: a.handle, note: "" })), POSTS_PER_ACCOUNT);
+  const failed: string[] = [];
+  const lines: string[] = [];
+  for (const a of accounts) {
+    const where = a.platform === "tiktok" ? "TikTok" : "Instagram";
+    const theirs = posts.filter((p) => p.platform === a.platform && p.handle === a.handle).sort((x, y) => y.views - x.views);
+    if (!theirs.length) {
+      const why = problems.find((p) => p.startsWith(`${where}:`))?.slice(where.length + 2) ?? "no public posts found (a private account, or the handle's wrong)";
+      failed.push(`${a.url} - ${why}`);
+      continue;
+    }
+    const views = theirs.map((p) => p.views).sort((x, y) => x - y);
+    lines.push(
+      [
+        `@${a.handle} on ${where} (${a.url}) - their ${theirs.length} latest posts usually get about ${compact(views[Math.floor(views.length / 2)])} views. Most viewed:`,
+        ...theirs.slice(0, SHOWN_PER_ACCOUNT).map((p) => `- ${compact(p.views)} views${p.seconds ? ` · ${Math.round(p.seconds)}s` : ""} · "${p.caption.replace(/\s+/g, " ").slice(0, 160)}" · ${p.url}`),
+      ].join("\n"),
+    );
+  }
+  return {
+    text: lines.length ? `Accounts linked in the material, with their latest posts (looked up just now - they opened fine, so they never go in couldntOpen):\n\n${lines.join("\n\n")}` : "",
+    failed,
+  };
+}
+
 export async function setUpJob(user: HubUser, projectId: string, input: { material: string; filming: string; voice: string; uploads: Upload[] }, progress: Progress = () => {}) {
   const job = await projectBasics(user.id, projectId);
   // Public Notion pages and Google Docs are read here (Claude's web fetch only sees their loading screen).
@@ -141,9 +182,10 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
   const links = [input.material, uploadedLinks(input.uploads)].filter(Boolean).join("\n");
   const linked = await readLinkedPages(links);
   const { rest, failed: macFailed, unread } = await readOtherLinks(user.id, links, linked, progress);
-  progress("Watching the reference videos");
-  // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at.
-  const watched = await watchVideos(input.material, linked.pages);
+  progress("Watching the reference videos and looking at the accounts");
+  // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at - and every
+  // other one in the material by its caption and what's said - plus the accounts it links to study.
+  const [watched, study] = await Promise.all([watchVideos(links, linked.pages, undefined, SETUP_MORE_VIDEOS), studyAccounts(links, linked.pages)]);
   const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
   progress("Claude is setting up the job");
   const result = await ask({
@@ -160,6 +202,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
           job.notes && `My notes from the tracker:\n${job.notes}`,
           `How I film: ${input.filming || "solo, phone on a tripod, at home and around town, second phone for app shots"}.`,
           `My voice: ${input.voice || "casual, direct, a bit dry"}.`,
+          study.text,
           unreadLine(unread, "in the material"),
         ]
           .filter(Boolean)
@@ -181,7 +224,7 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     files: { ...ws.files, brief: result.brief, appNotes: result.appNotes, references: result.references || ws.files.references },
     clientQuestions: result.clientQuestions,
     needsDan: result.needsDan,
-    couldntOpen: couldntOpenOnce(linked.failed, macFailed, watched.failed, result.couldntOpen),
+    couldntOpen: couldntOpenOnce(linked.failed, macFailed, watched.failed, study.failed, result.couldntOpen),
     read: linked.pages.map((p) => ({ title: p.title, url: p.url, parts: [...p.text.matchAll(/^## Sub-page: (.+)$/gm)].map((m) => m[1].trim()).slice(0, 50) })),
     ...(handles && { account: { ...ws.account, handles } }),
   });
@@ -191,6 +234,9 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
 
 /* ---- This week's shoot sheet ---- */
 
+// Reference videos past the ones watched, looked up for a shoot sheet by their caption, what's said and their views.
+const SHEET_MORE_VIDEOS = 6;
+
 /** A brief's links read for Claude: public pages, pages on your Mac, and reference videos. */
 async function readBrief(userId: string, text: string, alsoWatch: string, progress: Progress) {
   progress("Reading the linked pages");
@@ -198,7 +244,7 @@ async function readBrief(userId: string, text: string, alsoWatch: string, progre
   const { rest, failed: macFailed, unread } = await readOtherLinks(userId, text, linked, progress);
   // Reference videos in the brief (or what's trending), as frames Claude can look at.
   progress("Watching the reference videos");
-  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages);
+  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages, undefined, SHEET_MORE_VIDEOS);
   return { linked, rest, unread, watched, failed: [...linked.failed, ...macFailed, ...watched.failed] };
 }
 

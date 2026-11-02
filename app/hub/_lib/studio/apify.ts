@@ -109,7 +109,7 @@ function instagram(items: Item[], mine: Set<string>): Post[] {
 }
 
 /** The latest posts for your accounts and the creators you track. */
-export async function pullPosts(accounts: Handle[], tracked: Handle[]): Promise<{ posts: Post[]; problems: string[] }> {
+export async function pullPosts(accounts: Handle[], tracked: Handle[], perAccount = POSTS_PER_ACCOUNT): Promise<{ posts: Post[]; problems: string[] }> {
   const all = [...accounts, ...tracked];
   const handles = (platform: Handle["platform"]) => [...new Set(all.filter((h) => h.platform === platform).map((h) => cleanHandle(h.handle)).filter(Boolean))];
   const mine = new Set(accounts.map((h) => cleanHandle(h.handle)));
@@ -119,12 +119,12 @@ export async function pullPosts(accounts: Handle[], tracked: Handle[]): Promise<
 
   const [ttPosts, igPosts] = await Promise.all([
     tt.length
-      ? run("clockworks/tiktok-profile-scraper", { profiles: tt, resultsPerPage: POSTS_PER_ACCOUNT, profileSorting: "latest", excludePinnedPosts: true })
+      ? run("clockworks/tiktok-profile-scraper", { profiles: tt, resultsPerPage: perAccount, profileSorting: "latest", excludePinnedPosts: true })
           .then((items) => tiktok(items, mine))
           .catch((e: Error) => (problems.push(`TikTok: ${e.message}`), []))
       : [],
     ig.length
-      ? run("apify/instagram-reel-scraper", { username: ig, resultsLimit: POSTS_PER_ACCOUNT, skipPinnedPosts: true })
+      ? run("apify/instagram-reel-scraper", { username: ig, resultsLimit: perAccount, skipPinnedPosts: true })
           .then((items) => instagram(items, mine))
           .catch((e: Error) => (problems.push(`Instagram: ${e.message}`), []))
       : [],
@@ -183,12 +183,13 @@ export async function pullAccounts(accounts: { platform: Handle["platform"]; han
 }
 
 /** A TikTok or Instagram video, ready to download: where the file is, its caption and what's said in it. */
-export type SocialVideo = { label: string; download: string; caption: string; transcript: string; subtitles: string };
+/** A video asked for by its link: where to download it (empty if Apify couldn't get the file), and what's known about it. */
+export type SocialVideo = { label: string; download: string; caption: string; transcript: string; subtitles: string; seconds: number; views: number };
 
 const pick = (items: Item[], url: string, keys: string[]) => items.find((i) => keys.some((k) => str(i[k]) === url));
 
 /** Download links for reference videos, keyed by the link given. A video Apify couldn't get is left out. */
-export async function fetchSocialVideos(links: { url: string; kind: "tiktok" | "instagram" }[]): Promise<{ videos: Record<string, SocialVideo>; problem: string }> {
+export async function fetchSocialVideos(links: { url: string; kind: "tiktok" | "instagram" }[], seconds = 90): Promise<{ videos: Record<string, SocialVideo>; problem: string }> {
   const tt = links.filter((l) => l.kind === "tiktok").map((l) => l.url);
   const ig = links.filter((l) => l.kind === "instagram").map((l) => l.url);
   const videos: Record<string, SocialVideo> = {};
@@ -196,8 +197,8 @@ export async function fetchSocialVideos(links: { url: string; kind: "tiktok" | "
   const fail = (e: Error) => ((problem = e.message.replace(/\.$/, "")), [] as Item[]);
   // Short enough to leave the shoot sheet most of its time.
   const [ttItems, igItems] = await Promise.all([
-    tt.length ? run("clockworks/tiktok-scraper", { postURLs: tt, shouldDownloadVideos: true, downloadSubtitlesOptions: "DOWNLOAD_AND_TRANSCRIBE_VIDEOS_WITHOUT_SUBTITLES" }, 90).catch(fail) : [],
-    ig.length ? run("apify/instagram-reel-scraper", { username: ig, resultsLimit: 1, includeTranscript: true }, 90).catch(fail) : [],
+    tt.length ? run("clockworks/tiktok-scraper", { postURLs: tt, shouldDownloadVideos: true, downloadSubtitlesOptions: "DOWNLOAD_AND_TRANSCRIBE_VIDEOS_WITHOUT_SUBTITLES" }, seconds).catch(fail) : [],
+    ig.length ? run("apify/instagram-reel-scraper", { username: ig, resultsLimit: 1, includeTranscript: true }, seconds).catch(fail) : [],
   ]);
   for (const url of tt) {
     const id = /\/video\/(\d+)/.exec(url)?.[1];
@@ -205,18 +206,25 @@ export async function fetchSocialVideos(links: { url: string; kind: "tiktok" | "
     if (!i || i.error) continue;
     const meta = (i.videoMeta ?? {}) as Item;
     const download = str(meta.downloadAddr) || (Array.isArray(i.mediaUrls) ? str(i.mediaUrls[0]) : "");
-    if (!download) continue;
     const subs = (Array.isArray(meta.subtitleLinks) ? meta.subtitleLinks : []) as Item[];
     const sub = subs.find((x) => /^en/i.test(str(x.language))) ?? subs[0];
     const author = str(((i.authorMeta ?? {}) as Item).name);
-    videos[url] = { label: `TikTok${author ? ` by @${author}` : ""}`, download, caption: str(i.text).slice(0, 600), transcript: "", subtitles: str(sub?.downloadLink) || str(meta.transcriptionLink) };
+    videos[url] = { label: `TikTok${author ? ` by @${author}` : ""}`, download, caption: str(i.text).slice(0, 600), transcript: "", subtitles: str(sub?.downloadLink) || str(meta.transcriptionLink), seconds: num(meta.duration), views: num(i.playCount) };
   }
   for (const url of ig) {
     const code = /\/(?:reels?|p|tv)\/([\w-]+)/.exec(url)?.[1];
     const i = pick(igItems, url, ["inputUrl", "url"]) ?? (code ? igItems.find((x) => str(x.shortCode) === code) : undefined) ?? (ig.length === 1 ? igItems[0] : undefined);
-    if (!i || i.error || !str(i.videoUrl)) continue;
+    if (!i || i.error || !(str(i.videoUrl) || str(i.caption) || str(i.transcript))) continue;
     const owner = str(i.ownerUsername);
-    videos[url] = { label: `Instagram reel${owner ? ` by @${owner}` : ""}`, download: str(i.videoUrl), caption: str(i.caption).slice(0, 600), transcript: str(i.transcript).slice(0, 8000), subtitles: "" };
+    videos[url] = {
+      label: `Instagram reel${owner ? ` by @${owner}` : ""}`,
+      download: str(i.videoUrl),
+      caption: str(i.caption).slice(0, 600),
+      transcript: str(i.transcript).slice(0, 8000),
+      subtitles: "",
+      seconds: num(i.videoDuration),
+      views: num(i.videoPlayCount) || num(i.videoViewCount),
+    };
   }
   return { videos, problem };
 }

@@ -188,6 +188,16 @@ function TaskTray() {
       return next;
     });
   }, []);
+  // Room at the foot of the page for the pop-ups (see the hub layout), so they never sit over a page's last button.
+  const measure = useCallback((el: HTMLDivElement) => {
+    const root = document.documentElement;
+    const watch = new ResizeObserver(() => root.style.setProperty("--tray-h", `${el.offsetHeight}px`));
+    watch.observe(el);
+    return () => {
+      watch.disconnect();
+      root.style.removeProperty("--tray-h");
+    };
+  }, []);
   // The job's own page shows its progress and result, so the tray leaves that one out.
   const here = path.startsWith("/hub/studio/brand") ? BRAND_ID : /^\/hub\/projects\/([^/]+)\/studio/.exec(path)?.[1];
   const shown = tasks.filter((t) => t.projectId !== here && (t.status === "running" || !faded.has(taskKey(t))));
@@ -220,6 +230,7 @@ function TaskTray() {
   // Bottom right - or bottom left while a Studio page has its chat panel (and reply box) on the right.
   return (
     <div
+      ref={measure}
       aria-live="polite"
       hidden={typing}
       className={`fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 space-y-2 sm:inset-x-auto sm:w-80 md:bottom-5 ${sidePanel ? "sm:left-5" : "sm:right-5"}`}
