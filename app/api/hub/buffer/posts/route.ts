@@ -7,7 +7,7 @@ import { bufferFailure, schedulePosts } from "../../../../hub/_lib/buffer/data";
 
 const Body = z
   .object({
-    channelIds: z.array(z.string().trim().min(1).max(100)).min(1, "Pick at least one account.").max(10),
+    channelIds: z.array(z.string().trim().min(1).max(100)).min(1, "Pick at least one account.").max(30),
     text: z.string().max(5_000).default(""),
     when: z.enum(["queue", "time"]),
     dueAt: z.string().datetime().optional(),

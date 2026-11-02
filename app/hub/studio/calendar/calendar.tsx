@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CAPTION_LIMIT, SERVICE_LABEL, type CalendarData, type CalendarPost, type Channel, type ScheduleResult } from "../../_lib/buffer/types";
+import { CAPTION_LIMIT, SERVICE_LABEL, type CalendarData, type CalendarPost, type Channel, type ChannelGroup, type ScheduleResult } from "../../_lib/buffer/types";
 import { SUPABASE_KEY, SUPABASE_URL } from "../../_lib/supabase/config";
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
@@ -14,7 +14,7 @@ import { Busy, Spinner } from "../../_lib/ui";
    Buffer: its API doesn't do them. */
 
 type Status = { connected: false } | { connected: true; organization: string; connectedAt: string };
-type Loaded = { status: Status; calendar?: CalendarData; error?: string };
+type Loaded = { status: Status; calendar?: CalendarData; error?: string; groups?: ChannelGroup[] };
 
 const input = "w-full rounded-xl border border-border bg-bg-card px-3 py-2 text-sm outline-none focus:border-accent";
 
@@ -106,10 +106,10 @@ export function CalendarPage() {
           {scheduling && data.calendar && (
             <Schedule
               channels={data.calendar.channels}
-              onDone={() => {
-                setScheduling(false);
-                void load(true);
-              }}
+              groups={data.groups ?? []}
+              onGroups={(groups) => setData((d) => d && { ...d, groups })}
+              onScheduled={() => void load(true)}
+              onDone={() => setScheduling(false)}
             />
           )}
           {data.calendar && <Calendar calendar={data.calendar} />}
@@ -380,45 +380,119 @@ function SentRow({ post, channel }: { post: CalendarPost; channel?: Channel }) {
 
 /* ---- Scheduling ---- */
 
-/** Upload a video straight to storage (too big to go through the server), with progress. */
-function uploadVideo(file: File, onProgress: (pct: number) => void): Promise<string> {
-  return new Promise(async (resolve, reject) => {
+// Your Supabase project, for the one setting a too-big video needs.
+const SUPABASE_PROJECT = /^https:\/\/([a-z0-9]+)\.supabase\.co/.exec(SUPABASE_URL)?.[1];
+
+type Upload = { file: File; progress: number; path?: string; error?: string; promise: Promise<string>; abort: () => void };
+
+/** Upload a video straight to storage (too big to go through the server), with progress. It starts as soon as you pick the video. */
+function uploadVideo(file: File, onProgress: (pct: number) => void): { promise: Promise<string>; abort: () => void } {
+  let xhr: XMLHttpRequest | null = null;
+  let aborted = false;
+  const promise = new Promise<string>(async (resolve, reject) => {
     try {
       const { path, token } = await call<{ path: string; token: string }>("/api/hub/buffer/upload", { method: "POST", body: JSON.stringify({ name: file.name }) });
+      if (aborted) return reject(new Error("Upload cancelled."));
       const body = new FormData();
       body.append("cacheControl", "3600");
       body.append("", file);
-      const xhr = new XMLHttpRequest();
+      xhr = new XMLHttpRequest();
       xhr.open("PUT", `${SUPABASE_URL}/storage/v1/object/upload/sign/buffer-media/${path}?token=${encodeURIComponent(token)}`);
       xhr.setRequestHeader("apikey", SUPABASE_KEY);
       xhr.setRequestHeader("x-upsert", "false");
       xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
       xhr.onload = () => {
+        if (!xhr) return;
         if (xhr.status >= 200 && xhr.status < 300) resolve(path);
-        else if (xhr.status === 413 || /too large|exceeded the maximum/i.test(xhr.responseText))
-          reject(new Error(`That video is bigger than your storage allows (${Math.round(file.size / 1_000_000)} MB). Export it smaller (1080p, 30fps), or raise the upload limit in Supabase → Storage → Settings.`));
+        else if (xhr.status === 413 || /too large|exceeded the maximum|maximum allowed size/i.test(xhr.responseText))
+          reject(
+            new Error(
+              `Your storage turned this video down for being too big (${Math.round(file.size / 1_000_000)} MB). It's one setting in Supabase: Storage → Settings → "Upload file size limit" - set it to 5 GB and save${SUPABASE_PROJECT ? ` (supabase.com/dashboard/project/${SUPABASE_PROJECT}/storage/buckets, then Settings)` : ""}. Then try again.`,
+            ),
+          );
         else reject(new Error(`The upload didn't go through (${xhr.status}). Try again.`));
       };
       xhr.onerror = () => reject(new Error("The upload didn't go through. Check your connection and try again."));
+      xhr.onabort = () => reject(new Error("Upload cancelled."));
       xhr.send(body);
     } catch (e) {
       reject(e);
     }
   });
+  // Nobody may be waiting on it yet: the error is shown from state.
+  promise.catch(() => {});
+  return {
+    promise,
+    abort: () => {
+      aborted = true;
+      xhr?.abort();
+    },
+  };
 }
 
-function Schedule({ channels, onDone }: { channels: Channel[]; onDone: () => void }) {
+const firstLine = (s: string) => s.trim().split("\n")[0].slice(0, 80);
+
+function Schedule({
+  channels,
+  groups: savedGroups,
+  onGroups,
+  onScheduled,
+  onDone,
+}: {
+  channels: Channel[];
+  groups: ChannelGroup[];
+  onGroups: (g: ChannelGroup[]) => void;
+  onScheduled: () => void;
+  onDone: () => void;
+}) {
   const usable = channels.filter((c) => !c.isDisconnected && !c.isLocked);
   const [picked, setPicked] = useState<string[]>(() => usable.filter((c) => c.service === "tiktok" || c.service === "instagram").map((c) => c.id));
+  const [groups, setGroups] = useState(savedGroups);
+  const [naming, setNaming] = useState<string | null>(null);
+  const [groupError, setGroupError] = useState("");
   const [text, setText] = useState("");
   const [when, setWhen] = useState<"queue" | "time">("queue");
   const [at, setAt] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
+  const [upload, setUpload] = useState<Upload | null>(null);
+  const [fileKey, setFileKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<ScheduleResult[] | null>(null);
+  // Posts scheduled since the form opened, newest first: one after another, without closing it.
+  const [done, setDone] = useState<{ id: number; label: string; results: ScheduleResult[] }[]>([]);
   const limit = Math.min(...picked.map((id) => CAPTION_LIMIT[channels.find((c) => c.id === id)?.service ?? ""] ?? 5000), 5000);
+  const uploading = Boolean(upload && !upload.path && !upload.error);
+
+  function startUpload(file: File | null) {
+    upload?.abort();
+    if (!file) return setUpload(null);
+    const u = uploadVideo(file, (progress) => setUpload((cur) => (cur?.file === file ? { ...cur, progress } : cur)));
+    setUpload({ file, progress: 0, ...u });
+    u.promise.then(
+      (path) => setUpload((cur) => (cur?.file === file ? { ...cur, path, progress: 100 } : cur)),
+      (e: Error) => setUpload((cur) => (cur?.file === file && !/cancelled/.test(e.message) ? { ...cur, error: e.message } : cur)),
+    );
+  }
+
+  async function saveGroups(next: ChannelGroup[]) {
+    const before = groups;
+    setGroups(next);
+    setGroupError("");
+    try {
+      const r = await call<{ groups: ChannelGroup[] }>("/api/hub/buffer/groups", { method: "PUT", body: JSON.stringify({ groups: next }) });
+      setGroups(r.groups);
+      onGroups(r.groups);
+    } catch (e) {
+      setGroups(before);
+      setGroupError((e as Error).message);
+    }
+  }
+  function saveNewGroup() {
+    const name = (naming ?? "").trim();
+    if (!name || !picked.length) return;
+    void saveGroups([...groups.filter((g) => g.name.toLowerCase() !== name.toLowerCase()), { id: crypto.randomUUID(), name, channelIds: picked }]);
+    setNaming(null);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -426,27 +500,81 @@ function Schedule({ channels, onDone }: { channels: Channel[]; onDone: () => voi
     setError("");
     setResults(null);
     try {
-      const videoPath = file ? await uploadVideo(file, setProgress) : undefined;
+      const videoPath = upload ? await upload.promise : undefined;
       const r = await call<{ results: ScheduleResult[] }>("/api/hub/buffer/posts", {
         method: "POST",
         body: JSON.stringify({ channelIds: picked, text, when, ...(when === "time" && at && { dueAt: new Date(at).toISOString() }), ...(videoPath && { videoPath }) }),
       });
-      setResults(r.results);
-      if (r.results.every((x) => x.ok)) setTimeout(onDone, 1200);
+      if (r.results.every((x) => x.ok)) {
+        // Scheduled: kept in the list above, and the form is ready for the next one (same accounts, same kind of timing).
+        setDone((d) => [{ id: Date.now(), label: firstLine(text) || upload?.file.name || "Post", results: r.results }, ...d]);
+        setText("");
+        setAt("");
+        setUpload(null);
+        setFileKey((k) => k + 1);
+        onScheduled();
+      } else {
+        setResults(r.results);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
-      setProgress(null);
     }
   }
 
+  const resultLine = (r: ScheduleResult) => {
+    const c = channels.find((x) => x.id === r.channelId);
+    return `${c?.name ?? r.channelId} (${SERVICE_LABEL[c?.service ?? ""] ?? c?.service}): ${r.ok ? (r.dueAt ? new Date(r.dueAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "next free slot") : r.error}`;
+  };
+
   return (
     <section aria-label="Schedule a post" className="rounded-2xl border border-accent/30 bg-bg-card p-5 shadow-sm">
-      <h2 className="text-lg font-semibold">Schedule a post</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">{done.length ? "Schedule the next post" : "Schedule a post"}</h2>
+        {done.length > 0 && (
+          <button type="button" onClick={onDone} className="rounded-xl border border-border px-4 py-1.5 text-sm hover:border-accent hover:text-accent">
+            Done
+          </button>
+        )}
+      </div>
+      {done.length > 0 && (
+        <ul aria-label="Scheduled just now" className="mt-3 space-y-1.5 rounded-xl bg-good/10 p-3 text-sm">
+          {done.map((d) => (
+            <li key={d.id}>
+              <span className="font-medium text-good">✓ {d.label}</span>
+              <span className="block text-xs text-text-muted">{d.results.map(resultLine).join(" · ")}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <form onSubmit={submit} className="mt-4 space-y-5">
         <fieldset>
           <legend className="text-sm font-medium">Post to</legend>
+          {groups.length > 0 && (
+            <div role="group" aria-label="Channel groups" className="mt-2 flex flex-wrap items-center gap-2">
+              {groups.map((g) => {
+                const ids = g.channelIds.filter((id) => usable.some((c) => c.id === id));
+                const all = ids.length > 0 && ids.every((id) => picked.includes(id));
+                return (
+                  <span key={g.id} className={`flex items-center rounded-lg border text-sm transition ${all ? "border-accent bg-accent text-on-accent" : "border-border-strong hover:border-accent"}`}>
+                    <button
+                      type="button"
+                      aria-pressed={all}
+                      disabled={!ids.length}
+                      onClick={() => setPicked((p) => (all ? p.filter((x) => !ids.includes(x)) : [...new Set([...p, ...ids])]))}
+                      className="py-1 pl-3 pr-1.5 font-medium disabled:opacity-50"
+                    >
+                      {g.name} <span className={`font-normal ${all ? "opacity-80" : "text-text-dim"}`}>· {ids.length}</span>
+                    </button>
+                    <button type="button" aria-label={`Delete the ${g.name} group`} onClick={() => void saveGroups(groups.filter((x) => x.id !== g.id))} className="px-2 py-1 opacity-60 hover:opacity-100">
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <div className="mt-2 flex flex-wrap gap-2">
             {usable.map((c) => {
               const on = picked.includes(c.id);
@@ -460,31 +588,84 @@ function Schedule({ channels, onDone }: { channels: Channel[]; onDone: () => voi
               );
             })}
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+            <button type="button" onClick={() => setPicked(usable.map((c) => c.id))} className="text-text-muted underline hover:text-accent">
+              All accounts
+            </button>
+            <button type="button" onClick={() => setPicked([])} className="text-text-muted underline hover:text-accent">
+              None
+            </button>
+            {naming === null ? (
+              picked.length > 1 &&
+              !groups.some((g) => g.channelIds.length === picked.length && g.channelIds.every((id) => picked.includes(id))) && (
+                <button type="button" onClick={() => setNaming("")} className="font-medium text-accent hover:underline">
+                  + Save these {picked.length} as a group
+                </button>
+              )
+            ) : (
+              <span className="flex flex-wrap items-center gap-2">
+                <input
+                  autoFocus
+                  aria-label="Group name"
+                  value={naming}
+                  maxLength={40}
+                  onChange={(e) => setNaming(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      saveNewGroup();
+                    } else if (e.key === "Escape") setNaming(null);
+                  }}
+                  placeholder="e.g. Tech UGC accounts"
+                  className="rounded-lg border border-border bg-bg-card px-2 py-1 text-sm outline-none focus:border-accent"
+                />
+                <button type="button" onClick={saveNewGroup} disabled={!naming.trim()} className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-on-accent disabled:opacity-60">
+                  Save group
+                </button>
+                <button type="button" onClick={() => setNaming(null)} className="text-text-muted underline">
+                  Cancel
+                </button>
+              </span>
+            )}
+          </div>
+          {groupError && <p className="mt-1 text-sm text-accent">{groupError}</p>}
         </fieldset>
 
         <div className="grid gap-5 md:grid-cols-2">
-          <label className="block">
-            <span className="text-sm font-medium">Video</span>
-            <span className={`mt-2 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-5 text-center text-sm transition ${file ? "border-accent bg-accent-soft" : "border-border-strong hover:border-accent"}`}>
-              <input type="file" accept="video/mp4,video/quicktime,video/webm" className="sr-only" aria-label="Video" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-              {file ? (
-                <>
-                  <span className="font-medium">{file.name}</span>
-                  <span className="text-xs text-text-muted">{(file.size / 1_000_000).toFixed(1)} MB · tap to change</span>
-                </>
-              ) : (
-                <>
-                  <span className="font-medium">Choose your exported video</span>
-                  <span className="text-xs text-text-muted">MP4 or MOV, straight from CapCut</span>
-                </>
-              )}
-            </span>
-            {progress != null && (
-              <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-text/10" role="progressbar" aria-valuenow={progress} aria-label="Uploading">
-                <span className="block h-full bg-accent transition-all" style={{ width: `${progress}%` }} />
+          <div>
+            <label className="block">
+              <span className="text-sm font-medium">Video</span>
+              <span className={`mt-2 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-5 text-center text-sm transition ${upload ? "border-accent bg-accent-soft" : "border-border-strong hover:border-accent"}`}>
+                <input key={fileKey} type="file" accept="video/mp4,video/quicktime,video/webm" className="sr-only" aria-label="Video" onChange={(e) => startUpload(e.target.files?.[0] ?? null)} />
+                {upload ? (
+                  <>
+                    <span className="font-medium">{upload.file.name}</span>
+                    <span className="text-xs text-text-muted">
+                      {(upload.file.size / 1_000_000).toFixed(1)} MB · {upload.error ? "didn't upload" : upload.path ? "uploaded ✓" : `uploading ${upload.progress}%`} · tap to change
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium">Choose your exported video</span>
+                    <span className="text-xs text-text-muted">MP4 or MOV, straight from CapCut - it uploads while you write the caption</span>
+                  </>
+                )}
+              </span>
+            </label>
+            {uploading && upload && (
+              <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-text/10" role="progressbar" aria-valuenow={upload.progress} aria-label="Uploading">
+                <span className="block h-full bg-accent transition-all" style={{ width: `${upload.progress}%` }} />
               </span>
             )}
-          </label>
+            {upload?.error && (
+              <p className="mt-2 text-sm text-accent">
+                {upload.error}{" "}
+                <button type="button" onClick={() => startUpload(upload.file)} className="font-medium underline">
+                  Try the upload again
+                </button>
+              </p>
+            )}
+          </div>
           <label className="block">
             <span className="flex justify-between text-sm font-medium">
               Caption <span className={`font-normal ${text.length > limit ? "text-accent" : "text-text-dim"}`}>{text.length.toLocaleString()} / {limit.toLocaleString()}</span>
@@ -513,26 +694,23 @@ function Schedule({ channels, onDone }: { channels: Channel[]; onDone: () => voi
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            disabled={busy || !picked.length || (!file && !text.trim()) || (when === "time" && !at) || text.length > limit}
+            disabled={busy || !picked.length || (!upload && !text.trim()) || Boolean(upload?.error) || (when === "time" && !at) || text.length > limit}
             className="rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
           >
-            <Busy busy={busy} label={progress != null ? `Uploading ${progress}%…` : "Sending to Buffer…"}>
+            <Busy busy={busy} label={uploading ? `Finishing the upload (${upload?.progress ?? 0}%)…` : "Sending to Buffer…"}>
               Schedule {picked.length > 1 ? `on ${picked.length} accounts` : ""}
             </Busy>
           </button>
-          <p className="text-xs text-text-dim">The video is kept at a private link Buffer fetches when the post goes out.</p>
+          <p className="text-xs text-text-dim">Once it&apos;s scheduled, the form is ready for the next one. The video is kept at a private link Buffer fetches when the post goes out.</p>
         </div>
         {error && <p className="text-sm text-accent">{error}</p>}
         {results && (
           <ul className="space-y-1 text-sm">
-            {results.map((r) => {
-              const c = channels.find((x) => x.id === r.channelId);
-              return (
-                <li key={r.channelId} className={r.ok ? "text-good" : "text-accent"}>
-                  {r.ok ? "✓" : "✗"} {c?.name ?? r.channelId} ({SERVICE_LABEL[c?.service ?? ""] ?? c?.service}): {r.ok ? (r.dueAt ? `scheduled for ${new Date(r.dueAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "added to the queue") : r.error}
-                </li>
-              );
-            })}
+            {results.map((r) => (
+              <li key={r.channelId} className={r.ok ? "text-good" : "text-accent"}>
+                {r.ok ? "✓" : "✗"} {resultLine(r)}
+              </li>
+            ))}
           </ul>
         )}
       </form>

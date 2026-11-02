@@ -36,6 +36,9 @@ export type CalendarPost = {
 
 export type CalendarData = { at: string; organization: string; channels: Channel[]; scheduled: CalendarPost[]; failed: CalendarPost[]; sent: CalendarPost[] };
 
+/** Accounts you post to together (Buffer's own channel groups aren't in its API, so they're kept in Creator Desk). */
+export type ChannelGroup = { id: string; name: string; channelIds: string[] };
+
 export type ScheduleResult = { channelId: string; ok: true; dueAt: string | null } | { channelId: string; ok: false; error: string };
 
 export const SERVICE_LABEL: Record<string, string> = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", threads: "Threads", facebook: "Facebook", twitter: "X", linkedin: "LinkedIn", pinterest: "Pinterest", bluesky: "Bluesky" };
