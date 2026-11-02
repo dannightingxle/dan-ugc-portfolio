@@ -196,6 +196,27 @@ function TaskTray() {
   const sidePanel = useSidePanel();
   const alerts = edits.filter((e) => editNeedsLook(e) && !cleared.has(editKey(e)) && !faded.has(editKey(e)) && e.projectId !== here);
   if (!shown.length && !alerts.length) return null;
+  const items = [
+    ...shown.slice(0, 4).map((t) => ({
+      key: taskKey(t),
+      node:
+        t.status === "running" ? (
+          <TaskRow task={t} onDismiss={() => dismiss(t.id)} />
+        ) : (
+          <FadeAway onGone={() => fade(taskKey(t))}>
+            <TaskRow task={t} onDismiss={() => dismiss(t.id)} />
+          </FadeAway>
+        ),
+    })),
+    ...alerts.slice(0, Math.max(0, 4 - shown.length)).map((e) => ({
+      key: editKey(e),
+      node: (
+        <FadeAway onGone={() => fade(editKey(e))}>
+          <EditAlert edit={e} onDismiss={() => clearEdit(e)} />
+        </FadeAway>
+      ),
+    })),
+  ];
   // Bottom right - or bottom left while a Studio page has its chat panel (and reply box) on the right.
   return (
     <div
@@ -205,20 +226,13 @@ function TaskTray() {
       role="region"
       aria-label="Jobs running in the background"
     >
-      {shown.slice(0, 4).map((t) =>
-        t.status === "running" ? (
-          <TaskRow key={t.id} task={t} onDismiss={() => dismiss(t.id)} />
-        ) : (
-          <FadeAway key={taskKey(t)} onGone={() => fade(taskKey(t))}>
-            <TaskRow task={t} onDismiss={() => dismiss(t.id)} />
-          </FadeAway>
-        ),
-      )}
-      {alerts.slice(0, Math.max(0, 4 - shown.length)).map((e) => (
-        <FadeAway key={editKey(e)} onGone={() => fade(editKey(e))}>
-          <EditAlert edit={e} onDismiss={() => clearEdit(e)} />
-        </FadeAway>
+      {items.map((item, i) => (
+        // On a phone, one pop-up at a time: a stack would cover half the screen.
+        <div key={item.key} className={i > 0 ? "max-sm:hidden" : undefined}>
+          {item.node}
+        </div>
       ))}
+      {items.length > 1 && <p className="rounded-full bg-bg-card/95 px-3 py-1 text-center text-xs text-text-muted shadow sm:hidden">+ {items.length - 1} more - in the list at the top</p>}
     </div>
   );
 }

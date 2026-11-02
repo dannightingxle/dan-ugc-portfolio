@@ -7,7 +7,8 @@
 
 /** A file uploaded into a linked page, at a lasting public link. */
 export type PageFile = { kind: "image" | "video" | "file"; name: string; url: string };
-export type LinkedPage = { url: string; title: string; text: string; files: PageFile[] };
+/** ids: the Notion pages it holds (itself and the pages inside it), so they aren't read again. */
+export type LinkedPage = { url: string; title: string; text: string; files: PageFile[]; ids?: string[] };
 /** An image from a linked page, downloaded so Claude can look at it. */
 export type PageImage = { name: string; mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; data: string };
 export type LinkedPages = { pages: LinkedPage[]; images: PageImage[]; failed: string[] };
@@ -46,7 +47,8 @@ export function googleDocId(url: URL) {
 
 /** Notion and Google Docs links in some text, at most a few. */
 export function readableLinks(text: string) {
-  const out: { url: string; kind: "notion" | "gdoc"; id: string }[] = [];
+  // "notionsite": a Notion link without a page id (a site's home address, say) - which page it shows is looked up.
+  const out: { url: string; kind: "notion" | "gdoc" | "notionsite"; id: string }[] = [];
   // Links as pasted, plus two ways Notion links turn up without https://: a page copied from Notion while you're
   // logged in gives its sub-pages as markdown links to a bare path ("[Step 1](Step-1-Account-Setup-33eb…)"), and
   // a chat app can drop the https:// ("wellspoken-app.notion.site/…").
@@ -62,9 +64,18 @@ export function readableLinks(text: string) {
     } catch {
       continue;
     }
-    const notion = NOTION_HOST.test(url.hostname) ? notionPageId(url) : null;
+    const onNotion = NOTION_HOST.test(url.hostname);
+    const notion = onNotion ? notionPageId(url) : null;
     const gdoc = googleDocId(url);
-    const item = notion ? { url: raw, kind: "notion" as const, id: notion } : gdoc ? { url: raw, kind: "gdoc" as const, id: gdoc } : null;
+    // A Notion site's own address with no page id in it (its home page, or a custom path).
+    const site = onNotion && !notion && /\.notion\.site$/i.test(url.hostname) ? `${url.hostname}${url.pathname}`.replace(/\/+$/, "").toLowerCase() : null;
+    const item = notion
+      ? { url: raw, kind: "notion" as const, id: notion }
+      : gdoc
+        ? { url: raw, kind: "gdoc" as const, id: gdoc }
+        : site
+          ? { url: raw, kind: "notionsite" as const, id: site }
+          : null;
     if (item && !out.some((o) => o.id === item.id)) out.push(item);
   }
   return out.slice(0, MAX_LINKS);
@@ -253,6 +264,20 @@ export function renderNotion(recordMap: RecordMap, pageId: string, databases: Da
       .trim(),
     files,
   };
+}
+
+// Tests serve a Notion site's pages locally.
+const NOTION_SITE = process.env.NOTION_SITE_BASE || "";
+
+/** Which page a Notion site address shows: Notion puts its id in the page it serves. */
+async function notionSitePage(raw: string): Promise<string> {
+  const url = new URL(raw);
+  const res = await fetch(NOTION_SITE ? `${NOTION_SITE}${url.pathname}${url.search}` : url.href, { headers: HEADERS, redirect: "follow", signal: AbortSignal.timeout(TIMEOUT), cache: "no-store" });
+  if (!res.ok) throw new Error(`Notion said ${res.status}`);
+  const html = await res.text();
+  const id = /"requiredRedirectMetadata",\{"pageId":"([0-9a-f-]{36})"/i.exec(html)?.[1] ?? /"pageId":"([0-9a-f]{8}-[0-9a-f-]{27})"/i.exec(html)?.[1];
+  if (!id) throw new Error("couldn't tell which page that Notion address shows - paste the page's own link");
+  return id.toLowerCase();
 }
 
 /** One call to Notion's public page data, tried again (after a pause) when Notion is busy or slow to answer. */
@@ -487,11 +512,11 @@ export async function readLinkedPages(text: string): Promise<LinkedPages> {
       try {
         if (l.kind === "gdoc") {
           const page = await readGoogleDoc(l.id);
-          return { ok: true as const, id: l.id, ids: [l.id], page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files }, missed: [] as string[] };
+          return { ok: true as const, id: l.id, ids: [l.id], page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files, ids: [l.id] }, missed: [] as string[] };
         }
-        const page = await readNotion(l.id);
+        const page = await readNotion(l.kind === "notionsite" ? await notionSitePage(l.url) : l.id);
         const missed = page.missed.map((m) => `https://www.notion.so/${m.id.replace(/-/g, "")} - the "${m.title}" page inside ${page.title} didn't load (${m.why}). Paste its text instead.`);
-        return { ok: true as const, id: l.id, ids: page.ids, page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files }, missed };
+        return { ok: true as const, id: page.ids[0], ids: page.ids, page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files, ids: page.ids }, missed };
       } catch (e) {
         const why = e instanceof Error && !/fetch failed|aborted|timeout/i.test(e.message) ? e.message : "it didn't load";
         return { ok: false as const, failed: `${l.url} - ${why}. Paste the page's text instead.` };
@@ -500,7 +525,9 @@ export async function readLinkedPages(text: string): Promise<LinkedPages> {
   );
   const ok = results.flatMap((r) => (r.ok ? [r] : []));
   // A page pasted on its own that was also read inside another one (a sub-page) is only sent once.
-  const pages = ok.filter((r) => !ok.some((o) => o !== r && o.id !== r.id && o.ids.includes(asUuid(r.id)))).map((r) => r.page);
+  const pages = ok
+    .filter((r, i) => !ok.some((o, j) => (o.id !== r.id && o.ids.includes(asUuid(r.id))) || (o.id === r.id && j < i)))
+    .map((r) => r.page);
   const failed = [...results.flatMap((r) => (r.ok ? r.missed : [r.failed]))];
   return { pages, images: await downloadImages(pages.flatMap((p) => p.files.filter((f) => f.kind === "image"))), failed };
 }
