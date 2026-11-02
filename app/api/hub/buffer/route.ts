@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { crossSite } from "../../../hub/_lib/same-origin";
 import { studioApiUser } from "../../../hub/_lib/studio/data";
-import { BufferError, bufferCalendar, bufferFailure, bufferStatus, connectBuffer, disconnectBuffer } from "../../../hub/_lib/buffer/data";
+import { BufferError, bufferCalendar, bufferFailure, bufferGroups, bufferStatus, connectBuffer, disconnectBuffer } from "../../../hub/_lib/buffer/data";
 
 /* Buffer: GET whether you're connected and, if so, your calendar (?refresh=1
    fetches it again now); POST an API key to connect; DELETE to disconnect. */
@@ -13,10 +13,11 @@ export async function GET(request: Request) {
     const status = await bufferStatus(auth.user.id);
     if (!status.connected) return Response.json({ status });
     const refresh = new URL(request.url).searchParams.get("refresh") === "1";
-    return Response.json({ status, calendar: await bufferCalendar(auth.user.id, refresh) });
+    const [calendar, groups] = await Promise.all([bufferCalendar(auth.user.id, refresh), bufferGroups(auth.user.id)]);
+    return Response.json({ status, calendar, groups });
   } catch (e) {
     // Still connected, but Buffer said no: the page shows why, with the calendar it had.
-    if (e instanceof BufferError) return Response.json({ status: await bufferStatus(auth.user.id), error: e.message });
+    if (e instanceof BufferError) return Response.json({ status: await bufferStatus(auth.user.id), error: e.message, groups: await bufferGroups(auth.user.id) });
     return bufferFailure(e);
   }
 }

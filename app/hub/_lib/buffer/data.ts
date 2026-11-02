@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { adminClient } from "../supabase/admin";
-import type { CalendarData, CalendarPost, Channel, ScheduleResult } from "./types";
+import type { CalendarData, CalendarPost, Channel, ChannelGroup, ScheduleResult } from "./types";
 
 /* Buffer, connected with your own API key (Buffer → Settings → API). Its
    GraphQL API is called from the server only. Every request counts against
@@ -16,6 +16,7 @@ import type { CalendarData, CalendarPost, Channel, ScheduleResult } from "./type
 const API = process.env.BUFFER_API_BASE || "https://api.buffer.com";
 const SETTINGS = "buffer:settings";
 const CACHE = "buffer:cache";
+const GROUPS = "buffer:groups";
 /** How long the calendar is shown before it's fetched again by itself. */
 const FRESH_MS = 10 * 60_000;
 export const MEDIA_BUCKET = "buffer-media";
@@ -103,7 +104,19 @@ export async function connectBuffer(userId: string, apiKey: string) {
 }
 
 export async function disconnectBuffer(userId: string) {
-  await adminClient().from("hub_workspaces").delete().eq("user_id", userId).in("project_id", [SETTINGS, CACHE]);
+  await adminClient().from("hub_workspaces").delete().eq("user_id", userId).in("project_id", [SETTINGS, CACHE, GROUPS]);
+}
+
+// ---------------------------------------------------------------- channel groups
+
+/** Your channel groups, kept with your account so they're the same on every device. */
+export async function bufferGroups(userId: string): Promise<ChannelGroup[]> {
+  return (await getRow<{ groups: ChannelGroup[] }>(userId, GROUPS))?.groups ?? [];
+}
+
+export async function saveBufferGroups(userId: string, groups: ChannelGroup[]) {
+  await setRow(userId, GROUPS, { groups });
+  return groups;
 }
 
 async function settingsFor(userId: string) {
