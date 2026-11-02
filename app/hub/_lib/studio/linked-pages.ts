@@ -19,6 +19,8 @@ const MAX_CHARS = 120_000;
 // Sub-pages (and Notion pages linked from the page) read with it: how many, and how deep.
 const MAX_SUBPAGES = 15;
 const SUBPAGE_DEPTH = 2;
+// Read this many at a time, so Notion isn't asked for a whole guide at once.
+const SUBPAGES_AT_ONCE = 3;
 // Images Claude looks at: enough for a brief's photos, well inside a request's size limit.
 const MAX_IMAGES = 12;
 const MAX_IMAGE_BYTES = 3_500_000;
@@ -45,7 +47,15 @@ export function googleDocId(url: URL) {
 /** Notion and Google Docs links in some text, at most a few. */
 export function readableLinks(text: string) {
   const out: { url: string; kind: "notion" | "gdoc"; id: string }[] = [];
-  for (const raw of text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? []) {
+  // Links as pasted, plus two ways Notion links turn up without https://: a page copied from Notion while you're
+  // logged in gives its sub-pages as markdown links to a bare path ("[Step 1](Step-1-Account-Setup-33eb…)"), and
+  // a chat app can drop the https:// ("wellspoken-app.notion.site/…").
+  const found = [
+    ...(text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? []),
+    ...[...text.matchAll(/(?<![\w./:@-])((?:[\w-]+\.)?notion\.(?:so|site)\/[^\s<>"')\]]+)/gi)].map((m) => `https://${m[1]}`),
+    ...[...text.matchAll(/\]\(\s*<?([^)\s>]*[0-9a-f]{32})(?:[?#][^)\s>]*)?>?\s*\)/gi)].filter((m) => !/^https?:/i.test(m[1])).map((m) => `https://www.notion.so/${m[1].replace(/^\/+/, "")}`),
+  ];
+  for (const raw of found) {
     let url: URL;
     try {
       url = new URL(raw);
@@ -245,18 +255,33 @@ export function renderNotion(recordMap: RecordMap, pageId: string, databases: Da
   };
 }
 
+/** One call to Notion's public page data, tried again (after a pause) when Notion is busy or slow to answer. */
+async function notionFetch(path: string, body: unknown): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response | null = null;
+    try {
+      res = await fetch(`${NOTION_API}/api/v3/${path}`, {
+        method: "POST",
+        headers: { ...HEADERS, "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(TIMEOUT),
+        cache: "no-store",
+      });
+    } catch (e) {
+      if (attempt >= 2) throw e;
+    }
+    if (res?.ok) return res;
+    if (res && res.status !== 429 && res.status < 500) throw new Error(`Notion said ${res.status}`);
+    if (attempt >= 2) throw new Error(res ? `Notion said ${res.status}` : "it didn't load");
+    await new Promise((r) => setTimeout(r, 800 * 3 ** attempt));
+  }
+}
+
 async function loadNotion(id: string): Promise<RecordMap> {
   const recordMap: RecordMap = { block: {}, collection: {} };
   let cursor: unknown = { stack: [] };
   for (let chunk = 0; chunk < 10; chunk++) {
-    const res = await fetch(`${NOTION_API}/api/v3/loadPageChunk`, {
-      method: "POST",
-      headers: { ...HEADERS, "content-type": "application/json" },
-      body: JSON.stringify({ pageId: id, limit: 100, cursor, chunkNumber: chunk, verticalColumns: false }),
-      signal: AbortSignal.timeout(TIMEOUT),
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`Notion said ${res.status}`);
+    const res = await notionFetch("loadPageChunk", { pageId: id, limit: 100, cursor, chunkNumber: chunk, verticalColumns: false });
     const data = (await res.json()) as { recordMap?: RecordMap; cursor?: { stack?: unknown[] } };
     Object.assign(recordMap.block!, data.recordMap?.block ?? {});
     Object.assign(recordMap.collection!, data.recordMap?.collection ?? {});
@@ -266,30 +291,47 @@ async function loadNotion(id: string): Promise<RecordMap> {
   return recordMap;
 }
 
-/** A Notion page, then the pages inside it and the Notion pages it links to (a couple of levels down), each as its own section. */
-async function readNotion(id: string): Promise<{ title: string; text: string; files: PageFile[] }> {
+/** A Notion page, then the pages inside it and the Notion pages it links to (a couple of levels down), each as its own section.
+    Sub-pages are read a few at a time; any that don't load are listed with why, rather than left out quietly. */
+async function readNotion(id: string): Promise<{ title: string; text: string; files: PageFile[]; ids: string[]; missed: { id: string; title: string; why: string }[] }> {
   const root = await readNotionPage(id);
   const parts = [root.text];
   const files = [...root.files];
   const seen = new Set([asUuid(id)]);
+  const missed: { id: string; title: string; why: string }[] = [];
+  const readIds = [asUuid(id)];
   let level = root.subPages;
   let read = 0;
   for (let depth = 1; depth <= SUBPAGE_DEPTH && level.length && read < MAX_SUBPAGES; depth++) {
     const batch = level.filter((p) => !seen.has(p.id)).slice(0, MAX_SUBPAGES - read);
     batch.forEach((p) => seen.add(p.id));
     read += batch.length;
-    const got = await Promise.all(batch.map((p) => readNotionPage(p.id).catch(() => null)));
+    const got: ({ title: string; text: string; files: PageFile[]; subPages: { id: string; title: string }[] } | null)[] = [];
+    for (let i = 0; i < batch.length; i += SUBPAGES_AT_ONCE) {
+      got.push(
+        ...(await Promise.all(
+          batch.slice(i, i + SUBPAGES_AT_ONCE).map((p) =>
+            readNotionPage(p.id).catch((e: unknown) => {
+              const why = e instanceof Error && !/fetch failed|aborted|timeout/i.test(e.message) ? e.message : "it didn't load";
+              console.warn("Creator Desk: couldn't read a Notion sub-page", p.id, why);
+              missed.push({ id: p.id, title: p.title, why });
+              return null;
+            }),
+          ),
+        )),
+      );
+    }
     const next: typeof level = [];
     got.forEach((page, i) => {
-      // One that isn't public (or is empty) is just left as its title in the parent.
       if (!page) return;
+      readIds.push(batch[i].id);
       parts.push(`## Sub-page: ${page.title || batch[i].title}\n\n${page.text.replace(/^# .*\n?/, "").trim()}`);
       files.push(...page.files);
       next.push(...page.subPages);
     });
     level = next;
   }
-  return { title: root.title, text: parts.join("\n\n"), files };
+  return { title: root.title, text: parts.join("\n\n"), files, ids: readIds, missed };
 }
 
 async function readNotionPage(id: string): Promise<{ title: string; text: string; files: PageFile[]; subPages: { id: string; title: string }[] }> {
@@ -336,18 +378,11 @@ function propText(value: Rich | undefined, type: string): string {
 
 async function readDatabase(page: RecordMap, block: Block, spaceId: string): Promise<{ text: string; files: PageFile[] }> {
   const collection = unwrap(page.collection?.[block.collection_id!]);
-  const res = await fetch(`${NOTION_API}/api/v3/queryCollection`, {
-    method: "POST",
-    headers: { ...HEADERS, "content-type": "application/json" },
-    body: JSON.stringify({
-      collection: { id: block.collection_id, spaceId },
-      collectionView: { id: block.view_ids![0], spaceId },
-      loader: { type: "reducer", reducers: { collection_group_results: { type: "results", limit: 100 } }, searchQuery: "", userTimeZone: "Europe/London" },
-    }),
-    signal: AbortSignal.timeout(TIMEOUT),
-    cache: "no-store",
+  const res = await notionFetch("queryCollection", {
+    collection: { id: block.collection_id, spaceId },
+    collectionView: { id: block.view_ids![0], spaceId },
+    loader: { type: "reducer", reducers: { collection_group_results: { type: "results", limit: 100 } }, searchQuery: "", userTimeZone: "Europe/London" },
   });
-  if (!res.ok) throw new Error(`Notion said ${res.status}`);
   const data = (await res.json()) as { result?: { reducerResults?: { collection_group_results?: { blockIds?: string[] } } }; recordMap?: RecordMap };
   const ids = data.result?.reducerResults?.collection_group_results?.blockIds ?? [];
   const schema = Object.entries(collection?.schema ?? {});
@@ -450,16 +485,24 @@ export async function readLinkedPages(text: string): Promise<LinkedPages> {
   const results = await Promise.all(
     links.map(async (l) => {
       try {
-        const page = l.kind === "notion" ? await readNotion(l.id) : await readGoogleDoc(l.id);
-        return { ok: true as const, page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files } };
+        if (l.kind === "gdoc") {
+          const page = await readGoogleDoc(l.id);
+          return { ok: true as const, id: l.id, ids: [l.id], page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files }, missed: [] as string[] };
+        }
+        const page = await readNotion(l.id);
+        const missed = page.missed.map((m) => `https://www.notion.so/${m.id.replace(/-/g, "")} - the "${m.title}" page inside ${page.title} didn't load (${m.why}). Paste its text instead.`);
+        return { ok: true as const, id: l.id, ids: page.ids, page: { url: l.url, title: page.title, text: page.text.slice(0, MAX_CHARS), files: page.files }, missed };
       } catch (e) {
         const why = e instanceof Error && !/fetch failed|aborted|timeout/i.test(e.message) ? e.message : "it didn't load";
         return { ok: false as const, failed: `${l.url} - ${why}. Paste the page's text instead.` };
       }
     }),
   );
-  const pages = results.flatMap((r) => (r.ok ? [r.page] : []));
-  return { pages, images: await downloadImages(pages.flatMap((p) => p.files.filter((f) => f.kind === "image"))), failed: results.flatMap((r) => (r.ok ? [] : [r.failed])) };
+  const ok = results.flatMap((r) => (r.ok ? [r] : []));
+  // A page pasted on its own that was also read inside another one (a sub-page) is only sent once.
+  const pages = ok.filter((r) => !ok.some((o) => o !== r && o.id !== r.id && o.ids.includes(asUuid(r.id)))).map((r) => r.page);
+  const failed = [...results.flatMap((r) => (r.ok ? r.missed : [r.failed]))];
+  return { pages, images: await downloadImages(pages.flatMap((p) => p.files.filter((f) => f.kind === "image"))), failed };
 }
 
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;

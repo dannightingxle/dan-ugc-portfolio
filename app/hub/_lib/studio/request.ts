@@ -64,6 +64,8 @@ export const WorkspaceBody = z.object({
   clientQuestions: z.array(z.string().max(2_000)).max(50).default([]),
   needsDan: z.array(z.string().max(2_000)).max(50).default([]),
   couldntOpen: z.array(z.string().max(2_000)).max(50).default([]),
+  // Left out by pages opened before it was saved: the saved one is kept.
+  read: z.array(z.object({ title: z.string().max(500), url: z.string().max(2_000), parts: z.array(z.string().max(500)).max(50) })).max(50).optional(),
   account: z.object({
     handles: text(2_000),
     checks: z.record(z.string().max(40), z.boolean()).default({}),
