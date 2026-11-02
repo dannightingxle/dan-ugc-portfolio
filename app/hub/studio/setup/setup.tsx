@@ -47,6 +47,8 @@ export function SetupPage() {
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
   const [open, setOpen] = useState<{ path: string; v: SetupVersion } | null>(null);
+  // What choosing between two Macs' versions did - kept on the page, as the choice takes the file out of "Different on your Macs".
+  const [resolved, setResolved] = useState("");
 
   async function load() {
     try {
@@ -84,6 +86,7 @@ export function SetupPage() {
     if (starting) return;
     setStarting(true);
     setError("");
+    setResolved("");
     try {
       const { sync } = await call<{ sync: Sync }>(api, "POST");
       setData((d) => d && { ...d, sync });
@@ -169,7 +172,12 @@ export function SetupPage() {
         </p>
       )}
 
-      {conflicts.length > 0 && <Conflicts files={conflicts} onOpen={(path, v) => setOpen({ path, v })} onChanged={load} />}
+      {resolved && (
+        <p role="status" className="rounded-xl border border-good/40 bg-bg-card px-4 py-3 text-sm text-good">
+          {resolved}
+        </p>
+      )}
+      {conflicts.length > 0 && <Conflicts files={conflicts} onOpen={(path, v) => setOpen({ path, v })} onChanged={load} onDone={setResolved} />}
 
       {data.files.length > 0 && <Files files={data.files} folders={data.folders} skills={data.skills} onOpen={(path, v) => setOpen({ path, v })} />}
 
@@ -268,7 +276,7 @@ function Details({ r }: { r: SetupRequest }) {
 
 // ---------------------------------------------------------------- different on your Macs
 
-function Conflicts({ files, onOpen, onChanged }: { files: SetupFile[]; onOpen: (path: string, v: SetupVersion) => void; onChanged: () => Promise<void> }) {
+function Conflicts({ files, onOpen, onChanged, onDone }: { files: SetupFile[]; onOpen: (path: string, v: SetupVersion) => void; onChanged: () => Promise<void>; onDone: (note: string) => void }) {
   return (
     <section className="min-w-0 space-y-3 rounded-2xl border border-warn/40 bg-bg-card p-4 sm:p-5" aria-label="Different on your Macs">
       <div className="space-y-1">
@@ -280,14 +288,14 @@ function Conflicts({ files, onOpen, onChanged }: { files: SetupFile[]; onOpen: (
       </div>
       <ul className="space-y-3">
         {files.map((f) => (
-          <Conflict key={f.path} file={f} onOpen={onOpen} onChanged={onChanged} />
+          <Conflict key={f.path} file={f} onOpen={onOpen} onChanged={onChanged} onDone={onDone} />
         ))}
       </ul>
     </section>
   );
 }
 
-function Conflict({ file, onOpen, onChanged }: { file: SetupFile; onOpen: (path: string, v: SetupVersion) => void; onChanged: () => Promise<void> }) {
+function Conflict({ file, onOpen, onChanged, onDone }: { file: SetupFile; onOpen: (path: string, v: SetupVersion) => void; onChanged: () => Promise<void>; onDone: (note: string) => void }) {
   // "combine", or the version being kept.
   const [busy, setBusy] = useState<string | null>(null);
   const [done, setDone] = useState("");
@@ -306,7 +314,9 @@ function Conflict({ file, onOpen, onChanged }: { file: SetupFile; onOpen: (path:
     setError("");
     try {
       const r = await call<{ note?: string }>(`${api}/conflict`, "POST", { path: file.path, ...body });
-      setDone(r.note ? `${r.note} Press Sync all my Macs to send it to your Macs.` : "Done - press Sync all my Macs to send it to your Macs.");
+      const note = `${file.path}: ${r.note ? `${r.note} Press Sync all my Macs to send it to your Macs.` : "done - press Sync all my Macs to send it to your Macs."}`;
+      setDone(note);
+      onDone(note);
       await onChanged();
     } catch (e) {
       setError(errorText(e));
