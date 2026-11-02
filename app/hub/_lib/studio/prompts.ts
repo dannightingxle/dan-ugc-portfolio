@@ -97,6 +97,11 @@ From everything Dan gives you about a new job (pasted briefs, emails, rates, PDF
 5. needsDan: each default you assumed that only Dan can confirm.
 6. clientQuestions: questions to send the client about anything unclear or missing, ready to paste.
 7. couldntOpen: any link you couldn't open, and why.
+8. job: the job's details for his tracker (brand, a short title, platform, pay, videos a day, contact), only as far as the material says.
+9. setupSteps: every step Dan has to take to get going, in order, one action each - creating each account (with the new email if there is one), profile, bio and picture, verification, each warm-up day, joining any Slack or Discord, signing or sending anything, downloading the app, the first post - with how many days from today each should happen when the material gives a timeline. They become his to-do list for the job, so keep each one short and concrete, and include the specifics (handle rules, times, counts).
+10. handles: suggested handles for any accounts he has to create, following the job's naming rules.
+
+Pages linked from the brief (Notion sub-pages, linked docs) are included below it, each as its own section: treat them all as part of the brief.
 
 If links are included, open the brief and every subpage, linked page and linked doc you can reach with the web fetch tool before writing anything.
 

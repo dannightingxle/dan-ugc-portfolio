@@ -10,6 +10,7 @@ import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from 
 import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
 import { socialVideoKind, videoBlocks, watchVideos } from "./videos";
 import { readOnMac } from "../edits/mac-reads";
+import { applySetup, suggestedHandles } from "./new-job";
 import { type Unread, type WebPages, cleanLink, readWebPages } from "./web-pages";
 import type { Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
@@ -141,15 +142,21 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
     effort: "high",
     onFixUp: () => progress("Claude is fixing its answer"),
   });
+  progress("Filling in the job and its setup to-dos");
   const ws = await getWorkspace(user.id, projectId);
-  return saveWorkspace(user.id, projectId, {
+  // Suggested handles go on the Account tab while it has none, marked as not made yet.
+  const handles = ws.account.handles.trim() ? "" : suggestedHandles(result.handles);
+  const saved = await saveWorkspace(user.id, projectId, {
     ...ws,
     instructions: result.instructions,
     files: { ...ws.files, brief: result.brief, appNotes: result.appNotes, references: result.references || ws.files.references },
     clientQuestions: result.clientQuestions,
     needsDan: result.needsDan,
     couldntOpen: couldntOpenOnce(linked.failed, macFailed, watched.failed, result.couldntOpen),
+    ...(handles && { account: { ...ws.account, handles } }),
   });
+  await applySetup(user, projectId, result, input.material);
+  return saved;
 }
 
 /* ---- This week's shoot sheet ---- */

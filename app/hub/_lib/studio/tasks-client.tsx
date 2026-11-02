@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useFeature } from "../../account-provider";
 import { BRAND_ID } from "./brand-types";
+import { reloadProject } from "../store";
 
 /* Studio's background jobs and the edits on your Mac, on every page: which
    are going, and which are ready or need you, checked every few seconds
@@ -67,12 +68,17 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [edits, setEdits] = useState<EditJob[]>([]);
   const [cleared, setCleared] = useState<Set<string>>(() => new Set());
+  // Setups already seen finished: one that finishes from now on has filled in its job, so the page takes the job's latest copy.
+  const setupsDone = useRef<Set<string> | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/hub/studio/tasks", { cache: "no-store" });
       if (!res.ok) return;
       const json = (await res.json()) as { tasks: Task[]; edits?: EditJob[] };
+      const done = json.tasks.filter((t) => t.kind === "intake" && t.status === "done" && t.finishedAt).map((t) => `${t.projectId}|${t.finishedAt}`);
+      if (setupsDone.current) for (const key of done) if (!setupsDone.current.has(key)) void reloadProject(key.split("|")[0]);
+      setupsDone.current = new Set([...(setupsDone.current ?? []), ...done]);
       setTasks(json.tasks);
       setEdits(json.edits ?? []);
     } catch {

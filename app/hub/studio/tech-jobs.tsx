@@ -53,15 +53,20 @@ export function TechJobs({ title, studioLink, boardLink, hideHeading, hideNew }:
             </Link>
           )}
           {!hideNew && (
-            <Link href="/hub/projects?new=tech" className="text-accent hover:underline">
-              + New tech job
-            </Link>
+            <>
+              <Link href="/hub/studio/new-job" className="text-accent hover:underline">
+                + New job from its brief
+              </Link>
+              <Link href="/hub/projects?new=tech" className="text-text-muted hover:text-accent">
+                + Add one by hand
+              </Link>
+            </>
           )}
         </div>
       </div>
       {ready && jobs.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border-strong bg-bg-card p-4 text-sm text-text-muted">
-          No tech jobs yet. Add one with <span className="font-medium">+ New tech job</span>, then set it up in its Studio.
+          No tech jobs yet. Start one with <span className="font-medium">+ New job from its brief</span>: paste the Notion link and messages, and it&apos;s set up for you.
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

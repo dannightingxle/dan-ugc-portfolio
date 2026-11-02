@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CURRENCIES } from "../currencies";
 
 /* Studio: one Claude workspace per job, replacing a Claude Project per job.
    The workspace holds the same things the project did - instructions plus
@@ -84,6 +85,25 @@ export const IntakeResult = z.object({
   needsDan: z.array(z.string()).describe("Each default you had to assume that only Dan can confirm, written as 'what you assumed - what to check'."),
   clientQuestions: z.array(z.string()).describe("Questions to send the client about anything unclear or missing, ready to paste."),
   couldntOpen: z.array(z.string()).describe("Links you couldn't open, with why."),
+  job: z
+    .object({
+      brand: z.string().describe("The app or company, as they write it. Empty if unclear."),
+      title: z.string().describe("A short name for the job, e.g. 'TikTok creator program'. Empty if unclear."),
+      platform: z.string().describe("Where the videos are posted, e.g. 'TikTok + Instagram'. Empty if not said."),
+      payModel: z.string().describe("How it pays, in a few words, e.g. '$25 a video + view bonuses, paid monthly'. Empty if not said."),
+      perVideo: z.number().nullable().describe("Pay per video as a plain number, or null if it isn't paid per video or isn't said."),
+      currency: z.enum(CURRENCIES).nullable().describe("The pay's currency, or null if not said."),
+      videosPerDay: z.number().nullable().describe("Videos a day once posting starts, or null if not said."),
+      contactName: z.string().describe("Dan's contact at the client. Empty if not said."),
+      contactEmail: z.string().describe("Their email. Empty if not said."),
+    })
+    .describe("The job's details for Dan's tracker, only as far as the material says."),
+  setupSteps: z
+    .array(z.object({ text: z.string().describe("One action, as Dan would write it on a to-do list"), dayOffset: z.number().int().nullable().describe("Days from today to do it (0 = today), or null if no particular day") }))
+    .describe("What Dan has to do before and around his first post, in order: creating each account, profile and bio, verification, warm-up days, joining a Slack/Discord, signing or sending anything, downloading the app, the first post. Empty if the material gives no setup steps."),
+  handles: z
+    .array(z.object({ platform: z.enum(["tiktok", "instagram"]), handle: z.string().describe("Without the @") }))
+    .describe("Suggested handles for the accounts Dan has to create, following the job's naming rules (or a natural name-based one if it has none). Empty if he isn't creating new accounts."),
 });
 export type IntakeResult = z.infer<typeof IntakeResult>;
 

@@ -297,6 +297,19 @@ let backend: Backend | null = null;
 let loadedFor: string | null = null;
 
 /** Called once by AccountProvider: pick where data lives and load it. */
+let remoteDb: SupabaseClient | null = null;
+
+/** Take a job's latest saved copy (one the server added or filled in, e.g. by setting it up from its brief). Your unsaved typing goes first. */
+export async function reloadProject(id: string) {
+  if (!remoteDb) return;
+  await backend?.flush();
+  const { data } = await remoteDb.from("hub_projects").select("data").eq("id", id).maybeSingle<{ data: Partial<Project> }>();
+  if (!data) return;
+  const fresh = upgrade(data.data);
+  const has = state.projects.some((p) => p.id === id);
+  setState({ projects: has ? state.projects.map((p) => (p.id === id ? fresh : p)) : [fresh, ...state.projects] });
+}
+
 export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: SupabaseClient; userId: string; canWrite: boolean }) {
   const key = opts.mode === "local" ? "local" : `${opts.userId}:${opts.canWrite}`;
   if (loadedFor === key) return;
@@ -315,6 +328,7 @@ export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: 
   }
 
   backend = remoteBackend(opts.db);
+  remoteDb = opts.db;
   setState({ ready: false, stars: {}, projects: [] });
   const [p, s] = await Promise.all([
     opts.db.from("hub_projects").select("data").order("updated_at", { ascending: false }),
