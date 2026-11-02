@@ -7,7 +7,7 @@ import { getSheet, getWorkspace, saveSheet, saveWorkspace, updateSheet } from ".
 import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
 import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
 import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
-import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPages } from "./linked-pages";
+import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPages, readableLinks } from "./linked-pages";
 import { socialVideoKind, videoBlocks, watchVideos } from "./videos";
 import { readOnMac } from "../edits/mac-reads";
 import { applySetup, suggestedHandles } from "./new-job";
@@ -53,19 +53,14 @@ function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockPara
 }
 
 /** Other links: ordinary public pages are read here; ones that need a login (or won't load here) are read in your own
-    browser through your Mac's helper when it's running; anything left is for Claude's web fetch, with why it wasn't read. */
+    browser through your Mac's helper when it's running; anything left is for Claude's web fetch, with why it wasn't read.
+    Then the links inside every page read are followed too. */
 async function readOtherLinks(userId: string, text: string, linked: LinkedPages, progress: Progress) {
   const rest = otherLinks(text, linked.pages).map(cleanLink);
-  // Web pages the pages read link to (the app's site, its store pages) are read too, after what was pasted -
-  // only for what they add: one that won't open is left out rather than reported.
-  const pasted = new Set(rest);
-  const inPages = otherLinks(linked.pages.map((p) => p.text).join("\n"), linked.pages)
-    .map(cleanLink)
-    .filter((u) => !pasted.has(u) && !socialVideoKind(u));
-  const web = await readWebPages([...new Set([...rest.filter((u) => !socialVideoKind(u)), ...inPages])]);
+  const web = await readWebPages(rest.filter((u) => !socialVideoKind(u)));
   linked.pages.push(...web.pages);
   const read = new Set(web.pages.map((p) => p.url));
-  let unread = web.unread.filter((u) => pasted.has(u.url));
+  let unread = web.unread;
   let failed: string[] = [];
   if (unread.length) progress("Checking for pages to read on your Mac");
   const mac = await readOnMac(userId, unread.map((u) => u.url)).catch(() => null);
@@ -76,7 +71,32 @@ async function readOtherLinks(userId: string, text: string, linked: LinkedPages,
     // The Mac's own reason is shown for the ones it couldn't read either.
     unread = unread.filter((u) => !mac.read.has(u.url) && !mac.failed.some((f) => f.startsWith(`${u.url} `)));
   }
+  failed.push(...(await followPageLinks(text, linked, progress)));
   return { rest: [...new Set(rest)].filter((u) => !read.has(u)), failed, unread };
+}
+
+/** The links inside the pages read - a Notion guide's sub-pages listed on a page your Mac read, the app's site, its store
+    pages - are read too. A Notion page that won't load is reported; a web page that won't open is left out quietly. */
+async function followPageLinks(text: string, linked: LinkedPages, progress: Progress) {
+  const inPages = linked.pages.map((p) => p.text).join("\n");
+  const readIds = new Set(linked.pages.flatMap((p) => p.ids ?? []));
+  const pasted = new Set([...readableLinks(text).map((l) => l.id), ...otherLinks(text, []).map(cleanLink)]);
+  const notion = readableLinks(inPages).filter((l) => !readIds.has(l.id) && !pasted.has(l.id));
+  let failed: string[] = [];
+  if (notion.length) {
+    progress("Reading the pages linked inside");
+    const more = await readLinkedPages(notion.map((l) => l.url).join("\n"));
+    const fresh = more.pages.filter((p) => !(p.ids ?? []).some((id) => readIds.has(id)));
+    linked.pages.push(...fresh);
+    linked.images.push(...more.images);
+    failed = more.failed;
+  }
+  const have = new Set(linked.pages.map((p) => cleanLink(p.url)));
+  const web = otherLinks(linked.pages.map((p) => p.text).join("\n"), linked.pages)
+    .map(cleanLink)
+    .filter((u) => !pasted.has(u) && !have.has(u) && !socialVideoKind(u));
+  if (web.length) linked.pages.push(...(await readWebPages([...new Set(web)])).pages);
+  return failed;
 }
 
 /** For Claude: links Creator Desk couldn't read itself, and why, to try with web fetch. */
