@@ -55,7 +55,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "0.3.12";
+const VERSION = "0.3.13";
 const HOME = process.env.CDH_HOME || path.join(os.homedir(), ".creator-desk");
 const CONFIG = path.join(HOME, "helper.json");
 const THUMBS = path.join(HOME, "thumbs.json");
@@ -117,17 +117,60 @@ function run(cmd, args, opts = {}) {
     return "";
   }
 }
-const has = (bin) => Boolean(run("/usr/bin/which", [bin]));
+// Where a program is, looked up once every 10 minutes rather than each time it's needed (each look starts a process).
+const found = new Map();
+const which = (bin) => {
+  const hit = found.get(bin);
+  if (hit && Date.now() - hit.at < 600_000) return hit.path;
+  const p = run("/usr/bin/which", [bin]);
+  found.set(bin, { path: p, at: Date.now() });
+  return p;
+};
+const has = (bin) => Boolean(which(bin));
 const ffprobe = () => process.env.CDH_FFPROBE || (has("ffprobe") ? "ffprobe" : "");
 const ffmpeg = () => process.env.CDH_FFMPEG || (has("ffmpeg") ? "ffmpeg" : "");
 
+// How long each clip is, kept by file, size and when it last changed: measuring one means starting ffprobe, which is
+// slow on an external drive or iCloud - too slow to do again for every clip every time the list is sent.
+const lengths = new Map();
+const lengthKey = (file) => {
+  try {
+    const st = fs.statSync(file);
+    return `${file}|${st.size}|${st.mtimeMs}`;
+  } catch {
+    return file;
+  }
+};
+const PROBE = ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1"];
+const seconds = (out) => {
+  const n = Number(String(out).trim());
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 10) / 10 : null;
+};
 function duration(file) {
   if (mediaKind(file) === "image") return null;
   const bin = ffprobe();
   if (!bin) return null;
-  const out = run(bin, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file]);
-  const n = Number(out);
-  return Number.isFinite(n) && n > 0 ? Math.round(n * 10) / 10 : null;
+  const key = lengthKey(file);
+  if (!lengths.has(key)) lengths.set(key, seconds(run(bin, [...PROBE, file])));
+  return lengths.get(key);
+}
+// The same without holding everything else up while ffprobe runs.
+async function durationAsync(file) {
+  if (mediaKind(file) === "image") return null;
+  const bin = ffprobe();
+  if (!bin) return null;
+  const key = lengthKey(file);
+  if (!lengths.has(key)) {
+    const { err, stdout } = await runAsync(bin, [...PROBE, file], 15_000);
+    lengths.set(key, err ? null : seconds(stdout));
+  }
+  return lengths.get(key);
+}
+// A few at a time, in order.
+async function inBatches(items, size, fn) {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
+  return out;
 }
 const mmss = (s) => (s == null ? "" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
 
@@ -136,26 +179,33 @@ let thumbCache = {};
 try {
   thumbCache = JSON.parse(fs.readFileSync(THUMBS, "utf8"));
 } catch {}
-function thumb(file, mtime) {
+let thumbCount = 0;
+async function thumb(file, mtime) {
   const key = `${file}|${mtime}`;
   if (thumbCache[key] !== undefined) return thumbCache[key];
   const bin = mediaKind(file) === "audio" ? null : ffmpeg();
   let data = null;
   if (bin) {
-    const out = path.join(os.tmpdir(), `cdh-${process.pid}.jpg`);
+    const out = path.join(os.tmpdir(), `cdh-${process.pid}-${thumbCount++}.jpg`);
     // A picture is its own thumbnail; a video's is a second in.
     const from = mediaKind(file) === "image" ? ["-i", file] : ["-ss", "1", "-i", file];
-    run(bin, ["-v", "error", "-y", ...from, "-frames:v", "1", "-vf", "scale=160:-2", "-q:v", "6", out], { timeout: 20_000 });
+    await runAsync(bin, ["-v", "error", "-y", ...from, "-frames:v", "1", "-vf", "scale=160:-2", "-q:v", "6", out], 20_000);
     try {
       data = "data:image/jpeg;base64," + fs.readFileSync(out).toString("base64");
       fs.rmSync(out);
     } catch {}
   }
   thumbCache[key] = data && data.length < 55_000 ? data : null;
+  thumbsChanged = true;
+  return thumbCache[key];
+}
+let thumbsChanged = false;
+function saveThumbs() {
+  if (!thumbsChanged) return;
+  thumbsChanged = false;
   try {
     fs.writeFileSync(THUMBS, JSON.stringify(thumbCache));
   } catch {}
-  return thumbCache[key];
 }
 
 // ------------------------------------------------------------ talking to Creator Desk
@@ -179,17 +229,50 @@ const update = (id, body) => api("POST", `/api/hub/helper/edits/${id}`, body);
 
 // ------------------------------------------------------------ what this Mac can see
 
+// What hardly ever changes (versions, what's installed), checked every 10 minutes rather than every time: each check
+// starts a program, and Claude Code's takes a second or two.
+let installed = null;
+let installedAt = 0;
+let checkingInstalled = false;
+const stdoutOf = (r) => (r.err ? "" : r.stdout.trim());
+async function checkInstalled() {
+  const [macos, capcut, claude] = await Promise.all([
+    runAsync("sw_vers", ["-productVersion"], 15_000),
+    runAsync("defaults", ["read", "/Applications/CapCut.app/Contents/Info.plist", "CFBundleShortVersionString"], 15_000),
+    runAsync(cfg.claude, ["--version"], 15_000),
+  ]);
+  return { macos: stdoutOf(macos) || os.release(), capcut: stdoutOf(capcut) || null, claude: stdoutOf(claude) || null, ffmpeg: Boolean(ffmpeg()), osxphotos: Boolean(osxphotos()) };
+}
+function setupInfo() {
+  // The first time it's checked there and then; after that, a stale answer is refreshed in the background.
+  if (!installed) {
+    installed = {
+      macos: run("sw_vers", ["-productVersion"]) || os.release(),
+      capcut: run("defaults", ["read", "/Applications/CapCut.app/Contents/Info.plist", "CFBundleShortVersionString"]) || null,
+      claude: run(cfg.claude, ["--version"]) || null,
+      ffmpeg: Boolean(ffmpeg()),
+      osxphotos: Boolean(osxphotos()),
+    };
+    installedAt = Date.now();
+  } else if (Date.now() - installedAt > 600_000 && !checkingInstalled) {
+    checkingInstalled = true;
+    checkInstalled()
+      .then((now) => {
+        installed = now;
+        installedAt = Date.now();
+      })
+      .catch(() => {})
+      .finally(() => (checkingInstalled = false));
+  }
+  return installed;
+}
 function info() {
   return {
     helper: VERSION,
-    macos: run("sw_vers", ["-productVersion"]) || os.release(),
-    capcut: run("defaults", ["read", "/Applications/CapCut.app/Contents/Info.plist", "CFBundleShortVersionString"]) || null,
+    ...setupInfo(),
     capcutRunning: Boolean(run("pgrep", ["-x", "CapCut"])),
-    claude: run(cfg.claude, ["--version"]) || null,
-    ffmpeg: Boolean(ffmpeg()),
     folders: cfg.folders,
     libraries: libraries(),
-    osxphotos: Boolean(osxphotos()),
     workdir: cfg.workdir,
     // Pages you're logged in to (a brand's portal, a Google-login brief) can be read through your browser.
     reads: true,
@@ -205,7 +288,7 @@ function info() {
 
 // The newest media in your folders (two levels deep, last 3 weeks), skipping CapCut's own files: up to 40 videos,
 // 20 images and 20 audio files, so a pile of screenshots never pushes your clips off the list.
-function recentClips() {
+async function recentClips() {
   const since = Date.now() - 21 * 86_400_000;
   const found = [];
   const walk = (dir, depth) => {
@@ -230,17 +313,27 @@ function recentClips() {
   };
   for (const f of cfg.folders) walk(f, 0);
   const newest = (kind, n) => found.filter((f) => f.kind === kind).sort((a, b) => b.mtime - a.mtime).slice(0, n);
-  return [...newest("video", 40), ...newest("image", 20), ...newest("audio", 20)]
-    .sort((a, b) => b.mtime - a.mtime)
-    .map((f) => ({ path: f.path, name: f.name, folder: f.folder, modifiedAt: new Date(f.mtime).toISOString(), duration: duration(f.path), thumb: thumb(f.path, f.mtime) }));
+  const list = [...newest("video", 40), ...newest("image", 20), ...newest("audio", 20)].sort((a, b) => b.mtime - a.mtime);
+  // Lengths and thumbnails are worked out once per clip, in the background, four at a time.
+  const out = await inBatches(list, 4, async (f) => ({ path: f.path, name: f.name, folder: f.folder, modifiedAt: new Date(f.mtime).toISOString(), duration: await durationAsync(f.path), thumb: await thumb(f.path, f.mtime) }));
+  saveThumbs();
+  return out;
 }
 
 let lastFilesKey = "";
 let lastReport = 0;
+let reporting = false;
+function reportSoon(force = false) {
+  if (reporting) return;
+  reporting = true;
+  report(force)
+    .catch((e) => log("Couldn't reach Creator Desk:", e.message))
+    .finally(() => (reporting = false));
+}
 async function report(force = false) {
   if (!force && Date.now() - lastReport < 30_000) return;
   lastReport = Date.now();
-  const files = recentClips();
+  const files = await recentClips();
   const key = files.map((f) => f.path + f.modifiedAt).join("|");
   const body = { info: info() };
   if (key !== lastFilesKey || force) body.files = files;
@@ -536,6 +629,7 @@ async function grabSound(url, out) {
 }
 
 const readsSeen = new Set();
+let readsGoing = Promise.resolve();
 async function handleReads(reads) {
   for (const r of reads ?? []) {
     if (readsSeen.has(r.id)) continue;
@@ -608,7 +702,8 @@ async function gather(edit, terms, dir) {
     if (photos.error) problems.add(photos.error);
     const drives = searchDrives(index, term);
     const all = [...photos.files, ...drives];
-    lines.push(`- "${term}": ${all.length ? all.map((f) => `${f}${duration(f) ? ` (${mmss(duration(f))})` : ""}`).join("; ") : "nothing found"}`);
+    const lens = await inBatches(all, 4, durationAsync);
+    lines.push(`- "${term}": ${all.length ? all.map((f, i) => `${f}${lens[i] ? ` (${mmss(lens[i])})` : ""}`).join("; ") : "nothing found"}`);
     found.push(...all);
   }
   const unique = [...new Set(found)];
@@ -618,7 +713,11 @@ async function gather(edit, terms, dir) {
       { kind: "status", text: `Found ${fromPhotos} in Apple Photos and ${unique.length - fromPhotos} on your drives.${problems.size ? ` (${[...problems].join("; ")})` : ""}` },
     ],
   });
-  if (unique.length) await update(edit.id, { pickDone: true, picked: unique.slice(0, 40).map((f) => ({ path: f, name: path.basename(f), duration: duration(f) })) });
+  if (unique.length) {
+    const some = unique.slice(0, 40);
+    const lens = await inBatches(some, 4, durationAsync);
+    await update(edit.id, { pickDone: true, picked: some.map((f, i) => ({ path: f, name: path.basename(f), duration: lens[i] })) });
+  }
   return [
     "B-roll I found for you (Apple Photos exports are in " + dir + "; the rest are on my drives):",
     ...lines,
@@ -669,14 +768,15 @@ function pickerScript(prompt, mode) {
   ];
 }
 
-function pickFiles(label, mode) {
+// The picker opens without holding anything else up while it's open (the helper keeps checking in and editing).
+async function pickFiles(label, mode) {
   const folder = mode === "folder";
-  if (process.env.CDH_PICK_CMD) {
-    const lines = run("/bin/sh", ["-c", process.env.CDH_PICK_CMD], { timeout: 600_000, env: { ...process.env, CDH_PICK_MODE: folder ? "folder" : "files" } }).split("\n").filter(Boolean);
-    return folder ? lines.flatMap(mediaIn) : lines;
-  }
   const prompt = `${folder ? "Pick the folder with the files" : "Pick the videos, images and audio"} for ${label || "this video"}`;
-  const lines = run("osascript", pickerScript(prompt, folder ? "folder" : "files").flatMap((l) => ["-e", l]), { timeout: 600_000 }).split("\n").filter(Boolean);
+  const { err, stdout } = process.env.CDH_PICK_CMD
+    ? await runAsync("/bin/sh", ["-c", process.env.CDH_PICK_CMD], 600_000, { ...process.env, CDH_PICK_MODE: folder ? "folder" : "files" })
+    : await runAsync("osascript", pickerScript(prompt, folder ? "folder" : "files").flatMap((l) => ["-e", l]), 600_000);
+  // Cancelled (or closed): nothing picked.
+  const lines = err ? [] : stdout.split("\n").map((l) => l.trim()).filter(Boolean);
   return folder ? lines.flatMap(mediaIn) : lines;
 }
 
@@ -697,9 +797,12 @@ async function handlePick(p) {
   if (picksSeen.has(key)) return;
   picksSeen.add(key);
   log(`Opening the ${p.mode === "folder" ? "folder" : "file"} picker for ${p.label || "a video"}…`);
-  const paths = pickFiles(p.label, p.mode);
+  const paths = await pickFiles(p.label, p.mode);
   if (paths.length > MAX_PICKED) log(`That's ${paths.length} files - using the first ${MAX_PICKED}.`);
-  const picked = paths.slice(0, MAX_PICKED).map((f) => ({ path: f, name: path.basename(f), duration: duration(f) }));
+  const some = paths.slice(0, MAX_PICKED);
+  // Their lengths, several at a time.
+  const lens = await inBatches(some, 6, durationAsync);
+  const picked = some.map((f, i) => ({ path: f, name: path.basename(f), duration: lens[i] }));
   const r = await update(p.id, { pickDone: true, picked }).catch((e) => ({ ok: false, error: e.message }));
   if (r?.ok === false) log("Couldn't send what you picked to Creator Desk:", r.error);
   else log(picked.length ? `Picked ${picked.length} file(s).` : "Nothing picked.");
@@ -1724,9 +1827,10 @@ async function handleWork(work) {
   for (const g of work.frameGrabs ?? []) queueFrameGrab(g);
   // Syncing your editing setup with your other Mac goes on alongside too.
   if (work.setupSync) queueSetupSync(work.setupSync);
-  // A shoot sheet is waiting on these, so they go first.
-  await handleReads(work.reads);
-  for (const p of work.picks ?? []) await handlePick(p);
+  // A picker you've just asked for opens straight away, and nothing waits on it while it's open.
+  for (const p of work.picks ?? []) handlePick(p).catch((e) => log("Couldn't open the picker:", e.message));
+  // Pages a shoot sheet is waiting on are read alongside everything else too - one at a time, as they use your browser.
+  if (work.reads?.some((r) => !readsSeen.has(r.id))) readsGoing = readsGoing.then(() => handleReads(work.reads)).catch((e) => log("Couldn't read a page:", e.message));
   for (const id of work.cancels ?? []) {
     const child = running.get(id);
     if (child) {
@@ -1750,30 +1854,41 @@ async function handleWork(work) {
   // A few edits side by side (you choose how many on the Mac helper page); the rest wait their turn.
   const max = Math.max(1, Math.min(4, Number(work.maxEdits) || 1));
   for (const e of work.edits ?? []) {
-    if (running.size >= max) break;
+    if (running.size + starting.size >= max) break;
+    if (starting.has(e.id)) continue;
     const { ok } = await update(e.id, { claim: true });
     if (!ok) continue;
-    log(`Editing ${[e.brand, e.videoCode, e.title].filter(Boolean).join(" · ")}`);
-    const where = whereFor(e.folder);
-    e.cwdUsed = where.used;
-    await update(e.id, {
-      events: [
-        { kind: "status", text: `Your Mac (${macName()}) has started the edit${where.used ? ` in ${e.folder}` : ""}.` },
-        ...(where.missing ? [{ kind: "status", text: `Couldn't find ${where.missing} on this Mac, so it's working in ${where.cwd.replace(os.homedir(), "~")} instead.` }] : []),
-      ],
-    });
-    const terms = !e.sessionId && LIBRARY_LINE.exec(e.brief)?.[1].split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6);
-    let broll = "";
-    if (terms?.length) {
-      try {
-        broll = await gatherBroll(e, terms);
-      } catch (err) {
-        log("Couldn't look for B-roll:", err.message);
-      }
-    }
-    const prompt = promptFor(e, broll);
-    startClaude(e.id, prompt, e.sessionId, where.cwd, e.sessionId ? prompt : null);
+    // Getting going (looking for B-roll can take minutes) happens alongside, so pickers and replies aren't held up.
+    starting.add(e.id);
+    startEdit(e)
+      .catch((err) => log("Couldn't start the edit:", err.message))
+      .finally(() => starting.delete(e.id));
   }
+}
+
+// Edits being got going: claimed, but Claude Code not started yet.
+const starting = new Set();
+async function startEdit(e) {
+  log(`Editing ${[e.brand, e.videoCode, e.title].filter(Boolean).join(" · ")}`);
+  const where = whereFor(e.folder);
+  e.cwdUsed = where.used;
+  await update(e.id, {
+    events: [
+      { kind: "status", text: `Your Mac (${macName()}) has started the edit${where.used ? ` in ${e.folder}` : ""}.` },
+      ...(where.missing ? [{ kind: "status", text: `Couldn't find ${where.missing} on this Mac, so it's working in ${where.cwd.replace(os.homedir(), "~")} instead.` }] : []),
+    ],
+  });
+  const terms = !e.sessionId && LIBRARY_LINE.exec(e.brief)?.[1].split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6);
+  let broll = "";
+  if (terms?.length) {
+    try {
+      broll = await gatherBroll(e, terms);
+    } catch (err) {
+      log("Couldn't look for B-roll:", err.message);
+    }
+  }
+  const prompt = promptFor(e, broll);
+  startClaude(e.id, prompt, e.sessionId, where.cwd, e.sessionId ? prompt : null);
 }
 
 // ------------------------------------------------------------ keeping itself up to date
@@ -1792,7 +1907,7 @@ let triedHelper = "";
 // When Creator Desk has a newer helper: save it over this one and run it in this one's place, as soon as no
 // edit is running. It's told the moment there's one; otherwise it looks every 6 hours. A failed try waits 10 minutes.
 async function selfUpdate() {
-  if (process.env.CDH_NO_UPDATE || running.size || syncing) return false;
+  if (process.env.CDH_NO_UPDATE || running.size || starting.size || syncing) return false;
   const told = latestHelper && newer(latestHelper, VERSION) && (latestHelper !== triedHelper || Date.now() - lastUpdateCheck > 10 * 60_000);
   if (!told && Date.now() - lastUpdateCheck < 6 * 3_600_000) return false;
   lastUpdateCheck = Date.now();
@@ -1856,15 +1971,16 @@ function onlyHelper() {
 async function loop() {
   onlyHelper();
   log(`Creator Desk Helper ${VERSION} is running for ${cfg.server}. Leave this window open.`);
-  await report(true).catch((e) => log("Couldn't reach Creator Desk:", e.message));
+  reportSoon(true);
   let failures = 0;
   for (;;) {
     // The new helper carries on in this window; this one just waits for it.
     if (await selfUpdate()) return new Promise(() => {});
     try {
       // Say which edits are running here, so ones a restart dropped don't stay stuck on "Editing".
-      await handleWork(await api("GET", `/api/hub/helper/poll?running=${[...running.keys()].join(",")}`));
-      await report();
+      await handleWork(await api("GET", `/api/hub/helper/poll?running=${[...running.keys(), ...starting].join(",")}`));
+      // The list of recent clips goes up alongside (working out new clips' lengths takes a while).
+      reportSoon();
       failures = 0;
     } catch (e) {
       failures++;
@@ -1913,7 +2029,7 @@ function switchBackground(on) {
   if (switchingTo === on) return;
   switchingTo = on;
   const go = async () => {
-    while (running.size || syncing) await sleep(2000);
+    while (running.size || starting.size || syncing) await sleep(2000);
     if (on) {
       if (process.platform !== "darwin" && !process.env.CDH_LAUNCHCTL) {
         log("Running in the background only works on a Mac.");
@@ -1991,7 +2107,7 @@ if (cmd === "connect") {
   }
   cfg = defaults(cfg);
   if (cmd === "autostart") autostart(rest[0] !== "off");
-  else if (cmd === "status") console.log(JSON.stringify({ ...info(), clips: recentClips().length }, null, 2));
+  else if (cmd === "status") console.log(JSON.stringify({ ...info(), clips: (await recentClips()).length }, null, 2));
   else if (cmd === "sound") {
     // node creator-desk-helper.mjs sound <link> [file]: saves the sound and prints where (used by edits).
     const [url, file] = rest;
