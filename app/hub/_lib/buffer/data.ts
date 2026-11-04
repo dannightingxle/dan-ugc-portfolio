@@ -17,6 +17,7 @@ const API = process.env.BUFFER_API_BASE || "https://api.buffer.com";
 const SETTINGS = "buffer:settings";
 const CACHE = "buffer:cache";
 const GROUPS = "buffer:groups";
+const JOBS = "buffer:jobs";
 /** How long the calendar is shown before it's fetched again by itself. */
 const FRESH_MS = 10 * 60_000;
 export const MEDIA_BUCKET = "buffer-media";
@@ -104,7 +105,7 @@ export async function connectBuffer(userId: string, apiKey: string) {
 }
 
 export async function disconnectBuffer(userId: string) {
-  await adminClient().from("hub_workspaces").delete().eq("user_id", userId).in("project_id", [SETTINGS, CACHE, GROUPS]);
+  await adminClient().from("hub_workspaces").delete().eq("user_id", userId).in("project_id", [SETTINGS, CACHE, GROUPS, JOBS]);
 }
 
 // ---------------------------------------------------------------- channel groups
@@ -117,6 +118,16 @@ export async function bufferGroups(userId: string): Promise<ChannelGroup[]> {
 export async function saveBufferGroups(userId: string, groups: ChannelGroup[]) {
   await setRow(userId, GROUPS, { groups });
   return groups;
+}
+
+/** Which of your Buffer accounts each job's videos go to, by job id. */
+export async function jobChannels(userId: string): Promise<Record<string, string[]>> {
+  return (await getRow<{ jobs: Record<string, string[]> }>(userId, JOBS))?.jobs ?? {};
+}
+
+export async function saveJobChannels(userId: string, projectId: string, channelIds: string[]) {
+  const jobs = await jobChannels(userId);
+  await setRow(userId, JOBS, { jobs: { ...jobs, [projectId]: channelIds } });
 }
 
 async function settingsFor(userId: string) {
