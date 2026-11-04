@@ -181,6 +181,7 @@ export async function matchFinished(userId: string, names: string[], jobFor: Rec
     out.push(v);
   }
   // In posting order: by job, then video number, so each job's queue fills V1, V2, V3…
-  out.sort((a, b) => (a.brand || "~").localeCompare(b.brand || "~") || codeNumber(a.code) - codeNumber(b.code) || a.name.localeCompare(b.name));
+  // Ones it couldn't place go last.
+  out.sort((a, b) => Number(!a.projectId) - Number(!b.projectId) || a.brand.localeCompare(b.brand) || codeNumber(a.code) - codeNumber(b.code) || a.name.localeCompare(b.name));
   return { videos: out, channels };
 }

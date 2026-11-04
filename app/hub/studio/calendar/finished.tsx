@@ -62,6 +62,8 @@ export function FinishedVideos({ channels, groups, scheduled, onScheduled, onDon
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [finished, setFinished] = useState(false);
+  // What was already in the queue when you pressed the button (the calendar refreshes with these posts in it afterwards).
+  const [before, setBefore] = useState<CalendarPost[]>([]);
 
   const patch = (key: number, p: Partial<Row>) => setRows((rs) => rs && rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
 
@@ -115,6 +117,7 @@ export function FinishedVideos({ channels, groups, scheduled, onScheduled, onDon
     if (!rows || busy) return;
     setBusy(true);
     setError("");
+    setBefore(scheduled);
     try {
       // Each job's accounts are kept for next time.
       const jobIds = [...new Set(included.map((r) => r.projectId!))];
@@ -267,7 +270,7 @@ export function FinishedVideos({ channels, groups, scheduled, onScheduled, onDon
               </p>
             </div>
           ) : (
-            <Check rows={rows} channels={channels} scheduled={scheduled} />
+            <Check rows={rows} channels={channels} scheduled={before} />
           )}
           {error && <p className="text-sm text-accent">{error}</p>}
         </div>
