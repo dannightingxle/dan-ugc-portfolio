@@ -36,23 +36,38 @@ The server's command or URL tells you which project it is. Check `~/.claude.json
 
 ### The open-source server it most likely is
 
-The `capcut_<action>` names match the open-source **VectCut / CapCutAPI** MCP server (see section 9 for links and other options). Its README lists tools like these:
+Two public servers use exactly the `capcut_<action>` names (links in section 9):
+
+- **[Atx-Guy/capcut-mcp-server](https://github.com/Atx-Guy/capcut-mcp-server)**, a TypeScript MCP server that passes every call to **[VectCutAPI](https://github.com/sun-guannan/VectCutAPI)** (formerly CapCutAPI). VectCutAPI is a Python server on `localhost:9001` that does the real draft writing. VectCutAPI's own MCP server uses the same tools without the `capcut_` prefix (`create_draft`, `add_video`…).
+- **[jmsldrn/capcut-mcp](https://github.com/jmsldrn/capcut-mcp)**, which edits draft files in place (tool list below).
+
+`claude mcp get capcut` tells you which one the Mac runs. The VectCut-based tool set, from VectCutAPI's MCP documentation:
 
 | Tool (as Claude Code sees it) | What it does | Main inputs |
 | --- | --- | --- |
-| `capcut_create_draft` | New empty draft | `width`, `height` (1080×1920 for 9:16) |
-| `capcut_add_video` | Put a clip on a track | `video_url` (local path), `draft_id`, `start`/`end` (source trim, seconds), `target_start` (timeline position), `track_name`, `speed`, `volume`, `scale_x/y`, `transform_x/y`, transition |
-| `capcut_add_audio` | Music, voiceover or SFX | `audio_url`, `draft_id`, `start`/`end`, `target_start`, `volume`, `speed`, `track_name` |
-| `capcut_add_image` | Still, logo, screenshot overlay | `image_url`, `draft_id`, `start`/`end`, position/scale, animation in/out |
-| `capcut_add_text` | On-screen headline or text card | `text`, `start`, `end`, `font`, `font_size`, `font_color`, `stroke`/`border_*`, `background_*`, `shadow_*`, `transform_x/y`, `intro_animation`/`outro_animation` + durations |
-| `capcut_add_subtitle` | Import an SRT as captions | `srt` (text or path), `font`, `font_size`, `font_color`, border, background, `transform_y`, `time_offset` |
-| `capcut_add_effect` | Video effects / filters | `effect_type`, `start`, `end`, `params` |
-| `capcut_add_sticker` | Stickers | `resource_id`, `start`, `end`, position/scale |
-| `capcut_add_video_keyframe` | Keyframes for punch-in zooms and moves | `track_name`, `property_types` (e.g. `uniform_scale`, `position_x`), `times`, `values` |
-| `capcut_get_*_types` | List fonts, animations, transitions, effects | none |
-| `capcut_save_draft` | Write the draft into CapCut's drafts folder | `draft_id`, `draft_folder` |
+| `capcut_create_draft` | New empty draft, returns a `draft_id` | `width`, `height` (1080×1920 for 9:16) |
+| `capcut_add_video` | Put a clip on a track | `draft_id`, `video_url` (local path or URL), `start`/`end` (source trim, s), `target_start` (timeline position), `track_name`, `speed`, `volume`, transform (`scale_x/y`, `transform_x/y`), transition |
+| `capcut_add_audio` | Music, voiceover or SFX | `draft_id`, `audio_url`, `start`/`end`, `target_start`, `volume`, `speed`, audio effects |
+| `capcut_add_image` | Still, logo, screenshot overlay | `draft_id`, `image_url`, `start`/`end`, transform, animation in/out, transition |
+| `capcut_add_text` | Headline / text card | `draft_id`, `text`, `start`, `end`, `font`, `font_size`, `font_color`, border/stroke, `background_*`, `shadow_*`, `text_styles` (per-range styling), position, intro/outro animation |
+| `capcut_add_subtitle` | Captions from an SRT | `draft_id`, `srt` path/text, font style, position (`transform_y`), `time_offset` |
+| `capcut_add_effect` | Video effects / filters | `draft_id`, `effect_type`, `parameters`, `start`, duration |
+| `capcut_add_sticker` | Sticker | `draft_id`, `resource_id`, position, scale, rotation, `start`/`end` |
+| `capcut_add_keyframe` (`add_video_keyframe`) | Punch-in zooms, moves, fades | `draft_id`, `track_name`, `property_types` (e.g. `uniform_scale`, `position_x`, `alpha`), `times`, `values` |
+| `capcut_get_duration` (`get_video_duration`) | Clip length | `video_url` |
+| `capcut_save_draft` | Write the draft folder | `draft_id` (VectCutAPI writes a `dfd_*` folder; it has to land in CapCut's drafts folder, see section 2) |
 
-**Check this table against `/mcp` before you rely on it.** Names and inputs change between versions.
+If it's **jmsldrn/capcut-mcp**, the tools are:
+
+- `capcut_list_drafts`, `capcut_read_timeline`, `capcut_clone_draft`
+- `capcut_add_video` / `_image` / `_audio` / `_text` / `_track`
+- `capcut_move_segment`, `capcut_trim_segment`, `capcut_split_segment`, `capcut_delete_segment`
+- `capcut_set_props`, `capcut_raw_patch`
+- `capcut_validate`, `capcut_save`, `capcut_discard`
+
+It clones segment templates from an existing draft, saves atomically with a `.mcpbak` backup, and **refuses to save while CapCut is running**.
+
+**Check this against `/mcp` on the Mac before relying on it**: names and inputs change between versions.
 
 ### What Claude Code uses besides the MCP
 
@@ -71,10 +86,17 @@ These are just as important. Claude Code has `Bash Read Write Edit Glob Grep Ski
 | Question | Answer | Source |
 | --- | --- | --- |
 | **What gets written** | A **new CapCut draft folder**. The prompt always says *"Make a new CapCut draft (never overwrite one) named "<name>", adding v2, v3 if that name is taken."* Trial versions **duplicate** a draft and "never change the original". | `promptFor()`, `trialPrompt()` |
-| **Where** | CapCut's drafts folder on macOS: `~/Movies/CapCut/User Data/Projects/com.lveditor.draft/<draft name>/`. Inside it, `draft_content.json` (newer builds also have `draft_info.json` / `draft_meta_info.json`). The MCP server writes the JSON, and CapCut lists the draft the next time it reads that folder. The helper never touches that folder: it skips any folder called `CapCut` when it lists clips. | MCP server (section 9); `recentClips()` |
+| **Where** | CapCut's drafts folder. macOS: `~/Movies/CapCut/User Data/Projects/com.lveditor.draft/<draft name>/`. Windows: `%LOCALAPPDATA%\CapCut\User Data\Projects\com.lveditor.draft\`. A draft is a folder of JSON (`draft_content.json`, `draft_meta_info.json`; newer builds also `draft_info.json`, `template-2.tmp` and a nested timeline document). The MCP server writes it, and CapCut lists the draft the next time it reads that folder. With VectCutAPI the `dfd_*` folder it saves has to be in (or copied into) `com.lveditor.draft`. The helper never touches that folder: it skips any folder called `CapCut` when it lists clips. | MCP server (section 9); `recentClips()` |
 | **Draft names** | Personal brand: `Personal <video code>`. Client job: `<Brand> <video code>`, e.g. `Fussy V1`. Whole shoot sheet: `<Brand> V1`, `<Brand> V2`, …. Trials: `<title> T1`, `T2`, …. Claude ends with a line `DRAFT: <name>`, which the helper reads and saves to `hub_edits.draft_name`. | `promptFor()`, `finish()` |
-| **CapCut version** | Not stored in the repo. Every helper reads it from `/Applications/CapCut.app/Contents/Info.plist` (`CFBundleShortVersionString`) and reports it every 30 s into `hub_devices.info.capcut`. Run the command or the SQL below to get it. **Newer CapCut desktop builds encrypt `draft_content.json`, which breaks JSON-writing MCPs.** Record the working version and turn off CapCut auto-update. | `info()` |
-| **Does CapCut have to be open?** | **No, and ideally it's closed.** If CapCut is open it can keep its own copy of the draft list and overwrite or ignore a new draft. So every prompt says *"If CapCut being open stops the draft saving, say so and stop. I'll close it and reply."* The helper reports whether CapCut is running (`pgrep -x CapCut` → `info.capcutRunning`), so the web app can warn the creator. Exports also happen in CapCut by hand (see section 6). | `promptFor()`, `info()` |
+| **CapCut version** | Not stored in the repo. Every helper reads it from `/Applications/CapCut.app/Contents/Info.plist` (`CFBundleShortVersionString`) and reports it every 30 s into `hub_devices.info.capcut`. Run the command or the SQL below to get it. **Version matters.** What's known about CapCut International's draft format by version:
+- **8.2 and 9.5** are confirmed to work with pyCapCut.
+- **8.7 (Windows):** `template-2.tmp` / `draft_meta_info.json` win over `draft_content.json`.
+- **9.2.8+ (macOS):** CapCut reads a nested timeline document; the root files are legacy copies.
+- **Some 8.x / 9.3 builds** reject drafts built from old templates.
+- **Encryption:** JianYing (the Chinese edition) 6.0+ encrypts drafts, but CapCut International reportedly doesn't (one source), and writing new drafts still works.
+
+Record the version that works on each Mac and **turn off CapCut auto-update**. | `info()`; section 9 |
+| **Does CapCut have to be open?** | **No, and it should be closed.** CapCut holds the open project in memory and writes its own copy back on close, so it can overwrite or ignore a new draft (jmsldrn/capcut-mcp refuses to save while it runs). So every prompt says *"If CapCut being open stops the draft saving, say so and stop. I'll close it and reply."* The helper reports whether CapCut is running (`pgrep -x CapCut` → `info.capcutRunning`), so the web app can warn the creator. Exports also happen in CapCut by hand (see section 6). | `promptFor()`, `info()` |
 | **Who runs it** | The creator's own `claude` CLI, under their own login and subscription, on their own Mac. The cloud never touches videos: *"Videos never leave your Mac."* Only paths, durations and 160 px thumbnails go up. | helper header, `report()` |
 
 Get the version on the Mac:
@@ -479,4 +501,92 @@ This is already per user, and it's the part to keep and strengthen:
 
 ## 9. Other editors (Premiere Pro, Final Cut, DaVinci Resolve) and one central tool
 
-_Research findings below._
+Checked 2026-11-04. Star counts and dates come from the GitHub pages that day. Anything marked *(unverified)* came from search snippets or directories only.
+
+### CapCut / JianYing
+
+| Project | Activity | How it changes the editor | Notes |
+| --- | --- | --- | --- |
+| [sun-guannan/VectCutAPI](https://github.com/sun-guannan/VectCutAPI) | ~2.4k★, commit 2026-10-24 | Python HTTP server (:9001) + stdio MCP server; writes a draft folder you put in `com.lveditor.draft`. `draft_profile`: `capcut_legacy` / `jianying_legacy` / `jianying_pro_10` | 11 tools ([MCP doc](https://raw.githubusercontent.com/sun-guannan/VectCutAPI/main/MCP_Documentation_English.md)). Its cloud render isn't open source. No version matrix. |
+| [Atx-Guy/capcut-mcp-server](https://github.com/Atx-Guy/capcut-mcp-server) | 88★, 1 commit | TypeScript MCP → VectCutAPI | Tools named `capcut_*`, like the ones the helper expects |
+| [jmsldrn/capcut-mcp](https://github.com/jmsldrn/capcut-mcp) | 17★, 1 commit | Edits draft JSON in place by cloning templates; atomic save + `.mcpbak` | Read, trim, split, move segments. Won't save while CapCut runs. `CAPCUT_DRAFTS_DIR` sets the folder. |
+| [GuanYixuan/pyCapCut](https://github.com/GuanYixuan/pyCapCut) / [pyJianYingDraft](https://github.com/GuanYixuan/pyJianYingDraft) | ~4.8k★ (pyJianYingDraft), v0.3.1 2026-10-14 | Python library that writes drafts | Most complete feature set (keyframes, masks, chroma, transitions, templates). pyCapCut is validated on CapCut 8.2 and 9.5. No auto-export on Mac. |
+| [renezander030/capcut-cli](https://github.com/renezander030/capcut-cli) | ~1.1k★, v0.32 | CLI with schema validation + `.bak`; includes `detect-silence`, `import-srt` | Best notes on [CapCut versions](https://raw.githubusercontent.com/renezander030/capcut-cli/master/docs/version-support.md) and [encryption](https://raw.githubusercontent.com/renezander030/capcut-cli/master/docs/jianying-encryption.md) |
+| [dcc-mcp/dcc-mcp-capcut](https://github.com/dcc-mcp/dcc-mcp-capcut) | PyPI 0.5.1, 2026-10-17 | Local bridge + panel injected into CapCut; `apply_edit_plan`, `export_video`, `export_otio` | Injection is manual and needs consent. OTIO export drops volume, fades and caption style. |
+
+CapCut has **no FCPXML / EDL / OTIO import or export** that I found. Only these third-party draft writers get edits in.
+
+### Adobe Premiere Pro
+
+| Project | Activity | How it connects | Notes |
+| --- | --- | --- | --- |
+| [hetpatel-11/Adobe_Premiere_Pro_MCP](https://github.com/hetpatel-11/Adobe_Premiere_Pro_MCP) | 814★, 173 commits | Node MCP → script files → **CEP panel** runs ExtendScript (UXP version experimental) | 283 tools behind `search_tools` / `invoke_tool`: import, `add_to_timeline_batch`, `razor_all_tracks`, `trim_clip`, effects, keyframes, `create_caption_track`, `export_sequence`. Premiere 2020+, tested on 26.0. **The most complete.** |
+| [mikechambers/adb-mcp](https://github.com/mikechambers/adb-mcp) | 738★ | MCP → Node proxy (ws :3001) → **UXP plugin** | Proof of concept, one sequence only. Shows the UXP pattern to copy (Premiere 25.6+ has UXP). |
+| [qmasingarbe/pymiere](https://github.com/qmasingarbe/pymiere) | 473★ | Python → CEP → ExtendScript | Unmaintained (tested up to Premiere 23.1) |
+
+- **Adobe's own Claude connector** (Apr 2026) works at Express/Firefly level. It **doesn't drive desktop Premiere timelines** *(secondary sources)*.
+- **The reliable file route** is **FCP7 XML (xmeml)** import.
+
+### Final Cut Pro
+
+- **[DareDev256/fcpxml-mcp-server](https://github.com/DareDev256/fcpxml-mcp-server)** (135★, v0.30.0 2026-11-02). Reads FCPXML 1.8–1.14 and writes 1.13. About 100 operations, including silence removal, rough cuts, transcript edits, markers, and export to Resolve and FCP7 XML. "Live" mode pushes FCPXML into the running app (verified on FCP 12.2). Reading an existing timeline still needs **File › Export XML** by hand.
+- **[elliotttate/SpliceKit](https://github.com/elliotttate/SpliceKit)** injects code into a re-signed FCP. It's powerful but **not fit to ship to users**.
+- **Apple's limits:** FCP's AppleScript is minimal, and Workflow Extensions exchange FCPXML but can't edit the timeline in place. **Generating FCPXML and importing it is the sanctioned route.**
+
+### DaVinci Resolve
+
+- **[samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp)** (~3.9k★, v4.18.5). Uses the official Python scripting API with Resolve running. 37 compound tools, or 390 with `--full`. Tested on Studio 19.1–21.0 and the free 21.0.3 through an in-app bridge.
+- **Free vs Studio:** external scripting needs **Studio**. 21.1 may have made Python Studio-only *(unconfirmed)*.
+- **File routes:** Resolve imports **OTIO, FCPXML, XML, EDL and AAF** natively, so it's the easiest file target.
+
+### Editor-agnostic interchange
+
+- **[OpenTimelineIO](https://github.com/AcademySoftwareFoundation/OpenTimelineIO)** (ASWF, ~2.1k★). One timeline model with adapters for [FCP7 XML (Premiere)](https://github.com/OpenTimelineIO/otio-fcp-adapter), [FCPXML (Final Cut)](https://github.com/OpenTimelineIO/otio-fcpx-xml-adapter), [AAF](https://github.com/OpenTimelineIO/otio-aaf-adapter), [CMX3600 EDL](https://github.com/OpenTimelineIO/otio-cmx3600-adapter) and ALE. Resolve reads `.otio` directly.
+- There's **no CapCut adapter** and no dedicated OTIO MCP server.
+
+### Cloud rendering (no desktop editor)
+
+- **[Shotstack](https://shotstack.io/docs/guide/agents/)**: official hosted MCP (`https://mcp.shotstack.io/`), JSON timeline, cloud render plus a browser editor. The closest ready-made fit for multi-user SaaS.
+- **[Remotion](https://www.remotion.dev/docs/lambda)**: React video rendered on Lambda. Companies need a paid licence. Its hosted docs MCP closed 2026-10-26.
+- **Descript API**: open beta since May 2026; cloud only.
+- **ffmpeg**: build your own render worker for previews and simple outputs.
+
+### Recommendation: one central tool, any editor
+
+Keep what Creator Desk already does well:
+
+- the cloud card, queue and chat
+- per-user styles, notes and the `NOTE FOR STYLE` learning loop
+- the local helper with device tokens and self-update
+- running on each user's own machine and Claude Code login
+
+Change *what the AI produces*.
+
+1. **Make the AI write an edit plan, not editor calls.** Today Claude Code drives the CapCut MCP directly, so the edit only exists as a CapCut draft. Instead, have it produce one versioned **edit plan** JSON, stored in the cloud next to the card (e.g. `hub_edits.plan jsonb`). Model the plan on OTIO so the time maths and the Premiere / FCP / Resolve conversions come free. It holds:
+   - fps and resolution
+   - tracks of clips with `asset` (path on the device + hash), `src_in/src_out`, `rec_in` (in frames), speed, volume and fades
+   - transform keyframes (zooms)
+   - text and caption items carrying a **style preset id**
+   - markers for placeholders ("B-roll needed here")
+   - only the transitions and effects all editors share, plus `extensions.capcut|premiere|fcp|resolve` for editor-only extras
+2. **Typed style presets per user.** Store `style.params` next to the free-text rules, e.g. `{ captions: { font, size, colour, strokePx, yPct, maxWordsPerLine, animation }, music: { duckDb }, zoom: { punchInPct, everyNSec }, cuts: { maxShotSec, silenceGapMs } }`. Each adapter maps a preset to its own editor:
+   - CapCut text styles
+   - Premiere caption track style
+   - FCP title
+   - Resolve Text+
+
+   Free-text rules stay as guidance for the AI; the numbers get applied exactly.
+3. **One adapter per editor**, running in the local helper (Mac or Windows):
+
+   | Editor | File route (always works) | Live route (optional) |
+   | --- | --- | --- |
+   | CapCut | Write a draft folder with pyCapCut or the VectCut generator into `com.lveditor.draft`. CapCut closed, backups, pinned versions. | none safe |
+   | Premiere | FCP7 XML via OTIO → import | UXP plugin (adb-mcp pattern) or the CEP MCP above |
+   | Final Cut | FCPXML 1.11–1.13 → Open Document | fcpxml-mcp-server live mode |
+   | Resolve | `.otio` / FCPXML → `ImportTimelineFromFile` | davinci-resolve-mcp (Studio) |
+
+   Each user picks their editor once, per device (`hub_devices.info.editor`, detected like `info.capcut` is today). The card's run button exports the plan to that editor.
+4. **Two things never go through a desktop editor:**
+   - **Analysis.** Transcription, silence and mistake detection, take scoring and frame descriptions come before the plan is written. They can run in the helper (ffmpeg + a local Whisper) so videos stay on the user's machine.
+   - **Preview and render.** An ffmpeg (or Shotstack) render of the plan works for users without a desktop editor, and gives a web preview on the card.
+5. **Expect CapCut to break most.** Its format is undocumented and changes with releases. Keep a test set of drafts for each CapCut version you support, run it in CI, report each Mac's CapCut version as today, and warn when a Mac moves to an untested one.
