@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CAPTION_LIMIT, SERVICE_LABEL, type CalendarData, type CalendarPost, type Channel, type ChannelGroup, type ScheduleResult } from "../../_lib/buffer/types";
-import { SUPABASE_KEY, SUPABASE_URL } from "../../_lib/supabase/config";
+import { FinishedVideos } from "./finished";
+import { Avatar, call, input, type Upload, uploadVideo } from "./shared";
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
 import { Busy, Spinner } from "../../_lib/ui";
@@ -15,15 +16,6 @@ import { Busy, Spinner } from "../../_lib/ui";
 
 type Status = { connected: false } | { connected: true; organization: string; connectedAt: string };
 type Loaded = { status: Status; calendar?: CalendarData; error?: string; groups?: ChannelGroup[] };
-
-const input = "w-full rounded-xl border border-border bg-bg-card px-3 py-2 text-sm outline-none focus:border-accent";
-
-async function call<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Something went wrong (${res.status}).`);
-  return json as T;
-}
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -38,6 +30,7 @@ export function CalendarPage() {
   const [loadError, setLoadError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [finishing, setFinishing] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     setRefreshing(refresh);
@@ -86,7 +79,22 @@ export function CalendarPage() {
                 Refresh
               </Busy>
             </button>
-            <button onClick={() => setScheduling((s) => !s)} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover">
+            <button
+              onClick={() => {
+                setFinishing((s) => !s);
+                setScheduling(false);
+              }}
+              className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover"
+            >
+              {finishing ? "Close" : "Schedule finished videos"}
+            </button>
+            <button
+              onClick={() => {
+                setScheduling((s) => !s);
+                setFinishing(false);
+              }}
+              className="rounded-xl border border-border px-4 py-2 text-sm hover:border-accent hover:text-accent"
+            >
               {scheduling ? "Close" : "+ Schedule a post"}
             </button>
           </div>
@@ -111,6 +119,9 @@ export function CalendarPage() {
               onScheduled={() => void load(true)}
               onDone={() => setScheduling(false)}
             />
+          )}
+          {finishing && data.calendar && (
+            <FinishedVideos channels={data.calendar.channels} groups={data.groups ?? []} scheduled={data.calendar.scheduled} onScheduled={() => void load(true)} onDone={() => setFinishing(false)} />
           )}
           {data.calendar && <Calendar calendar={data.calendar} />}
           <Disconnect organization={data.status.organization} onDone={() => void load()} />
@@ -200,12 +211,6 @@ function Disconnect({ organization, onDone }: { organization: string; onDone: ()
 }
 
 /* ---- The calendar ---- */
-
-function Avatar({ channel, size = "h-6 w-6" }: { channel?: Channel; size?: string }) {
-  if (!channel) return <span className={`${size} shrink-0 rounded-full bg-text/10`} />;
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={channel.avatar} alt="" className={`${size} shrink-0 rounded-full border border-border object-cover`} />;
-}
 
 function Calendar({ calendar }: { calendar: CalendarData }) {
   const byId = useMemo(() => new Map(calendar.channels.map((c) => [c.id, c])), [calendar.channels]);
@@ -379,56 +384,6 @@ function SentRow({ post, channel }: { post: CalendarPost; channel?: Channel }) {
 }
 
 /* ---- Scheduling ---- */
-
-// Your Supabase project, for the one setting a too-big video needs.
-const SUPABASE_PROJECT = /^https:\/\/([a-z0-9]+)\.supabase\.co/.exec(SUPABASE_URL)?.[1];
-
-type Upload = { file: File; progress: number; path?: string; error?: string; promise: Promise<string>; abort: () => void };
-
-/** Upload a video straight to storage (too big to go through the server), with progress. It starts as soon as you pick the video. */
-function uploadVideo(file: File, onProgress: (pct: number) => void): { promise: Promise<string>; abort: () => void } {
-  let xhr: XMLHttpRequest | null = null;
-  let aborted = false;
-  const promise = new Promise<string>(async (resolve, reject) => {
-    try {
-      const { path, token } = await call<{ path: string; token: string }>("/api/hub/buffer/upload", { method: "POST", body: JSON.stringify({ name: file.name }) });
-      if (aborted) return reject(new Error("Upload cancelled."));
-      const body = new FormData();
-      body.append("cacheControl", "3600");
-      body.append("", file);
-      xhr = new XMLHttpRequest();
-      xhr.open("PUT", `${SUPABASE_URL}/storage/v1/object/upload/sign/buffer-media/${path}?token=${encodeURIComponent(token)}`);
-      xhr.setRequestHeader("apikey", SUPABASE_KEY);
-      xhr.setRequestHeader("x-upsert", "false");
-      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
-      xhr.onload = () => {
-        if (!xhr) return;
-        if (xhr.status >= 200 && xhr.status < 300) resolve(path);
-        else if (xhr.status === 413 || /too large|exceeded the maximum|maximum allowed size/i.test(xhr.responseText))
-          reject(
-            new Error(
-              `Your storage turned this video down for being too big (${Math.round(file.size / 1_000_000)} MB). It's one setting in Supabase: Storage → Settings → "Upload file size limit" - set it to 5 GB and save${SUPABASE_PROJECT ? ` (supabase.com/dashboard/project/${SUPABASE_PROJECT}/storage/buckets, then Settings)` : ""}. Then try again.`,
-            ),
-          );
-        else reject(new Error(`The upload didn't go through (${xhr.status}). Try again.`));
-      };
-      xhr.onerror = () => reject(new Error("The upload didn't go through. Check your connection and try again."));
-      xhr.onabort = () => reject(new Error("Upload cancelled."));
-      xhr.send(body);
-    } catch (e) {
-      reject(e);
-    }
-  });
-  // Nobody may be waiting on it yet: the error is shown from state.
-  promise.catch(() => {});
-  return {
-    promise,
-    abort: () => {
-      aborted = true;
-      xhr?.abort();
-    },
-  };
-}
 
 const firstLine = (s: string) => s.trim().split("\n")[0].slice(0, 80);
 
