@@ -247,7 +247,10 @@ export async function schedulePosts(userId: string, input: ScheduleInput): Promi
         ? { instagram: { type: "reel", shouldShareToFeed: true } }
         : service === "youtube"
           ? { youtube: { title, categoryId: "22" } }
-          : undefined;
+          : service === "facebook"
+            ? // Buffer needs a Facebook post's type: a video goes up as a reel.
+              { facebook: { type: videoUrl ? "reel" : "post", annotations: [] } }
+            : undefined;
     const variables = {
       input: {
         text: input.text,

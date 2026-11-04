@@ -1,6 +1,6 @@
 "use client";
 
-import type { Channel } from "../../_lib/buffer/types";
+import { SERVICE_LABEL, type Channel, type ChannelGroup } from "../../_lib/buffer/types";
 import { SUPABASE_KEY, SUPABASE_URL } from "../../_lib/supabase/config";
 
 /* What the Calendar's scheduling forms share: talking to Creator Desk, uploading a video for Buffer, account avatars. */
@@ -78,4 +78,76 @@ export function uploadVideo(file: File, onProgress: (pct: number) => void): { pr
       xhr?.abort();
     },
   };
+}
+
+type PickerChannel = Pick<Channel, "id" | "name" | "service" | "avatar"> & { displayName?: string | null };
+
+/** Which of your Buffer accounts something goes to: every account as a row you tick, and your channel groups as one-tap picks. */
+export function AccountPicker({
+  label,
+  channels,
+  value,
+  onChange,
+  groups = [],
+  disabled = false,
+}: {
+  label: string;
+  channels: PickerChannel[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+  groups?: ChannelGroup[];
+  disabled?: boolean;
+}) {
+  return (
+    <div role="group" aria-label={label} className="space-y-2">
+      {groups.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-text-muted">Use a group:</span>
+          {groups.map((g) => {
+            const ids = g.channelIds.filter((id) => channels.some((c) => c.id === id));
+            const same = ids.length > 0 && ids.length === value.length && ids.every((id) => value.includes(id));
+            return (
+              <button
+                key={g.id}
+                type="button"
+                aria-pressed={same}
+                disabled={disabled || !ids.length}
+                onClick={() => onChange(ids)}
+                className={`rounded-lg border px-3 py-1 font-medium transition disabled:opacity-50 ${same ? "border-accent bg-accent text-on-accent" : "border-border-strong hover:border-accent"}`}
+              >
+                {g.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {channels.map((c) => {
+          const on = value.includes(c.id);
+          return (
+            <li key={c.id}>
+              <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${on ? "border-accent bg-accent-soft" : "border-border bg-bg-card hover:border-border-strong"}`}>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                  checked={on}
+                  disabled={disabled}
+                  aria-label={`${c.name} on ${SERVICE_LABEL[c.service] ?? c.service}`}
+                  onChange={() => onChange(on ? value.filter((x) => x !== c.id) : [...value, c.id])}
+                />
+                <Avatar channel={c as Channel} />
+                <span className="min-w-0">
+                  <span className={`block truncate ${on ? "font-medium" : ""}`}>{c.displayName || c.name}</span>
+                  <span className="block truncate text-xs text-text-muted">
+                    {SERVICE_LABEL[c.service] ?? c.service}
+                    {c.displayName && c.displayName !== c.name ? ` · ${c.name}` : ""}
+                  </span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }

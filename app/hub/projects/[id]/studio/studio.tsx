@@ -8,6 +8,7 @@ import { JobAssistant } from "./assistant";
 import { Busy, Spinner, shortDate, useBusy } from "../../../_lib/ui";
 import { ACCOUNT_CHECKS, DEFAULT_FILMING, FILES, type Profile, type SheetSummary, type Workspace } from "../../../_lib/studio/types";
 import { Field, Section, input } from "../../fields";
+import { JobBufferAccounts } from "../../../studio/calendar/job-accounts";
 import { useFeature } from "../../../account-provider";
 import { EditPanel, EditsList, editName, useEditsData } from "./edits";
 import { ChatList, ChatView, CouldntOpen, type OpenChat } from "./sheet-chat";
@@ -67,6 +68,7 @@ export function Studio({ projectId }: { projectId: string }) {
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const editsOn = useFeature("edits");
   const accountsOn = useFeature("accounts");
+  const calendarOn = useFeature("calendar");
   // On a wide screen the shoot sheet chat sits on the right, beside whichever tab is open.
   const wide = useWide();
   // Tell the pop-ups the chat panel is on the right, so they keep clear of its reply box.
@@ -261,7 +263,7 @@ export function Studio({ projectId }: { projectId: string }) {
         {shown === "setup" && <SetupTab api={api} ws={ws} edit={edit} onWorkspace={setWs} onAsk={(prefill) => setAssist({ open: true, prefill })} />}
         {shown === "files" && <FilesTab ws={ws} edit={edit} />}
         {shown === "review" && <ReviewTab api={api} ws={ws} onWorkspace={setWs} />}
-        {shown === "account" && <AccountTab ws={ws} edit={edit} stats={accountsOn} />}
+        {shown === "account" && <AccountTab ws={ws} edit={edit} stats={accountsOn} buffer={calendarOn ? { projectId, brand: project?.brand || "This job" } : null} />}
         {shown === "edits" && editsOn && (
           <EditsList store={edits} projectId={projectId} sheets={sheets} panel={panelOn ? { openId: editShown ? panelEdit : null, onOpen: (id) => (id ? openEdit(id) : closeEdit()) } : undefined} />
         )}
@@ -872,7 +874,7 @@ function ReviewTab({ api, ws, onWorkspace }: { api: string; ws: Workspace; onWor
 
 /* ---- Account ---- */
 
-function AccountTab({ ws, edit, stats }: { ws: Workspace; edit: (w: Workspace) => void; stats: boolean }) {
+function AccountTab({ ws, edit, stats, buffer }: { ws: Workspace; edit: (w: Workspace) => void; stats: boolean; buffer: { projectId: string; brand: string } | null }) {
   const a = ws.account;
   const set = (patch: Partial<Workspace["account"]>) => edit({ ...ws, account: { ...a, ...patch } });
   const done = ACCOUNT_CHECKS.filter((c) => a.checks[c.id]).length;
@@ -883,6 +885,7 @@ function AccountTab({ ws, edit, stats }: { ws: Workspace; edit: (w: Workspace) =
           <TextBox rows={3} className={input} value={a.handles} onValue={(v) => set({ handles: v })} placeholder={"TikTok @danlearnsmarkets\nInstagram @danlearnsmarkets"} />
         </Field>
       </Section>
+      {buffer && <JobBufferAccounts projectId={buffer.projectId} brand={buffer.brand} />}
       {stats && <TrackedProfiles profiles={a.profiles} handles={a.handles} onChange={(profiles) => set({ profiles })} />}
       <Section title="New account checklist" action={<span className="text-xs text-text-dim">{done}/{ACCOUNT_CHECKS.length}</span>}>
         <ul className="space-y-1">
