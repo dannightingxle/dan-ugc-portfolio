@@ -23,6 +23,16 @@ export function Avatar({ channel, size = "h-6 w-6" }: { channel?: Channel; size?
 // Your Supabase project, for the one setting a too-big video needs.
 const SUPABASE_PROJECT = /^https:\/\/([a-z0-9]+)\.supabase\.co/.exec(SUPABASE_URL)?.[1];
 
+/** What Supabase said about a failed upload, in its own words (for working out why). */
+function said(body: string) {
+  try {
+    const m = (JSON.parse(body) as { message?: string; error?: string }).message ?? "";
+    return m ? ` - Supabase said "${m.slice(0, 160)}"` : "";
+  } catch {
+    return "";
+  }
+}
+
 export type Upload = { file: File; progress: number; path?: string; error?: string; promise: Promise<string>; abort: () => void };
 
 /** Upload a video straight to storage (too big to go through the server), with progress. It starts as soon as you pick the video. */
@@ -47,10 +57,10 @@ export function uploadVideo(file: File, onProgress: (pct: number) => void): { pr
         else if (xhr.status === 413 || /too large|exceeded the maximum|maximum allowed size/i.test(xhr.responseText))
           reject(
             new Error(
-              `Your storage turned this video down for being too big (${Math.round(file.size / 1_000_000)} MB). It's one setting in Supabase: Storage → Settings → "Upload file size limit" - set it to 5 GB and save${SUPABASE_PROJECT ? ` (supabase.com/dashboard/project/${SUPABASE_PROJECT}/storage/buckets, then Settings)` : ""}. Then try again.`,
+              `Your storage turned this video down for being too big (${Math.round(file.size / 1_000_000)} MB${said(xhr.responseText)}). It's one setting in Supabase: Storage → Settings → "Upload file size limit" - set it to 5 GB and save${SUPABASE_PROJECT ? ` (supabase.com/dashboard/project/${SUPABASE_PROJECT}/storage/buckets, then Settings)` : ""}. If you've just changed it, give it a few minutes, then try again. On Supabase's free plan it can't go above 50 MB.`,
             ),
           );
-        else reject(new Error(`The upload didn't go through (${xhr.status}). Try again.`));
+        else reject(new Error(`The upload didn't go through (${xhr.status}${said(xhr.responseText)}). Try again.`));
       };
       xhr.onerror = () => reject(new Error("The upload didn't go through. Check your connection and try again."));
       xhr.onabort = () => reject(new Error("Upload cancelled."));
