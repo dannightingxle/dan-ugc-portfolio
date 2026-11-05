@@ -5,7 +5,7 @@ import { SERVICE_LABEL, type CalendarPost, type Channel, type ChannelGroup, type
 import type { FinishedVideo } from "../../_lib/buffer/finished";
 import { TextBox } from "../../_lib/text-box";
 import { Busy, Spinner } from "../../_lib/ui";
-import { Avatar, call, input, uploadVideo } from "./shared";
+import { AccountPicker, call, input, uploadVideo } from "./shared";
 
 /* Schedule finished videos: pick everything you exported from CapCut, and
    Creator Desk works out what each one is from its name (the draft name the
@@ -202,44 +202,18 @@ export function FinishedVideos({ channels, groups, scheduled, onScheduled, onDon
                       {job.videosPerDay ? ` · ${perDay(job.videosPerDay)}` : ""}
                     </span>
                   </h3>
-                  {projectId && job.channelsFrom === "handles" && !finished && <span className="text-xs text-text-muted">Accounts matched from the job&apos;s handles - kept for next time</span>}
                 </div>
                 {projectId && (
-                  <div className="flex flex-wrap items-center gap-2" aria-label={`${job.brand} accounts`} role="group">
-                    {groups.map((g) => {
-                      const ids = g.channelIds.filter((id) => usable.some((c) => c.id === id));
-                      const all = ids.length > 0 && ids.length === picked.length && ids.every((id) => picked.includes(id));
-                      return (
-                        <button
-                          key={g.id}
-                          type="button"
-                          aria-pressed={all}
-                          disabled={busy || finished}
-                          onClick={() => setAccounts((a) => ({ ...a, [projectId]: ids }))}
-                          className={`rounded-lg border px-3 py-1 text-sm font-medium transition ${all ? "border-accent bg-accent text-on-accent" : "border-border-strong hover:border-accent"}`}
-                        >
-                          {g.name}
-                        </button>
-                      );
-                    })}
-                    {usable.map((c) => {
-                      const on = picked.includes(c.id);
-                      return (
-                        <label key={c.id} className={`flex cursor-pointer items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-sm transition ${on ? "border-accent bg-accent-soft" : "border-border hover:border-border-strong"}`}>
-                          <input
-                            type="checkbox"
-                            className="sr-only"
-                            checked={on}
-                            disabled={busy || finished}
-                            aria-label={`${job.brand}: ${c.name} on ${SERVICE_LABEL[c.service] ?? c.service}`}
-                            onChange={() => setAccounts((a) => ({ ...a, [projectId]: on ? picked.filter((x) => x !== c.id) : [...picked, c.id] }))}
-                          />
-                          <Avatar channel={c} />
-                          <span className={on ? "font-medium" : ""}>{c.name}</span>
-                          <span className="text-xs text-text-dim">{SERVICE_LABEL[c.service] ?? c.service}</span>
-                        </label>
-                      );
-                    })}
+                  <div className="space-y-2 rounded-xl border border-border bg-bg-elevated/40 p-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <p className="text-sm font-semibold">Posts to</p>
+                      <p className="text-xs text-text-muted">
+                        {job.channelsFrom === "saved"
+                          ? `Saved for ${job.brand} - change it here, or on the job's Account tab.`
+                          : `Suggested from ${job.brand}'s handles - tick every account this job posts to. It's saved for next time when you schedule.`}
+                      </p>
+                    </div>
+                    <AccountPicker label={`${job.brand} accounts`} channels={usable} value={picked} onChange={(ids) => setAccounts((a) => ({ ...a, [projectId]: ids }))} groups={groups} disabled={busy || finished} />
                   </div>
                 )}
                 <ul className="space-y-3">

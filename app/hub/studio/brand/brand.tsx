@@ -10,6 +10,7 @@ import { ActionButton, FilePicker, SheetList, call, useAction, type Upload } fro
 import { Edits } from "../../projects/[id]/studio/edits";
 import { useFeature } from "../../account-provider";
 import { BRAND_ID } from "../../_lib/studio/brand-types";
+import { JobBufferAccounts } from "../calendar/job-accounts";
 import { IdeasTab } from "./ideas";
 import { TrialsTab } from "./trials";
 import { TextBox } from "../../_lib/text-box";
@@ -29,6 +30,7 @@ export function BrandStudio() {
   const [tab, setTab] = useState<Tab>("ideas");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const editsOn = useFeature("edits");
+  const calendarOn = useFeature("calendar");
 
   useEffect(() => {
     call<{ brand: BrandData; sheets: SheetSummary[]; claude: boolean; apify: boolean }>(API, "GET")
@@ -164,7 +166,7 @@ export function BrandStudio() {
         />
       )}
       {tab === "week" && <WeekTab brand={brand} apify={flags.apify} sheets={sheets} setSheets={setSheets} onBrand={setBrand} edit={edit} goSetup={() => setTab("setup")} />}
-      {tab === "setup" && <SetupTab brand={brand} edit={edit} />}
+      {tab === "setup" && <SetupTab brand={brand} edit={edit} buffer={calendarOn} />}
       {tab === "files" && (
         <div className="space-y-5">
           <Section title="Winners">
@@ -417,7 +419,7 @@ function HandleList({ title, hint, list, onChange, withNote }: { title: string; 
   );
 }
 
-function SetupTab({ brand, edit }: { brand: BrandData; edit: (b: BrandData) => void }) {
+function SetupTab({ brand, edit, buffer }: { brand: BrandData; edit: (b: BrandData) => void; buffer: boolean }) {
   return (
     <div className="space-y-5">
       <Section title="About your brand">
@@ -431,6 +433,7 @@ function SetupTab({ brand, edit }: { brand: BrandData; edit: (b: BrandData) => v
         />
       </Section>
       <HandleList title="Your accounts" hint="Your personal brand accounts. Public accounts only." list={brand.accounts} onChange={(accounts) => edit({ ...brand, accounts })} />
+      {buffer && <JobBufferAccounts projectId={BRAND_ID} brand="Your personal brand" />}
       <HandleList
         title="Creators you track"
         hint="Creators doing well that you want to learn from. Their posts that beat their own average get turned into ideas for you."

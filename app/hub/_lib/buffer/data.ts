@@ -216,6 +216,11 @@ export async function videoUploadUrl(userId: string, fileName: string) {
   if (!bucket) {
     const { error } = await storage.createBucket(MEDIA_BUCKET, { public: true });
     if (error && !/already exists/i.test(error.message)) throw error;
+  } else if (bucket.file_size_limit || bucket.allowed_mime_types?.length) {
+    // A size limit (or list of file types) on the bucket itself would hold videos back whatever the project's upload
+    // limit is set to: clear it, so "Upload file size limit" in Supabase's Storage settings is the one that counts.
+    const { error } = await storage.updateBucket(MEDIA_BUCKET, { public: true, fileSizeLimit: null, allowedMimeTypes: null });
+    if (error) console.error("Creator Desk buffer: couldn't clear the video bucket's own limit:", error.message);
   }
   const ext = (/\.(mp4|mov|m4v|webm)$/i.exec(fileName)?.[1] ?? "mp4").toLowerCase();
   // Public, but only to whoever has the link: a random name in a folder of your own.
@@ -242,7 +247,10 @@ export async function schedulePosts(userId: string, input: ScheduleInput): Promi
         ? { instagram: { type: "reel", shouldShareToFeed: true } }
         : service === "youtube"
           ? { youtube: { title, categoryId: "22" } }
-          : undefined;
+          : service === "facebook"
+            ? // Buffer needs a Facebook post's type: a video goes up as a reel.
+              { facebook: { type: videoUrl ? "reel" : "post", annotations: [] } }
+            : undefined;
     const variables = {
       input: {
         text: input.text,

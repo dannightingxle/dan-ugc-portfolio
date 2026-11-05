@@ -72,11 +72,25 @@ function handlesFrom(text: string) {
     });
 }
 
+/** The accounts a job's handles name - and its other accounts under the same name (a Facebook page or YouTube channel
+    called what the TikTok's display name is), as a suggestion to tick or untick. */
 function channelsForHandles(handles: { platform: string; handle: string }[], channels: Channel[]) {
-  return channels
-    .filter((c) => !c.isDisconnected && !c.isLocked)
-    .filter((c) => handles.some((h) => h.handle === c.name.replace(/^@/, "").toLowerCase() && (!h.platform || h.platform === c.service)))
-    .map((c) => c.id);
+  const usable = channels.filter((c) => !c.isDisconnected && !c.isLocked);
+  const named = usable.filter((c) => handles.some((h) => h.handle === c.name.replace(/^@/, "").toLowerCase() && (!h.platform || h.platform === c.service)));
+  const names = new Set(named.flatMap((c) => [c.displayName, c.name].filter(Boolean).map((n) => norm(String(n)))));
+  const alsoNamed = usable.filter((c) => !named.includes(c) && [c.displayName, c.name].some((n) => n && names.has(norm(n))));
+  return [...named, ...alsoNamed].map((c) => c.id);
+}
+
+/** Where a job's videos go: the accounts saved for it, or (until you save some) the ones its handles suggest. */
+export async function jobAccounts(userId: string, projectId: string) {
+  const [calendar, saved] = await Promise.all([bufferCalendar(userId).catch(() => null), jobChannels(userId)]);
+  const channels = calendar?.channels ?? [];
+  const usable = new Set(channels.filter((c) => !c.isDisconnected && !c.isLocked).map((c) => c.id));
+  const kept = (saved[projectId] ?? []).filter((id) => usable.has(id));
+  if (projectId in saved) return { channels, channelIds: kept, from: "saved" as const };
+  const handles = projectId === BRAND_ID ? (await getBrand(userId)).accounts.map((a) => ({ platform: a.platform, handle: a.handle.replace(/^@/, "").toLowerCase() })) : handlesFrom((await getWorkspace(userId, projectId)).account.handles);
+  return { channels, channelIds: channelsForHandles(handles, channels), from: "handles" as const };
 }
 
 /** Each file matched; `jobFor` names the job for a file you've told it about (by file name). */
@@ -160,7 +174,7 @@ export async function matchFinished(userId: string, names: string[], jobFor: Rec
       v.brand = v.projectId === BRAND_ID ? "Personal brand" : String(p?.data?.brand ?? "");
       v.videosPerDay = typeof p?.data?.videosPerDay === "number" ? p.data.videosPerDay : null;
       const kept = (saved[v.projectId] ?? []).filter((id) => usable.has(id));
-      if (kept.length) {
+      if (v.projectId in saved) {
         v.channelIds = kept;
         v.channelsFrom = "saved";
       } else {
