@@ -51,9 +51,9 @@ export function pdfLinks(base64: string): string[] {
 }
 
 /** The links in every uploaded PDF, one per line, to read alongside what was pasted. */
-export function uploadedLinks(uploads: { type: string; data: string }[]) {
+export function uploadedLinks(uploads: { type: string; data?: string }[]) {
   return uploads
-    .filter((u) => u.type === "application/pdf")
-    .flatMap((u) => pdfLinks(u.data))
+    .filter((u) => u.type === "application/pdf" && u.data)
+    .flatMap((u) => pdfLinks(u.data!))
     .join("\n");
 }

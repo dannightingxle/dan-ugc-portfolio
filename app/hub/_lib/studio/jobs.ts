@@ -13,6 +13,7 @@ import { apifyEnabled, pullPosts } from "./apify";
 import { readOnMac } from "../edits/mac-reads";
 import { applySetup, suggestedHandles } from "./new-job";
 import { uploadedLinks } from "./pdf-links";
+import { attachedVideos } from "./attachments";
 import { type Unread, type WebPages, cleanLink, readWebPages } from "./web-pages";
 import type { Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
@@ -25,7 +26,8 @@ import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types"
    material, make the week's shoot sheet, and run the Friday review. Each one
    reads the job's workspace and writes the results straight back into it. */
 
-export type Upload = { name: string; type: string; data: string };
+/** A file attached to the material: sent along (a PDF or screenshot), or uploaded to storage first (a video). */
+export type Upload = { name: string; type: string; data?: string; path?: string };
 
 /** The job's name and basics, from the tracker (hub_projects). */
 async function projectBasics(userId: string, projectId: string) {
@@ -45,6 +47,8 @@ export function workspaceContext(name: string, ws: Workspace) {
 
 function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockParam[] {
   return uploads.flatMap((u): Anthropic.Beta.BetaContentBlockParam[] => {
+    // Videos go to the video watcher (frames and what's said), not in here.
+    if (!u.data) return [];
     if (u.type === "application/pdf") return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: u.data }, title: u.name }];
     if (u.type === "image/png" || u.type === "image/jpeg" || u.type === "image/webp" || u.type === "image/gif") {
       return [{ type: "image", source: { type: "base64", media_type: u.type, data: u.data } }];
@@ -185,7 +189,8 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
   progress("Watching the reference videos and looking at the accounts");
   // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at - and every
   // other one in the material by its caption and what's said - plus the accounts it links to study.
-  const [watched, study] = await Promise.all([watchVideos(links, linked.pages, undefined, SETUP_MORE_VIDEOS), studyAccounts(links, linked.pages)]);
+  const attached = await attachedVideos(user.id, input.uploads);
+  const [watched, study] = await Promise.all([watchVideos(links, linked.pages, undefined, SETUP_MORE_VIDEOS, attached), studyAccounts(links, linked.pages)]);
   const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
   progress("Claude is setting up the job");
   const result = await ask({
@@ -238,13 +243,13 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
 const SHEET_MORE_VIDEOS = 6;
 
 /** A brief's links read for Claude: public pages, pages on your Mac, and reference videos. */
-async function readBrief(userId: string, text: string, alsoWatch: string, progress: Progress) {
+async function readBrief(userId: string, text: string, alsoWatch: string, progress: Progress, attached: { label: string; url: string }[] = []) {
   progress("Reading the linked pages");
   const linked = await readLinkedPages(text);
   const { rest, failed: macFailed, unread } = await readOtherLinks(userId, text, linked, progress);
   // Reference videos in the brief (or what's trending), as frames Claude can look at.
   progress("Watching the reference videos");
-  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages, undefined, SHEET_MORE_VIDEOS);
+  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages, undefined, SHEET_MORE_VIDEOS, attached);
   return { linked, rest, unread, watched, failed: [...linked.failed, ...macFailed, ...watched.failed] };
 }
 
@@ -291,7 +296,7 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
   // This week's brief from the brand is for this sheet only: the project brief (Files tab) never changes here.
   // Public Notion pages and Google Docs in it are read here and sent with it.
   const followUps = (input.followUps ?? []).join("\n\n");
-  const read = await readBrief(user.id, [input.weekBrief, followUps, uploadedLinks(input.uploads)].join("\n"), input.trending, progress);
+  const read = await readBrief(user.id, [input.weekBrief, followUps, uploadedLinks(input.uploads)].join("\n"), input.trending, progress, await attachedVideos(user.id, input.uploads));
   const notes = await readNotesPages(ws, [...read.linked.pages.map((p) => p.url), ...read.rest], progress);
   const weekBrief = [input.weekBrief.trim(), linkedPagesText(read.linked.pages)].filter(Boolean).join("\n\n");
 

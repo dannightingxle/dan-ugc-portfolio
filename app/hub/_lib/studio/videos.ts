@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegStatic from "ffmpeg-static";
-import { type SocialVideo, apifyEnabled, fetchSocialVideos } from "./apify";
+import { type SocialVideo, apifyEnabled, fetchSocialVideos, transcribeMedia } from "./apify";
 import type { LinkedPage } from "./linked-pages";
 
 /* Reference videos, watched the only way Claude can: as still frames.
@@ -188,10 +188,15 @@ async function download(url: string, file: string) {
 /** Download each video and turn it into timed frames (and captions where the platform has them). Past the first `max`, up to
     `alsoDescribe` more are looked up for their caption, what's said in them and their views, without frames - so a brief
     with a long list of references has every one of them read, not just the first few. */
-export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_VIDEOS, alsoDescribe = 0): Promise<Watched> {
-  const { uploads, social } = findVideos(text, pages);
+export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_VIDEOS, alsoDescribe = 0, attached: { label: string; url: string }[] = []): Promise<Watched> {
+  const found = findVideos(text, pages);
+  // Videos you attached come first, then ones uploaded into the linked pages.
+  const uploads = [...attached, ...found.uploads];
+  const { social } = found;
   const failed: string[] = [];
   const sources: Source[] = uploads.slice(0, max);
+  // What's said in them: a file has no captions of its own, so it's transcribed (alongside the downloads).
+  const spoken = transcribeMedia(sources.map((s) => s.url));
   const toWatch = Math.max(0, max - sources.length);
   const wanted = social.slice(0, toWatch + alsoDescribe);
   const described: WatchedVideo[] = [];
@@ -219,6 +224,11 @@ export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_V
     failed.push(...skipped.map((s) => `${s.url} - not looked at: Creator Desk looks at the first ${toWatch + alsoDescribe} reference videos in the material.`));
   }
   if (!sources.length) return { videos: described, failed };
+  const words = await spoken;
+  for (const s of sources) {
+    const lines = words[s.url];
+    if (!s.transcript && lines?.length) s.transcript = lines.map((l) => `${timeLabel(l.start)} ${l.text}`).join("\n").slice(0, 8000);
+  }
 
   const dir = await mkdtemp(path.join(tmpdir(), "cd-video-"));
   const perVideo = Math.min(MAX_FRAMES_PER_VIDEO, Math.floor(MAX_FRAMES / sources.length));
@@ -237,7 +247,8 @@ export async function watchVideos(text: string, pages: LinkedPage[], max = MAX_V
             return asDescribed({ ...s, transcript: s.transcript || (s.subtitles ? await subtitles(s.subtitles) : "") });
           }
           const why = e instanceof Error && !/fetch failed|aborted|timeout/i.test(e.message) ? e.message : "the video didn't download";
-          failed.push(`${s.url} - ${why}. Its link still works on the sheet.`);
+          // A video you attached is named, not given by its (private, signed) storage link.
+          failed.push(s.url.includes("/storage/v1/object/sign/") ? `${s.label} - ${why}.` : `${s.url} - ${why}. Its link still works on the sheet.`);
           return null;
         }
       }),
@@ -255,7 +266,8 @@ export function videoBlocks(w: Watched) {
   // Numbered among the ones with frames, so "Video 2 at 0:03" matches "Reference video 2".
   const withFrames = w.videos.filter((v) => v.frames.length);
   const without = w.videos.filter((v) => !v.frames.length);
-  const facts = (v: WatchedVideo) => [`Link: ${v.url}`, v.seconds || v.views ? [v.seconds && `Length: ${Math.round(v.seconds)}s`, v.views && `${viewsText(v.views)} views`].filter(Boolean).join(" · ") : ""];
+  // A video Dan attached has no link to give (its storage link is private and expires).
+  const facts = (v: WatchedVideo) => [v.url.includes("/storage/v1/object/sign/") ? "Attached by Dan as a file (no link to it)" : `Link: ${v.url}`, v.seconds || v.views ? [v.seconds && `Length: ${Math.round(v.seconds)}s`, v.views && `${viewsText(v.views)} views`].filter(Boolean).join(" · ") : ""];
   return [
     ...withFrames.flatMap((v, n) => [
       {
