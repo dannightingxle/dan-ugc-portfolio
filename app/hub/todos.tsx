@@ -6,6 +6,7 @@ import { isArchived, paymentDue, useProjects, type Project } from "./_lib/store"
 import { CHECK_IN_AFTER_DAYS, REPEATS, REPEAT_LABEL, checkInOn, finish, localDay, placeOf, unfinish, type Repeat, type Todo } from "./_lib/todos/types";
 import { input } from "./projects/fields";
 import { Busy, Spinner, money, shortDate } from "./_lib/ui";
+import { useConfirm } from "./_lib/popups";
 import { useFeature } from "./account-provider";
 
 /* Your to-dos, at the top of the home page: what to do, chase and check in on.
@@ -14,6 +15,8 @@ import { useFeature } from "./account-provider";
    chases that are due and invoices that are overdue. */
 
 const API = "/api/hub/todos";
+/** A job with this many one-off to-dos gets a "Clear them" line. */
+const PILE = 5;
 
 async function call<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -83,6 +86,27 @@ export function YourTodos() {
     setTodos((list) => list && list.filter((x) => x.id !== t.id));
     send(`${API}?id=${t.id}`, "DELETE");
   }
+  // A job with a pile of one-off to-dos (a job set-up adds a few) can be cleared in one go, with Undo.
+  const confirm = useConfirm();
+  const [cleared, setCleared] = useState<{ brand: string; todos: Todo[] } | null>(null);
+  async function clearJob(projectId: string, brand: string, n: number) {
+    if (!(await confirm({ title: `Clear ${brand}'s ${n} to-dos?`, message: "The one-off to-dos still on your list for this job go. Repeating ones and work waiting for approval stay. You can undo it straight after.", confirmLabel: `Clear ${n}`, danger: true }))) return;
+    pending.current++;
+    setError("");
+    const done = queue.current.then(() => call<{ todos: Todo[]; cleared: Todo[] }>(`${API}?projectId=${encodeURIComponent(projectId)}`, "DELETE"));
+    queue.current = done
+      .then((r) => {
+        if (pending.current === 1) setTodos(r.todos);
+        setCleared({ brand, todos: r.cleared });
+      }, (e: Error) => setError(e.message))
+      .finally(() => pending.current--);
+  }
+  function undoClear() {
+    if (!cleared) return;
+    const back = cleared.todos;
+    setCleared(null);
+    send(API, "PUT", { todos: back });
+  }
   /** Ticking: one of a count done, or this time round finished. */
   const tick = (t: Todo) => (t.left != null && t.left > 1 ? patch(t, { left: t.left - 1 }) : patch(t, finish(t, today)));
 
@@ -105,6 +129,12 @@ export function YourTodos() {
   const later = by("later").sort((a, b) => a.due.localeCompare(b.due));
   const done = by("done").sort((a, b) => b.doneAt.localeCompare(a.doneAt));
   const count = todo.length + checkins.length + chases.length + unpaid.length;
+  // Jobs with a pile of one-off to-dos still to do, biggest first.
+  const piles = Object.entries(
+    todo.filter((t) => t.projectId && !t.repeat).reduce<Record<string, number>>((m, t) => ({ ...m, [t.projectId]: (m[t.projectId] ?? 0) + 1 }), {}),
+  )
+    .filter(([, n]) => n >= PILE)
+    .sort((a, b) => b[1] - a[1]);
 
   return (
     <section className="space-y-4" aria-labelledby="todos-heading">
@@ -120,6 +150,27 @@ export function YourTodos() {
 
       <AddTodo jobs={live} add={addTodo} />
       {error && <p className="text-sm text-accent">{error}</p>}
+      {cleared && (
+        <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-bg-card px-4 py-2.5 text-sm">
+          Cleared {cleared.todos.length} to-do{cleared.todos.length === 1 ? "" : "s"} for {cleared.brand}.
+          <button type="button" onClick={undoClear} className="font-medium text-accent hover:underline">
+            Undo
+          </button>
+        </p>
+      )}
+      {piles.map(([projectId, n]) => {
+        const brand = job(projectId)?.brand || "a job";
+        return (
+          <div key={projectId} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-bg-elevated/50 px-4 py-2.5 text-sm">
+            <span>
+              <span className="font-medium">{brand}</span> has {n} to-dos on your list.
+            </span>
+            <button type="button" onClick={() => void clearJob(projectId, brand, n)} className="rounded-lg border border-border px-3 py-1 text-xs font-medium hover:border-accent hover:text-accent">
+              Clear {brand}&apos;s to-dos
+            </button>
+          </div>
+        );
+      })}
 
       {!todos ? (
         !error && (

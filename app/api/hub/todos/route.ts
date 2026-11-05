@@ -4,7 +4,9 @@ import { getTodos, saveTodos } from "../../../hub/_lib/todos/data";
 import { MAX_TODOS, REPEATS, type Todo } from "../../../hub/_lib/todos/types";
 
 /* Your to-dos: GET the list, POST a new one, PATCH one's fields (the page works
-   out what ticking, submitting or approving changes), DELETE ?id= one. */
+   out what ticking, submitting or approving changes), DELETE ?id= one, or
+   DELETE ?projectId= a job's open one-off to-dos all at once (a pile set-up
+   added, say). PUT { todos } puts back ones just cleared (Undo). */
 
 const day = z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]);
 const time = z.union([z.literal(""), z.string().datetime()]);
@@ -65,7 +67,41 @@ export async function PATCH(request: Request) {
   );
 }
 
+/** A one-off that's still to do (not ticked, not sent off for approval). */
+const openOneOff = (t: Todo) => !t.repeat && !t.doneAt && !t.submittedAt;
+
 export async function DELETE(request: Request) {
-  const id = new URL(request.url).searchParams.get("id");
-  return editsApi(request, null, async ({ user }) => ({ todos: await saveTodos(user.id, (await getTodos(user.id)).filter((t) => t.id !== id)) }), "todos");
+  const params = new URL(request.url).searchParams;
+  const id = params.get("id");
+  const projectId = params.get("projectId");
+  return editsApi(
+    request,
+    null,
+    async ({ user }) => {
+      const todos = await getTodos(user.id);
+      if (projectId) {
+        const cleared = todos.filter((t) => t.projectId === projectId && openOneOff(t));
+        return { cleared, todos: await saveTodos(user.id, todos.filter((t) => !cleared.includes(t))) };
+      }
+      return { todos: await saveTodos(user.id, todos.filter((t) => t.id !== id)) };
+    },
+    "todos",
+  );
+}
+
+const Restore = z.object({
+  todos: z.array(Fields.extend({ id: z.string().max(40), createdAt: z.string().max(40) })).max(MAX_TODOS),
+});
+
+export async function PUT(request: Request) {
+  return editsApi(
+    request,
+    Restore,
+    async ({ user, body }) => {
+      const todos = await getTodos(user.id);
+      const back = (body.todos as Todo[]).filter((t) => !todos.some((x) => x.id === t.id));
+      return { todos: await saveTodos(user.id, [...todos, ...back].slice(0, MAX_TODOS)) };
+    },
+    "todos",
+  );
 }

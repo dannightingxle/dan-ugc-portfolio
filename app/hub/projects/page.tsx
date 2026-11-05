@@ -145,6 +145,7 @@ function ProjectCard({ p, archivedAs }: { p: Project; archivedAs?: "Ended" | "Lo
         <p className="flex items-center gap-1.5 text-xs text-text-dim">
           {p.brand || "No brand"}
           {p.example && <ExampleTag />}
+          {p.repeat && <span className="rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-medium text-accent" title="A retainer: next month's job is added by itself">↻ Monthly</span>}
           {archivedAs && <span className="ml-auto rounded-full bg-text/5 px-2 py-0.5 text-[11px] font-medium text-text-muted">{archivedAs}</span>}
         </p>
         <p className="text-sm font-medium">{p.title || "Untitled"}</p>

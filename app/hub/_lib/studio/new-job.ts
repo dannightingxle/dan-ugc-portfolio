@@ -60,6 +60,8 @@ async function fillTracker(userId: string, projectId: string, job: IntakeResult[
   await db.from("hub_projects").update({ data: next, updated_at: new Date().toISOString() }).eq("user_id", userId).eq("id", projectId);
 }
 
+const MAX_SETUP_TODOS = 8;
+
 /** The setup steps as one-off to-dos for the job, in order, with a date where the material gives a timeline. Ones already there aren't added twice. */
 export async function addSetupTodos(userId: string, projectId: string, steps: IntakeResult["setupSteps"]): Promise<Todo[]> {
   if (!steps.length) return [];
@@ -81,7 +83,8 @@ export async function addSetupTodos(userId: string, projectId: string, steps: In
     const createdAt = new Date(start + i).toISOString();
     added.push({ id: randomUUID(), text, projectId, repeat: "", due, count: null, left: null, submittedAt: "", doneAt: "", prevDue: "", createdAt });
   }
-  const kept = added.slice(0, 30);
+  // A handful at most: set-up's steps are the key actions, not a day-by-day plan (that's in the instructions).
+  const kept = added.slice(0, MAX_SETUP_TODOS);
   if (kept.length) await saveTodos(userId, [...todos, ...kept]);
   return kept;
 }
