@@ -103,7 +103,7 @@ export const IntakeResult = z.object({
     .describe("The job's details for Dan's tracker, only as far as the material says."),
   setupSteps: z
     .array(z.object({ text: z.string().describe("One action, as Dan would write it on a to-do list"), dayOffset: z.number().int().nullable().describe("Days from today to do it (0 = today), or null if no particular day") }))
-    .describe("What Dan has to do before and around his first post, in order: creating each account, profile and bio, verification, warm-up days, joining a Slack/Discord, signing or sending anything, downloading the app, the first post. Empty if the material gives no setup steps."),
+    .describe("The few things Dan must actively do before and around his first post, in order - at most 8, small steps combined (one 'create the accounts', one 'warm them up for 3 days'): creating the accounts, profiles, joining a Slack/Discord, signing or sending anything, the first post. Not rules or things to know. Empty if the material gives no setup steps."),
   handles: z
     .array(z.object({ platform: z.enum(["tiktok", "instagram"]), handle: z.string().describe("Without the @") }))
     .describe("Suggested handles for the accounts Dan has to create, following the job's naming rules (or a natural name-based one if it has none). Empty if he isn't creating new accounts."),

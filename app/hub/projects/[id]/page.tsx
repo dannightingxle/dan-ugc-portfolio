@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use } from "react";
+import { use, useState } from "react";
 import { useFeature } from "../../account-provider";
 import {
   PAYMENT_STATUSES,
@@ -10,8 +10,10 @@ import {
   STAGES,
   SOURCES,
   TECH_STAGES,
+  flushSaves,
   isArchived,
   isLost,
+  reloadProject,
   paymentDue,
   techMonthly,
   useDataReady,
@@ -25,6 +27,7 @@ import { Spinner, compact, money, shortDate } from "../../_lib/ui";
 import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "../fields";
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
+import { BriefFillBox } from "./brief-fill";
 
 /* One project: dates, payment, contact, the full brief, links and notes.
    Every change saves straight away - there's no save button. */
@@ -152,6 +155,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </p>
         )}
       </header>
+
+      {studio && <BriefFillBox projectId={project.id} brand={project.brand} />}
 
       {studio && (
         <Link
@@ -291,6 +296,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               ))}
             </div>
           </Section>
+
+          <RetainerSection project={project} save={save} />
 
           <Section title="Contact">
             <div className="grid grid-cols-2 gap-3">
@@ -646,5 +653,82 @@ function TechPay({ project, set }: { project: Project; set: <K extends keyof Pro
         )}
       </p>
     </div>
+  );
+}
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const monthOf = (day: string) => MONTH_NAMES[Number(day.slice(5, 7)) - 1] ?? "next month";
+function firstOfNextMonth() {
+  const d = new Date();
+  const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** A retainer: next month's job is added by itself, ready but for that month's brief. */
+function RetainerSection({ project, save }: { project: Project; save: (p: Project) => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [made, setMade] = useState<{ id: string; title: string } | null>(null);
+  const r = project.repeat;
+  const on = (yes: boolean) => save({ ...project, repeat: yes ? { next: firstOfNextMonth(), stage: "Briefed", todos: "" } : null, seriesId: project.seriesId || (yes ? project.id : "") });
+  const setR = (patch: Partial<NonNullable<Project["repeat"]>>) => r && save({ ...project, repeat: { ...r, ...patch } });
+
+  async function addNow() {
+    setBusy(true);
+    setError("");
+    try {
+      // The server works from what's saved: make sure the latest is.
+      await flushSaves();
+      const res = await fetch(`/api/hub/projects/${project.id}/next-month`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Couldn't add it - try again.");
+      await reloadProject(project.id);
+      await reloadProject(json.id);
+      setMade({ id: json.id, title: json.title });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Repeats every month">
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" checked={Boolean(r)} onChange={(e) => on(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]" />
+        <span>
+          A retainer - add next month&apos;s job by itself
+          <span className="block text-xs text-text-dim">Same brand, contact, fee, terms and videos. You add that month&apos;s brief.</span>
+        </span>
+      </label>
+      {r && (
+        <div className="space-y-3">
+          <Field label={`${monthOf(r.next)}'s job is added on`} hint="Then the same day each month.">
+            <input type="date" className={input} value={r.next} onChange={(e) => e.target.value && setR({ next: e.target.value })} />
+          </Field>
+          <Field label="It starts in">
+            <select className={input} value={r.stage} onChange={(e) => setR({ stage: e.target.value as Project["stage"] })}>
+              {STAGES.filter((s) => s !== "Paid" && s !== "Lost").map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="To-dos each month" hint="One a line, added with each new month's job. This job's repeating to-dos move across too.">
+            <TextBox rows={3} className={input} value={r.todos} onValue={(v) => setR({ todos: v })} placeholder={"Get this month's briefs\nFilm the videos\nSend the invoice"} />
+          </Field>
+          <button type="button" onClick={() => void addNow()} disabled={busy} className="w-full rounded-xl border border-accent/40 px-3 py-2 text-sm font-medium text-accent hover:border-accent disabled:opacity-60">
+            {busy ? "Adding it…" : `Add ${monthOf(r.next)}'s job now`}
+          </button>
+        </div>
+      )}
+      {!r && project.period && !made && <p className="text-xs text-text-dim">Part of a monthly retainer - the newest month&apos;s job carries the repeat.</p>}
+      {made && (
+        <button type="button" onClick={() => router.push(`/hub/projects/${made.id}`)} className="w-full rounded-xl bg-good-soft px-3 py-2 text-left text-sm font-medium text-good hover:opacity-90">
+          Added: {made.title} - open it →
+        </button>
+      )}
+      {error && <p className="text-sm text-accent">{error}</p>}
+    </Section>
   );
 }

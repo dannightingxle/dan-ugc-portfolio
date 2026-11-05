@@ -16,15 +16,24 @@ const text = (max: number) => z.string().max(max).default("");
 const MAX_UPLOAD_B64 = 4_000_000;
 export const Uploads = z
   .array(
-    z.object({
-      name: z.string().max(200),
-      type: z.enum(["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"]),
-      data: z.string().regex(/^[A-Za-z0-9+/=]*$/),
-    }),
+    z.union([
+      z.object({
+        name: z.string().max(200),
+        type: z.enum(["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"]),
+        data: z.string().regex(/^[A-Za-z0-9+/=]*$/),
+      }),
+      // A video, uploaded to storage first (only its place is sent).
+      z.object({
+        name: z.string().max(200),
+        type: z.string().regex(/^video\/[\w.+-]+$/),
+        path: z.string().regex(/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(mp4|mov|m4v|webm)$/),
+      }),
+    ]),
   )
-  .max(10)
+  .max(12)
   .default([])
-  .refine((u) => u.reduce((n, f) => n + f.data.length, 0) <= MAX_UPLOAD_B64, "Those files are too big - keep them under 3 MB in total.");
+  .refine((u) => u.reduce((n, f) => n + ("data" in f ? f.data.length : 0), 0) <= MAX_UPLOAD_B64, "Those files are too big - keep the PDFs and screenshots under 3 MB in total (videos don't count).")
+  .refine((u) => u.filter((f) => "path" in f).length <= 4, "Attach up to 4 videos at a time.");
 
 export const IntakeBody = z.object({ material: text(200_000), filming: text(2_000), voice: text(500), uploads: Uploads });
 export const WeekBody = z.object({

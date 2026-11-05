@@ -97,7 +97,9 @@ export async function makeBrandPlan(user: HubUser, input: { videos: number; film
     context,
     content: [
       ...input.uploads.flatMap((u): import("@anthropic-ai/sdk").default.Beta.BetaContentBlockParam[] =>
-        u.type === "image/png" || u.type === "image/jpeg" || u.type === "image/webp" || u.type === "image/gif"
+        !u.data
+          ? []
+          : u.type === "image/png" || u.type === "image/jpeg" || u.type === "image/webp" || u.type === "image/gif"
           ? [{ type: "image", source: { type: "base64", media_type: u.type, data: u.data } }]
           : u.type === "application/pdf"
             ? [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: u.data }, title: u.name }]

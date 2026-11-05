@@ -4,15 +4,17 @@ import { adminClient } from "../supabase/admin";
 import type { HubUser } from "../supabase/server";
 import { StudioError, ask } from "./claude";
 import { getSheet, getWorkspace, saveSheet, saveWorkspace, updateSheet } from "./data";
-import { SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
+import { SYSTEM_BRIEF_FILL, SYSTEM_INTAKE, SYSTEM_REVIEW, SYSTEM_SHEET, SYSTEM_SHEET_TEMPLATE } from "./prompts";
 import { CustomSheetResult, FILES, IntakeResult, ReviewResult, SheetResult, type SheetData, type Workspace } from "./types";
 import { type CustomSheet, fillTemplate, readTemplateData, weekDataBlock } from "./custom-template";
 import { couldntOpenOnce, imageBlocks, linkedPagesText, otherLinks, readLinkedPages, readableLinks } from "./linked-pages";
 import { findAccounts, socialLink, videoBlocks, watchVideos } from "./videos";
 import { apifyEnabled, pullPosts } from "./apify";
 import { readOnMac } from "../edits/mac-reads";
-import { applySetup, suggestedHandles } from "./new-job";
+import { addSetupTodos, applySetup, suggestedHandles } from "./new-job";
+import { BriefFill, applyBrief } from "./brief-fill";
 import { uploadedLinks } from "./pdf-links";
+import { attachedVideos } from "./attachments";
 import { type Unread, type WebPages, cleanLink, readWebPages } from "./web-pages";
 import type { Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
@@ -25,7 +27,8 @@ import { WHOLE_SHEET, briefForWholeSheet, briefFromSheet } from "../edits/types"
    material, make the week's shoot sheet, and run the Friday review. Each one
    reads the job's workspace and writes the results straight back into it. */
 
-export type Upload = { name: string; type: string; data: string };
+/** A file attached to the material: sent along (a PDF or screenshot), or uploaded to storage first (a video). */
+export type Upload = { name: string; type: string; data?: string; path?: string };
 
 /** The job's name and basics, from the tracker (hub_projects). */
 async function projectBasics(userId: string, projectId: string) {
@@ -45,6 +48,8 @@ export function workspaceContext(name: string, ws: Workspace) {
 
 function uploadsToBlocks(uploads: Upload[]): Anthropic.Beta.BetaContentBlockParam[] {
   return uploads.flatMap((u): Anthropic.Beta.BetaContentBlockParam[] => {
+    // Videos go to the video watcher (frames and what's said), not in here.
+    if (!u.data) return [];
     if (u.type === "application/pdf") return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: u.data }, title: u.name }];
     if (u.type === "image/png" || u.type === "image/jpeg" || u.type === "image/webp" || u.type === "image/gif") {
       return [{ type: "image", source: { type: "base64", media_type: u.type, data: u.data } }];
@@ -185,7 +190,8 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
   progress("Watching the reference videos and looking at the accounts");
   // Reference videos (uploaded to those pages, or TikTok / Instagram links) as frames Claude can look at - and every
   // other one in the material by its caption and what's said - plus the accounts it links to study.
-  const [watched, study] = await Promise.all([watchVideos(links, linked.pages, undefined, SETUP_MORE_VIDEOS), studyAccounts(links, linked.pages)]);
+  const attached = await attachedVideos(user.id, input.uploads);
+  const [watched, study] = await Promise.all([watchVideos(links, linked.pages, undefined, SETUP_MORE_VIDEOS, attached), studyAccounts(links, linked.pages)]);
   const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
   progress("Claude is setting up the job");
   const result = await ask({
@@ -232,19 +238,96 @@ export async function setUpJob(user: HubUser, projectId: string, input: { materi
   return saved;
 }
 
+/* ---- Fill a job in from its brief ---- */
+
+export type BriefFillResult = { summary: string; changes: string[]; questions: string[]; todos: number; couldntOpen: string[] };
+const briefUndoRow = (projectId: string) => `brief:${projectId}`;
+
+/** Any job (a brand deal, a retainer's new month): read what the client sent and fill in the job's details from it. */
+export async function fillJobFromBrief(user: HubUser, projectId: string, input: { material: string; uploads: Upload[] }, progress: Progress = () => {}): Promise<BriefFillResult> {
+  const db = adminClient();
+  const { data: row } = await db.from("hub_projects").select("data").eq("user_id", user.id).eq("id", projectId).maybeSingle<{ data: Record<string, unknown> }>();
+  if (!row) throw new StudioError("That job's been deleted.");
+  const job = row.data;
+  progress("Reading the linked pages");
+  const links = [input.material, uploadedLinks(input.uploads)].filter(Boolean).join("\n");
+  const linked = await readLinkedPages(links);
+  const { rest, failed: macFailed, unread } = await readOtherLinks(user.id, links, linked, progress);
+  progress("Watching the videos");
+  const watched = await watchVideos(links, linked.pages, undefined, 0, await attachedVideos(user.id, input.uploads));
+  const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
+  // What's on the job now, so Claude knows what's there already.
+  const pick = (k: string) => job[k];
+  const now = { brand: pick("brand"), title: pick("title"), stage: pick("stage"), fee: pick("fee"), feeCurrency: pick("feeCurrency"), contact: pick("contact"), deliverables: pick("deliverables"), product: pick("product"), keyMessages: pick("keyMessages"), dos: pick("dos"), donts: pick("donts"), usageRights: pick("usageRights"), filmBy: pick("filmBy"), due: pick("due"), goLive: pick("goLive") };
+  progress("Claude is reading the brief");
+  const result = await ask({
+    system: SYSTEM_BRIEF_FILL,
+    content: [
+      ...uploadsToBlocks(input.uploads),
+      ...imageBlocks(linked.images),
+      ...videoBlocks(watched),
+      {
+        type: "text",
+        text: [
+          `Today is ${today()}.`,
+          `The job as it stands:\n${JSON.stringify(now, null, 1)}`,
+          `What the client sent:\n${material || "(see the attached files)"}`,
+          unreadLine(unread, "in the material"),
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      },
+    ],
+    schema: BriefFill,
+    webFetch: rest.length > 0,
+    effort: "medium",
+    onFixUp: () => progress("Claude is fixing its answer"),
+  });
+  progress("Filling in the job");
+  // Applied to the job as it is now (you may have changed something while Claude read).
+  const { data: fresh } = await db.from("hub_projects").select("data").eq("user_id", user.id).eq("id", projectId).maybeSingle<{ data: Record<string, unknown> }>();
+  if (!fresh) throw new StudioError("That job's been deleted.");
+  const { next, changes } = applyBrief(fresh.data, result);
+  const stamp = new Date().toISOString();
+  await db.from("hub_projects").update({ data: next, updated_at: stamp }).eq("user_id", user.id).eq("id", projectId);
+  const added = (await canUse(user, "todos")) ? await addSetupTodos(user.id, projectId, result.todos.slice(0, 6).map((t) => ({ text: t.text, dayOffset: t.dayOffset }))) : [];
+  // Kept so it can be undone: the job as it was, and the to-dos added.
+  await db.from("hub_workspaces").upsert({ user_id: user.id, project_id: briefUndoRow(projectId), data: { before: fresh.data, after: stamp, todoIds: added.map((t) => t.id) }, updated_at: stamp });
+  return {
+    summary: result.summary,
+    changes: [...changes, ...(added.length ? [`${added.length} to-do${added.length === 1 ? "" : "s"}`] : [])],
+    questions: result.questions,
+    todos: added.length,
+    couldntOpen: couldntOpenOnce(linked.failed, macFailed, watched.failed),
+  };
+}
+
+/** Put the job back as it was before it was filled in from its brief, and take away the to-dos that added. */
+export async function undoBriefFill(user: HubUser, projectId: string) {
+  const db = adminClient();
+  const { data } = await db.from("hub_workspaces").select("data").eq("user_id", user.id).eq("project_id", briefUndoRow(projectId)).maybeSingle<{ data: { before: Record<string, unknown>; todoIds: string[] } }>();
+  if (!data?.data?.before) throw new StudioError("There's nothing to undo.");
+  await db.from("hub_projects").update({ data: data.data.before, updated_at: new Date().toISOString() }).eq("user_id", user.id).eq("id", projectId);
+  if (data.data.todoIds.length) {
+    const { getTodos, saveTodos } = await import("../todos/data");
+    await saveTodos(user.id, (await getTodos(user.id)).filter((t) => !data.data.todoIds.includes(t.id)));
+  }
+  await db.from("hub_workspaces").delete().eq("user_id", user.id).eq("project_id", briefUndoRow(projectId));
+}
+
 /* ---- This week's shoot sheet ---- */
 
 // Reference videos past the ones watched, looked up for a shoot sheet by their caption, what's said and their views.
 const SHEET_MORE_VIDEOS = 6;
 
 /** A brief's links read for Claude: public pages, pages on your Mac, and reference videos. */
-async function readBrief(userId: string, text: string, alsoWatch: string, progress: Progress) {
+async function readBrief(userId: string, text: string, alsoWatch: string, progress: Progress, attached: { label: string; url: string }[] = []) {
   progress("Reading the linked pages");
   const linked = await readLinkedPages(text);
   const { rest, failed: macFailed, unread } = await readOtherLinks(userId, text, linked, progress);
   // Reference videos in the brief (or what's trending), as frames Claude can look at.
   progress("Watching the reference videos");
-  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages, undefined, SHEET_MORE_VIDEOS);
+  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages, undefined, SHEET_MORE_VIDEOS, attached);
   return { linked, rest, unread, watched, failed: [...linked.failed, ...macFailed, ...watched.failed] };
 }
 
@@ -291,7 +374,7 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
   // This week's brief from the brand is for this sheet only: the project brief (Files tab) never changes here.
   // Public Notion pages and Google Docs in it are read here and sent with it.
   const followUps = (input.followUps ?? []).join("\n\n");
-  const read = await readBrief(user.id, [input.weekBrief, followUps, uploadedLinks(input.uploads)].join("\n"), input.trending, progress);
+  const read = await readBrief(user.id, [input.weekBrief, followUps, uploadedLinks(input.uploads)].join("\n"), input.trending, progress, await attachedVideos(user.id, input.uploads));
   const notes = await readNotesPages(ws, [...read.linked.pages.map((p) => p.url), ...read.rest], progress);
   const weekBrief = [input.weekBrief.trim(), linkedPagesText(read.linked.pages)].filter(Boolean).join("\n\n");
 

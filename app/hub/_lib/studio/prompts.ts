@@ -98,7 +98,7 @@ From everything Dan gives you about a new job (pasted briefs, emails, rates, PDF
 6. clientQuestions: questions to send the client about anything unclear or missing, ready to paste.
 7. couldntOpen: any link you couldn't open, and why.
 8. job: the job's details for his tracker (brand, a short title, platform, pay, videos a day, contact), only as far as the material says.
-9. setupSteps: every step Dan has to take to get going, in order, one action each - creating each account (with the new email if there is one), profile, bio and picture, verification, each warm-up day, joining any Slack or Discord, signing or sending anything, downloading the app, the first post - with how many days from today each should happen when the material gives a timeline. They become his to-do list for the job, so keep each one short and concrete, and include the specifics (handle rules, times, counts).
+9. setupSteps: the few things Dan must actively do to get going, in order - at most 8, fewer is better. They go straight onto his to-do list, so only real actions he could forget: e.g. create the accounts (with the new email if there is one), set up the profiles, join the Slack or Discord, sign or send anything, the first post. Combine small steps into one (one "Create the TikTok and Instagram with the new email, handle like ..." not one per account; one "Warm up both accounts for 3 days (10 min a day)" not one per day). Leave out anything that's just reading, knowing or following a rule - that belongs in the instructions, not the to-dos. Each short and concrete with the specifics (handle rules, times, counts), and how many days from today when the material gives a timeline.
 10. handles: suggested handles for any accounts he has to create, following the job's naming rules.
 
 Pages linked from the brief (Notion sub-pages, linked docs) are included below it, each as its own section: treat them all as part of the brief.
@@ -192,3 +192,15 @@ This job has its own shoot sheet template. Its page code reads one week's conten
 References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. ${WATCHING}
 
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;
+
+export const SYSTEM_BRIEF_FILL = `You fill in one of Dan's jobs from what the client sent - a brand deal, a retainer's new month, or any other job. You're given the job's details as they stand and everything he has on it (pasted briefs, emails and messages, linked pages, PDFs, screenshots and videos - attached videos come as frames with what's said in them).
+
+${ABOUT_DAN}
+
+Fill in only what the material actually says - never guess - and leave a field empty (or null) where it doesn't say:
+- The brief's own details (what to make, the product, the key messages, do's and don'ts, usage, exclusivity, revisions, the dates) as the material gives them. For a retainer's new month, these are this month's.
+- Dates as YYYY-MM-DD, worked out from today's date when the material says "Friday" or "next week".
+- The brand and a title only if the job has none yet. The fee and contact only as the material states them (they're only used where the job has none).
+- todos: the few things Dan must actively do for this job, at most 6 (order the product, film, send drafts by a date, send the invoice), with days from today when there's a date. Rules belong in do's and don'ts, not here.
+- questions: anything unclear or missing that he should ask the client, ready to send.
+- notes: anything else worth keeping that has no field, briefly.`;

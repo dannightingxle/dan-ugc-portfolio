@@ -8,7 +8,7 @@ import { useTasks } from "../../_lib/studio/tasks-client";
 import { TextBox } from "../../_lib/text-box";
 import { Busy } from "../../_lib/ui";
 import { Field, Section, input } from "../../projects/fields";
-import { FilePicker, type Upload } from "../../projects/[id]/studio/studio";
+import { FilePicker, useUploading, type Upload } from "../../projects/[id]/studio/studio";
 
 /* A new tech job from everything you have on it, in one go: it's added to your
    tracker and set up in the background - the job's files, its details, its
@@ -21,6 +21,7 @@ export function NewJob() {
   const [filming, setFilming] = useState("solo, phone on a tripod, at home and around town, second phone filming app screens over my shoulder");
   const [voice, setVoice] = useState("casual, direct, a bit dry");
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const uploading = useUploading();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -57,7 +58,7 @@ export function NewJob() {
           <Field label="Links and messages" hint="Notion pages (with their sub-pages) and Google Docs shared by link are read in full; TikTok and Instagram links are watched. Paste WhatsApps, emails and rates as they are.">
             <TextBox rows={14} className={input} value={material} onValue={setMaterial} placeholder={"https://www.notion.so/…\n\nWhatsApp from the client:\n…"} />
           </Field>
-          <FilePicker accept="application/pdf,image/png,image/jpeg,image/webp" label="PDFs or screenshots (optional)" onChange={setUploads} />
+          <FilePicker accept="image/*,application/pdf,video/*" label="Screenshots, PDFs or videos (optional)" onChange={setUploads} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="How you film">
               <input className={input} value={filming} onChange={(e) => setFilming(e.target.value)} />
@@ -66,9 +67,9 @@ export function NewJob() {
               <input className={input} value={voice} onChange={(e) => setVoice(e.target.value)} />
             </Field>
           </div>
-          <button disabled={busy || (!material.trim() && !uploads.length)} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
+          <button disabled={busy || uploading || (!material.trim() && !uploads.length)} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
             <Busy busy={busy} label="Adding the job…">
-              Add the job and set it all up
+              {uploading ? "Waiting for your files to upload…" : "Add the job and set it all up"}
             </Busy>
           </button>
           <p className="text-xs text-text-dim">Takes a few minutes and runs in the background: you&apos;ll go to the job&apos;s Studio, where you can watch it or carry on with something else.</p>

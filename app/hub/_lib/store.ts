@@ -91,7 +91,16 @@ export type Project = {
   lastContact: string;
   /** One to pass on to the mentorship group rather than do yourself. */
   forGroup: boolean;
+  /** A retainer: next month's job is added by itself on `next` (YYYY-MM-DD), starting in `stage`, with `todos` (one a
+      line) as its to-dos. It moves on to each new month's job, so the newest one carries it. */
+  repeat: Retainer | null;
+  /** The jobs one retainer made share the first one's id. */
+  seriesId: string;
+  /** The month a retainer's job is for (YYYY-MM). */
+  period: string;
 };
+
+export type Retainer = { next: string; stage: Stage; todos: string };
 
 export function newProject(partial: Partial<Project> = {}): Project {
   return {
@@ -136,6 +145,9 @@ export function newProject(partial: Partial<Project> = {}): Project {
     platform: "",
     lastContact: "",
     forGroup: false,
+    repeat: null,
+    seriesId: "",
+    period: "",
     ...partial,
   };
 }
@@ -300,6 +312,11 @@ let loadedFor: string | null = null;
 let remoteDb: SupabaseClient | null = null;
 
 /** Take a job's latest saved copy (one the server added or filled in, e.g. by setting it up from its brief). Your unsaved typing goes first. */
+/** Send any changes still waiting to be saved, now (before the server works from what's saved). */
+export async function flushSaves() {
+  await backend?.flush();
+}
+
 export async function reloadProject(id: string) {
   if (!remoteDb) return;
   await backend?.flush();

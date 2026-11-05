@@ -228,3 +228,26 @@ export async function fetchSocialVideos(links: { url: string; kind: "tiktok" | "
   }
   return { videos, problem };
 }
+
+/** What's said in videos at these links (an uploaded brief video, a video in a Notion page): timed lines by link,
+    through a speech-to-text actor that charges only for minutes with speech in them. Nothing if it can't be done. */
+export async function transcribeMedia(urls: string[]): Promise<Record<string, { start: number; text: string }[]>> {
+  if (!urls.length || !apifyEnabled) return {};
+  const items = await run("steadyfetch/media-transcriber", { urls, outputFormats: ["text", "segments"], maxMinutesPerItem: 30 }, 240).catch((e: Error) => {
+    console.error("Creator Desk: transcribing videos failed:", e.message);
+    return [] as Item[];
+  });
+  const out: Record<string, { start: number; text: string }[]> = {};
+  for (const i of items) {
+    if (str(i.status) !== "ok") continue;
+    const url = urls.find((u) => u === str(i.url) || u === str(i.resolvedMediaUrl));
+    if (!url) continue;
+    const segments = (Array.isArray(i.segments) ? i.segments : []) as Item[];
+    out[url] = segments.length
+      ? segments.map((s) => ({ start: num(s.start), text: str(s.text).trim() })).filter((s) => s.text)
+      : str(i.text).trim()
+        ? [{ start: 0, text: str(i.text).trim() }]
+        : [];
+  }
+  return out;
+}

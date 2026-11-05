@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FilePicker, useUploading, type Upload } from "../../../_lib/attachments";
 import { reloadProject, useProjects } from "../../../_lib/store";
 import { JobAssistant } from "./assistant";
 import { Busy, Spinner, shortDate, useBusy } from "../../../_lib/ui";
@@ -19,11 +20,8 @@ import { useConfirm } from "../../../_lib/popups";
 import { type Task, type TaskKind, useElapsed, useTask, useTasks } from "../../../_lib/studio/tasks-client";
 import { TextBox } from "../../../_lib/text-box";
 
-/* Studio: everything a Claude Project held for this job, plus the weekly
-   shoot sheet, the Friday review and the account checklist. Edits save by
-   themselves; the Claude actions take a minute or two. */
+export { FilePicker, useUploading, type Upload };
 
-export type Upload = { name: string; type: string; data: string };
 type Tab = "week" | "edits" | "setup" | "files" | "review" | "account";
 const TABS: [Tab, string][] = [
   ["week", "This week"],
@@ -34,19 +32,9 @@ const TABS: [Tab, string][] = [
   ["account", "Account"],
 ];
 
-async function readUploads(files: FileList | null): Promise<Upload[]> {
-  return Promise.all(
-    [...(files ?? [])].map(
-      (f) =>
-        new Promise<Upload>((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve({ name: f.name, type: f.type, data: String(r.result).split(",")[1] ?? "" });
-          r.onerror = () => reject(r.error);
-          r.readAsDataURL(f);
-        }),
-    ),
-  );
-}
+/* Studio: everything a Claude Project held for this job, plus the weekly
+   shoot sheet, the Friday review and the account checklist. Edits save by
+   themselves; the Claude actions take a minute or two. */
 
 export async function call<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -422,11 +410,12 @@ function useJob(api: string, kind: TaskKind, onDone: (t: Task) => void) {
 }
 
 function JobButton({ busy, elapsed, label, busyLabel, step }: { busy: boolean; elapsed: string; label: string; busyLabel: string; step?: string }) {
+  const uploading = useUploading();
   return (
     <div className="space-y-1.5">
-      <button disabled={busy} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
+      <button disabled={busy || uploading} className="w-full rounded-xl bg-accent py-3 font-semibold text-on-accent transition hover:bg-accent-hover disabled:opacity-70 sm:w-auto sm:px-6">
         <Busy busy={busy} label={`${busyLabel} ${elapsed}`}>
-          {label}
+          {uploading ? "Waiting for your files to upload…" : label}
         </Busy>
       </button>
       <p className="text-xs text-text-dim">
@@ -435,25 +424,6 @@ function JobButton({ busy, elapsed, label, busyLabel, step }: { busy: boolean; e
           : "Runs in the background, so you can carry on with other jobs while it works."}
       </p>
     </div>
-  );
-}
-
-export function FilePicker({ accept, label, onChange }: { accept: string; label: string; onChange: (u: Upload[]) => void }) {
-  const [names, setNames] = useState<string[]>([]);
-  return (
-    <Field label={label} hint={names.length ? names.join(", ") : "Up to 3 MB in total."}>
-      <input
-        type="file"
-        multiple
-        accept={accept}
-        className="block w-full text-sm text-text-muted file:mr-3 file:rounded-lg file:border file:border-border file:bg-bg-card file:px-3 file:py-1.5 file:text-sm"
-        onChange={async (e) => {
-          const files = e.target.files;
-          setNames([...(files ?? [])].map((f) => f.name));
-          onChange(await readUploads(files));
-        }}
-      />
-    </Field>
   );
 }
 
@@ -600,7 +570,7 @@ function WeekTab({
             <Field label="Trending in the niche (optional)" hint="Describe 2-3 videos doing well (hook, format, length) and they'll be adapted for the app.">
               <TextBox rows={2} className={input} value={trending} onValue={(v) => setTrending(v)} />
             </Field>
-            <FilePicker accept="image/png,image/jpeg,image/webp,application/pdf" label="Screenshots or PDFs (optional)" onChange={setUploads} />
+            <FilePicker accept="image/*,application/pdf,video/*" label="Screenshots, PDFs or videos (optional)" onChange={setUploads} />
             <JobButton busy={job.busy} elapsed={job.elapsed} step={job.task?.status === "running" ? job.task.step : undefined} label="Make this week's shoot sheet" busyLabel="Writing your shoot sheet… usually 1-3 minutes ·" />
             {job.error && <p className="text-sm text-accent">{job.error}</p>}
           </form>
@@ -664,7 +634,7 @@ function SetupTab({ api, ws, edit, onWorkspace, onAsk }: { api: string; ws: Work
           <Field label="Everything you have on the job">
             <TextBox rows={10} className={input} value={material} onValue={(v) => setMaterial(v)} placeholder="Paste the brief, links, emails, rates…" />
           </Field>
-          <FilePicker accept="application/pdf,image/png,image/jpeg,image/webp" label="PDFs or screenshots (optional)" onChange={setUploads} />
+          <FilePicker accept="image/*,application/pdf,video/*" label="Screenshots, PDFs or videos (optional)" onChange={setUploads} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="How you film">
               <input className={input} value={filming} onChange={(e) => setFilming(e.target.value)} />
