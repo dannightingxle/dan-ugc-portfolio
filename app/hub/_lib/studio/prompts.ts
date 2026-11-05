@@ -192,3 +192,15 @@ This job has its own shoot sheet template. Its page code reads one week's conten
 References and links: every video's reference is a real video link from this week's brief, the brief, references or winners for that format. Only when the material genuinely has no video for one, fall back to a TikTok search link, and add a prep item naming those videos so Dan can find a real one. If a link in the material can't be opened, or only shows a login or loading page, list it in couldntOpen and never guess what it says. ${WATCHING}
 
 Also return scriptBankEntry: one line per video with its V-number, hook and angle, so the next sheet never repeats them; and oneLine: one line on what's in the sheet.`;
+
+export const SYSTEM_BRIEF_FILL = `You fill in one of Dan's jobs from what the client sent - a brand deal, a retainer's new month, or any other job. You're given the job's details as they stand and everything he has on it (pasted briefs, emails and messages, linked pages, PDFs, screenshots and videos - attached videos come as frames with what's said in them).
+
+${ABOUT_DAN}
+
+Fill in only what the material actually says - never guess - and leave a field empty (or null) where it doesn't say:
+- The brief's own details (what to make, the product, the key messages, do's and don'ts, usage, exclusivity, revisions, the dates) as the material gives them. For a retainer's new month, these are this month's.
+- Dates as YYYY-MM-DD, worked out from today's date when the material says "Friday" or "next week".
+- The brand and a title only if the job has none yet. The fee and contact only as the material states them (they're only used where the job has none).
+- todos: the few things Dan must actively do for this job, at most 6 (order the product, film, send drafts by a date, send the invoice), with days from today when there's a date. Rules belong in do's and don'ts, not here.
+- questions: anything unclear or missing that he should ask the client, ready to send.
+- notes: anything else worth keeping that has no field, briefly.`;

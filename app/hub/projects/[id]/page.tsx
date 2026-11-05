@@ -27,6 +27,7 @@ import { Spinner, compact, money, shortDate } from "../../_lib/ui";
 import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "../fields";
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
+import { BriefFillBox } from "./brief-fill";
 
 /* One project: dates, payment, contact, the full brief, links and notes.
    Every change saves straight away - there's no save button. */
@@ -154,6 +155,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </p>
         )}
       </header>
+
+      {studio && <BriefFillBox projectId={project.id} brand={project.brand} />}
 
       {studio && (
         <Link

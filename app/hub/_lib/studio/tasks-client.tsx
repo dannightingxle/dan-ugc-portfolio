@@ -13,7 +13,7 @@ import { reloadProject } from "../store";
    and anything that needs a look; the Jobs button in the top bar lists the
    lot, so work across several clients can run side by side. */
 
-export type TaskKind = "intake" | "week" | "review" | "assist";
+export type TaskKind = "intake" | "week" | "review" | "assist" | "brief";
 export type Task = {
   id: string;
   projectId: string;
@@ -33,10 +33,12 @@ export type Task = {
 /** An edit on your Mac that's going, or waiting on you. */
 export type EditJob = { id: string; projectId: string; brand: string; title: string; videoCode: string; status: "queued" | "editing" | "needs_you" | "ready" | "failed"; updatedAt: string };
 
-export const LABEL: Record<TaskKind, string> = { intake: "Setting up the job", week: "Shoot sheet", review: "Friday review", assist: "Claude answered" };
-export const TAB: Record<TaskKind, string> = { intake: "setup", week: "week", review: "review", assist: "setup" };
+export const LABEL: Record<TaskKind, string> = { intake: "Setting up the job", week: "Shoot sheet", review: "Friday review", assist: "Claude answered", brief: "Filled in from the brief" };
+export const TAB: Record<TaskKind, string> = { intake: "setup", week: "week", review: "review", assist: "setup", brief: "" };
 /** The job's page for a task (a shoot sheet opens at its chat). */
-export const taskHref = (t: Task) => `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}${t.ref ? `&chat=${t.ref}` : ""}${t.kind === "assist" ? "&assist=1" : ""}`;
+// Filling a job in from its brief happens on the job's own page.
+export const taskHref = (t: Task) =>
+  t.kind === "brief" ? `/hub/projects/${t.projectId}` : `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}${t.ref ? `&chat=${t.ref}` : ""}${t.kind === "assist" ? "&assist=1" : ""}`;
 const POLL_MS = 4000;
 // With nothing going, a slower check picks up edits started elsewhere.
 const IDLE_POLL_MS = 30_000;
@@ -76,7 +78,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/hub/studio/tasks", { cache: "no-store" });
       if (!res.ok) return;
       const json = (await res.json()) as { tasks: Task[]; edits?: EditJob[] };
-      const done = json.tasks.filter((t) => (t.kind === "intake" || t.kind === "assist") && t.status === "done" && t.finishedAt).map((t) => `${t.projectId}|${t.finishedAt}`);
+      const done = json.tasks.filter((t) => (t.kind === "intake" || t.kind === "assist" || t.kind === "brief") && t.status === "done" && t.finishedAt).map((t) => `${t.projectId}|${t.finishedAt}`);
       if (setupsDone.current) for (const key of done) if (!setupsDone.current.has(key)) void reloadProject(key.split("|")[0]);
       setupsDone.current = new Set([...(setupsDone.current ?? []), ...done]);
       setTasks(json.tasks);
@@ -200,7 +202,9 @@ function TaskTray() {
   }, []);
   // The job's own page shows its progress and result, so the tray leaves that one out.
   const here = path.startsWith("/hub/studio/brand") ? BRAND_ID : /^\/hub\/projects\/([^/]+)\/studio/.exec(path)?.[1];
-  const shown = tasks.filter((t) => t.projectId !== here && (t.status === "running" || !faded.has(taskKey(t))));
+  // A job filled in from its brief shows how it went on the job's own page.
+  const onJobPage = /^\/hub\/projects\/([^/]+)$/.exec(path)?.[1];
+  const shown = tasks.filter((t) => t.projectId !== here && !(t.kind === "brief" && t.projectId === onJobPage) && (t.status === "running" || !faded.has(taskKey(t))));
   // Out of the way while you type: a pop-up over a text box would take the click (and the paste) meant for it.
   const typing = useTyping();
   const sidePanel = useSidePanel();
