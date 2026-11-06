@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useFeature } from "../../account-provider";
 import { BRAND_ID } from "./brand-types";
 import { reloadProject } from "../store";
+import { OWN_SCRIPTS } from "../scripts/types";
 
 /* Studio's background jobs and the edits on your Mac, on every page: which
    are going, and which are ready or need you, checked every few seconds
@@ -13,7 +14,7 @@ import { reloadProject } from "../store";
    and anything that needs a look; the Jobs button in the top bar lists the
    lot, so work across several clients can run side by side. */
 
-export type TaskKind = "intake" | "week" | "review" | "assist" | "brief";
+export type TaskKind = "intake" | "week" | "review" | "assist" | "brief" | "script";
 export type Task = {
   id: string;
   projectId: string;
@@ -33,12 +34,12 @@ export type Task = {
 /** An edit on your Mac that's going, or waiting on you. */
 export type EditJob = { id: string; projectId: string; brand: string; title: string; videoCode: string; status: "queued" | "editing" | "needs_you" | "ready" | "failed"; updatedAt: string };
 
-export const LABEL: Record<TaskKind, string> = { intake: "Setting up the job", week: "Shoot sheet", review: "Friday review", assist: "Claude answered", brief: "Filled in from the brief" };
-export const TAB: Record<TaskKind, string> = { intake: "setup", week: "week", review: "review", assist: "setup", brief: "" };
+export const LABEL: Record<TaskKind, string> = { intake: "Setting up the job", week: "Shoot sheet", review: "Friday review", assist: "Claude answered", brief: "Filled in from the brief", script: "Script written" };
+export const TAB: Record<TaskKind, string> = { intake: "setup", week: "week", review: "review", assist: "setup", brief: "", script: "" };
 /** The job's page for a task (a shoot sheet opens at its chat). */
 // Filling a job in from its brief happens on the job's own page.
 export const taskHref = (t: Task) =>
-  t.kind === "brief" ? `/hub/projects/${t.projectId}` : `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}${t.ref ? `&chat=${t.ref}` : ""}${t.kind === "assist" ? "&assist=1" : ""}`;
+  t.kind === "script" ? (t.projectId === OWN_SCRIPTS ? "/hub/scripts" : `/hub/projects/${t.projectId}#scripts`) : t.kind === "brief" ? `/hub/projects/${t.projectId}` : `/hub/projects/${t.projectId}/studio?tab=${TAB[t.kind]}${t.ref ? `&chat=${t.ref}` : ""}${t.kind === "assist" ? "&assist=1" : ""}`;
 const POLL_MS = 4000;
 // With nothing going, a slower check picks up edits started elsewhere.
 const IDLE_POLL_MS = 30_000;
@@ -204,7 +205,10 @@ function TaskTray() {
   const here = path.startsWith("/hub/studio/brand") ? BRAND_ID : /^\/hub\/projects\/([^/]+)\/studio/.exec(path)?.[1];
   // A job filled in from its brief shows how it went on the job's own page.
   const onJobPage = /^\/hub\/projects\/([^/]+)$/.exec(path)?.[1];
-  const shown = tasks.filter((t) => t.projectId !== here && !(t.kind === "brief" && t.projectId === onJobPage) && (t.status === "running" || !faded.has(taskKey(t))));
+  const onScripts = path === "/hub/scripts" ? OWN_SCRIPTS : undefined;
+  const shown = tasks.filter(
+    (t) => t.projectId !== here && !((t.kind === "brief" || t.kind === "script") && (t.projectId === onJobPage || t.projectId === onScripts)) && (t.status === "running" || !faded.has(taskKey(t))),
+  );
   // Out of the way while you type: a pop-up over a text box would take the click (and the paste) meant for it.
   const typing = useTyping();
   const sidePanel = useSidePanel();

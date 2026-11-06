@@ -17,6 +17,7 @@ const LINKS = [
   { href: "/hub/find", label: "Find ads", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4.35-4.35" },
   { href: "/hub/scripts", label: "Scripts", soon: true, icon: "M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4" },
 ];
+const SCRIPT_ICON = "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6";
 /* Where Scripts goes once someone has Studio (a staged feature). */
 const STUDIO = { href: "/hub/studio", label: "Studio", soon: false, icon: "M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4" };
 
@@ -35,7 +36,10 @@ export function Logo() {
 export function HubNav() {
   const path = usePathname();
   const { user, billing, features } = useAccount();
-  const links = features.includes("studio") || features.includes("brand") ? LINKS.map((l) => (l.href === "/hub/scripts" ? STUDIO : l)) : LINKS;
+  // Scripts stays once it's switched on for you (alongside Studio); until then Studio takes its place.
+  const scripts = features.includes("scripts");
+  const studio = features.includes("studio") || features.includes("brand");
+  const links = LINKS.flatMap((l) => (l.href !== "/hub/scripts" ? [l] : scripts ? [{ ...l, soon: false, icon: SCRIPT_ICON }, ...(studio ? [STUDIO] : [])] : [studio ? STUDIO : l]));
   const isPublic = isPublicPath(path);
   const appVisible = !isPublic && billing.hasAccess;
   const { data } = useApi<{ source: DataSource }>(appVisible ? "/api/hub/status" : null);
@@ -97,7 +101,7 @@ export function HubNav() {
       {/* Phones: tabs along the bottom, where thumbs are. */}
       {appVisible && (
         <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-          <div className="mx-auto grid max-w-md grid-cols-4">
+          <div className={`mx-auto grid max-w-md ${links.length > 4 ? "grid-cols-5" : "grid-cols-4"}`}>
             {links.map((l) => {
               const active = isActive(path, l.href);
               return (

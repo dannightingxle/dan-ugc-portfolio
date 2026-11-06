@@ -17,9 +17,12 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/hub/studio/\\[projectId\\]/week": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/studio/\\[projectId\\]/intake": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/hub/studio/\\[projectId\\]/brief": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/studio/brand/ideas": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/studio/brand/trials": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/hub/cron/weekly": ["./node_modules/ffmpeg-static/ffmpeg"],
+    // Scripts read their prompt from this file at run time (app/hub/_lib/scripts/prompt.ts), and watch attached videos.
+    "/api/hub/scripts": ["./app/hub/_lib/studio/scriptwriting-prompt.md", "./node_modules/ffmpeg-static/ffmpeg"],
   },
   // The portfolio's videos are served as static files; no server code needs them (and they'd push
   // functions over Vercel's size limit).

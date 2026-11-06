@@ -249,13 +249,7 @@ export async function fillJobFromBrief(user: HubUser, projectId: string, input: 
   const { data: row } = await db.from("hub_projects").select("data").eq("user_id", user.id).eq("id", projectId).maybeSingle<{ data: Record<string, unknown> }>();
   if (!row) throw new StudioError("That job's been deleted.");
   const job = row.data;
-  progress("Reading the linked pages");
-  const links = [input.material, uploadedLinks(input.uploads)].filter(Boolean).join("\n");
-  const linked = await readLinkedPages(links);
-  const { rest, failed: macFailed, unread } = await readOtherLinks(user.id, links, linked, progress);
-  progress("Watching the videos");
-  const watched = await watchVideos(links, linked.pages, undefined, 0, await attachedVideos(user.id, input.uploads));
-  const material = [input.material, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n");
+  const read = await readMaterial(user, input.material, input.uploads, progress);
   // What's on the job now, so Claude knows what's there already.
   const pick = (k: string) => job[k];
   const now = { brand: pick("brand"), title: pick("title"), stage: pick("stage"), fee: pick("fee"), feeCurrency: pick("feeCurrency"), contact: pick("contact"), deliverables: pick("deliverables"), product: pick("product"), keyMessages: pick("keyMessages"), dos: pick("dos"), donts: pick("donts"), usageRights: pick("usageRights"), filmBy: pick("filmBy"), due: pick("due"), goLive: pick("goLive") };
@@ -263,23 +257,21 @@ export async function fillJobFromBrief(user: HubUser, projectId: string, input: 
   const result = await ask({
     system: SYSTEM_BRIEF_FILL,
     content: [
-      ...uploadsToBlocks(input.uploads),
-      ...imageBlocks(linked.images),
-      ...videoBlocks(watched),
+      ...read.blocks,
       {
         type: "text",
         text: [
           `Today is ${today()}.`,
           `The job as it stands:\n${JSON.stringify(now, null, 1)}`,
-          `What the client sent:\n${material || "(see the attached files)"}`,
-          unreadLine(unread, "in the material"),
+          `What the client sent:\n${read.text || "(see the attached files)"}`,
+          read.unread,
         ]
           .filter(Boolean)
           .join("\n\n"),
       },
     ],
     schema: BriefFill,
-    webFetch: rest.length > 0,
+    webFetch: read.webFetch,
     effort: "medium",
     onFixUp: () => progress("Claude is fixing its answer"),
   });
@@ -298,6 +290,25 @@ export async function fillJobFromBrief(user: HubUser, projectId: string, input: 
     changes: [...changes, ...(added.length ? [`${added.length} to-do${added.length === 1 ? "" : "s"}`] : [])],
     questions: result.questions,
     todos: added.length,
+    couldntOpen: read.couldntOpen,
+  };
+}
+
+/** What a client sent, read for Claude: the pasted text and the pages it links to, the attached PDFs and screenshots
+    as they are, and any videos (attached or linked) as frames with what's said in them. */
+export async function readMaterial(user: HubUser, text: string, uploads: Upload[], progress: Progress = () => {}) {
+  progress("Reading the linked pages");
+  const links = [text, uploadedLinks(uploads)].filter(Boolean).join("\n");
+  const linked = await readLinkedPages(links);
+  const { rest, failed: macFailed, unread } = await readOtherLinks(user.id, links, linked, progress);
+  progress("Watching the videos");
+  const watched = await watchVideos(links, linked.pages, undefined, 0, await attachedVideos(user.id, uploads));
+  return {
+    blocks: [...uploadsToBlocks(uploads), ...imageBlocks(linked.images), ...videoBlocks(watched)],
+    text: [text, linkedPagesText(linked.pages)].filter(Boolean).join("\n\n"),
+    /** Links Creator Desk couldn't read, for Claude to try with web fetch. */
+    unread: unreadLine(unread, "in the material") || "",
+    webFetch: rest.length > 0,
     couldntOpen: couldntOpenOnce(linked.failed, macFailed, watched.failed),
   };
 }
