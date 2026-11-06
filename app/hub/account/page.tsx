@@ -2,7 +2,8 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAccount } from "../account-provider";
+import { useAccount, useFeature } from "../account-provider";
+import { CreatorProfileSection } from "../scripts/profile";
 import { ImportLocal } from "../import-local";
 import { useProjects, useStars } from "../_lib/store";
 import { browserClient } from "../_lib/supabase/browser";
@@ -28,6 +29,7 @@ export default function AccountPage() {
 
 function Account() {
   const { enabled, user, billing } = useAccount();
+  const scripts = useFeature("scripts");
   const [signingOut, signOut] = useBusy();
   const params = useSearchParams();
   const resetting = params.get("reset") === "1";
@@ -57,6 +59,7 @@ function Account() {
       {resetting && <PasswordSection highlight />}
       <BillingSection />
       <ProfileSection name={user.name} email={user.email} />
+      {scripts && <CreatorProfileSection />}
       <CurrencySection value={user.currency} />
       <TrendTrackSection />
       {!resetting && <PasswordSection />}

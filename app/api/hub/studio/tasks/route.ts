@@ -3,6 +3,7 @@ import { adminClient } from "../../../../hub/_lib/supabase/admin";
 import { BRAND_ID, studioApiUser } from "../../../../hub/_lib/studio/data";
 import { dismissTask, listTasks } from "../../../../hub/_lib/studio/tasks";
 import { canUse } from "../../../../hub/_lib/features";
+import { OWN_SCRIPTS } from "../../../../hub/_lib/scripts/types";
 
 /* Studio's background jobs: GET the running and recently finished ones, and
    the Mac edits that are going or waiting on you (each with its job's brand
@@ -34,6 +35,7 @@ export async function GET() {
     const { data } = ids.length ? await db.from("hub_projects").select("id, data").eq("user_id", auth.user.id).in("id", ids) : { data: [] };
     const brands = new Map((data ?? []).map((p) => [p.id as string, String((p.data as { brand?: string })?.brand || "Job")]));
     brands.set(BRAND_ID, "Personal brand");
+    brands.set(OWN_SCRIPTS, "Scripts");
     return Response.json({
       tasks: tasks.map((t) => ({ ...t, brand: brands.get(t.projectId) ?? "Job" })),
       edits: edits.map((e) => ({

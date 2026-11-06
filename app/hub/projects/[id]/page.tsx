@@ -28,6 +28,7 @@ import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
 import { BriefFillBox } from "./brief-fill";
+import { JobScripts } from "./scripts";
 
 /* One project: dates, payment, contact, the full brief, links and notes.
    Every change saves straight away - there's no save button. */
@@ -50,6 +51,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const sync = useSyncStatus();
   const studio = useFeature("studio");
   const followups = useFeature("followups");
+  const scripts = useFeature("scripts");
   const p = projects.find((x) => x.id === id);
 
   if (!ready)
@@ -380,15 +382,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             />
           </Section>
 
-          <Section title="Script" action={<span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">Scripting tool coming soon</span>}>
-            <TextBox
-              rows={6}
-              className={input}
-              value={project.script}
-              onValue={(v) => set("script", v)}
-              placeholder="Rough script or ideas for now. A proper script and shot-list builder is on the way."
-            />
-          </Section>
+          {scripts && !project.techStage ? (
+            <JobScripts project={project} set={set} />
+          ) : (
+            <Section title="Script" action={<span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">Scripting tool coming soon</span>}>
+              <TextBox
+                rows={6}
+                className={input}
+                value={project.script}
+                onValue={(v) => set("script", v)}
+                placeholder="Rough script or ideas for now. A proper script and shot-list builder is on the way."
+              />
+            </Section>
+          )}
 
           <div className="pt-2">
             <button

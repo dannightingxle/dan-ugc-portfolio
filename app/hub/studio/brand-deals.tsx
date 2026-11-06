@@ -4,6 +4,7 @@ import Link from "next/link";
 import { STAGES, isArchived, useDataReady, useProjects, type Project } from "../_lib/store";
 import { shortDate } from "../_lib/ui";
 import { JobMenu } from "./job-menu";
+import { useFeature } from "../account-provider";
 
 /* Every live brand deal (a job that isn't tech UGC), soonest due first, each
    opening straight into its Studio - to add its files and make its edits. */
@@ -18,6 +19,7 @@ export function BrandDeals() {
   const { projects } = useProjects();
   const ready = useDataReady();
   const deals = liveDeals(projects);
+  const scripts = useFeature("scripts");
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -41,7 +43,7 @@ export function BrandDeals() {
             const late = Boolean(p.due && p.due < today && p.stage !== "Delivered");
             return (
               <div key={p.id} className="relative min-w-0">
-              <Link href={`/hub/projects/${p.id}/studio`} className="block h-full min-w-0 rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong">
+              <Link href={`/hub/projects/${p.id}/studio`} className={`block h-full min-w-0 rounded-xl border border-border bg-bg-card p-4 transition hover:border-border-strong ${scripts ? "pb-12" : ""}`}>
                 <div className="flex items-center justify-between gap-2 pr-7">
                   <p className="truncate font-medium">{p.brand || "Untitled"}</p>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${p.stage === "Filming" || p.stage === "Scripting" ? "bg-accent-soft font-medium text-accent" : "bg-text/5 text-text-dim"}`}>{p.stage}</span>
@@ -49,6 +51,11 @@ export function BrandDeals() {
                 {p.title && <p className="truncate text-sm text-text-muted">{p.title}</p>}
                 {p.due && <p className={`mt-2 text-xs ${late ? "font-medium text-warn" : "text-text-dim"}`}>{late ? `Was due ${shortDate(p.due)}` : `Due ${shortDate(p.due)}`}</p>}
               </Link>
+              {scripts && (
+                <Link href={`/hub/projects/${p.id}#write-script`} className="absolute bottom-3 right-3 rounded-lg border border-border bg-bg-card px-2.5 py-1 text-xs font-medium text-accent hover:border-accent">
+                  Write script
+                </Link>
+              )}
               <JobMenu project={p} />
               </div>
             );
