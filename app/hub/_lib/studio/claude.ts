@@ -99,6 +99,63 @@ async function askOnce<S extends z.ZodType>({ system, context, content, schema, 
   throw new StudioError("Opening the links took too long. Paste the brief text in instead.");
 }
 
+type Converse = {
+  system: string;
+  messages: Anthropic.Beta.BetaMessageParam[];
+  tools: { name: string; description: string; input_schema: { type: "object"; [k: string]: unknown } }[];
+  /** Let Claude open links (a brief on notion.site, a Google Doc). */
+  webFetch?: boolean;
+  runTool: (name: string, input: unknown) => Promise<{ ok: boolean; result: unknown }>;
+  /** A tool is starting. */
+  onTool?: (name: string) => void;
+  /** What Claude has said so far this round, as it writes it. */
+  onText?: (text: string) => void;
+  /** Something Claude said on the way (before using a tool). */
+  onAside?: (text: string) => void;
+  maxRounds?: number;
+};
+
+/** A turn of a conversation where Claude can use tools: it asks for a tool, gets its answer, and carries on until it
+    has replied. Same model and settings as the rest of Studio. Returns its final reply. */
+export async function converse({ system, messages: history, tools, webFetch, runTool, onTool, onText, onAside, maxRounds = 16 }: Converse): Promise<string> {
+  const messages = [...history];
+  const allTools = [...tools, ...(webFetch ? [{ type: "web_fetch_20260209" as const, name: "web_fetch" as const, max_uses: 5 }] : [])];
+  for (let round = 0; round < maxRounds; round++) {
+    let said = "";
+    const stream = anthropic().beta.messages.stream({
+      model: MODEL,
+      max_tokens: 16000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium" },
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+      messages,
+      tools: allTools as Anthropic.Beta.BetaToolUnion[],
+    });
+    stream.on("text", (delta) => {
+      said += delta;
+      onText?.(said);
+    });
+    const msg = await stream.finalMessage();
+    console.info("Creator Desk assistant: Claude usage", JSON.stringify(msg.usage));
+    messages.push({ role: "assistant", content: msg.content as Anthropic.Beta.BetaContentBlockParam[] });
+    if (msg.stop_reason === "pause_turn") continue;
+    if (msg.stop_reason === "refusal") throw new StudioError("Claude couldn't help with that one. Try asking another way.");
+    const uses = msg.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
+    if (msg.stop_reason !== "tool_use" || !uses.length) return said.trim() || "Done.";
+    if (said.trim()) onAside?.(said.trim());
+    const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
+    for (const u of uses) {
+      onTool?.(u.name);
+      const r = await runTool(u.name, u.input);
+      results.push({ type: "tool_result", tool_use_id: u.id, content: (typeof r.result === "string" ? r.result : JSON.stringify(r.result)).slice(0, 60_000), is_error: !r.ok });
+    }
+    messages.push({ role: "user", content: results });
+  }
+  throw new StudioError("That took too many steps. Try asking for one thing at a time.");
+}
+
 /** The answer checked against the shape, or what's wrong with it in a few words. */
 function readAnswer<S extends z.ZodType>(schema: S, text: string): { ok: true; data: z.infer<S> } | { ok: false; problem: string } {
   let json: unknown;

@@ -11,6 +11,7 @@ import { featuresFor } from "./_lib/features";
 import { Analytics } from "@vercel/analytics/next";
 import { Popups } from "./_lib/popups";
 import { TasksProvider } from "./_lib/studio/tasks-client";
+import { DwightDock } from "./dwight/dock";
 import { JobChangeNote } from "./studio/job-menu";
 import "./hub.css";
 
@@ -37,6 +38,7 @@ export default async function HubLayout({ children }: { children: React.ReactNod
             <main className="mx-auto w-full max-w-6xl px-4 pb-[calc(7rem+var(--tray-h,0px))] pt-6 sm:px-6 md:pb-[calc(6rem+var(--tray-h,0px))]">
               <AccessGate>{children}</AccessGate>
             </main>
+            <DwightDock />
           </TasksProvider>
         </Popups>
       </AccountProvider>

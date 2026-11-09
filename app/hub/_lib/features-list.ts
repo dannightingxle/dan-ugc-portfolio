@@ -10,6 +10,7 @@ export const FEATURES = [
   { key: "edits", name: "Edits on your Mac", about: "An edit card per video, edited in CapCut on your own Mac by the Creator Desk Helper and your Claude Code." },
   { key: "calendar", name: "Calendar (Buffer)", about: "Connect Buffer with an API key: your schedule for every account, gaps to fill, how sent posts did, and scheduling videos to Buffer from Creator Desk." },
   { key: "scripts", name: "Scripts", about: "Write a script pack from a brand brief: 3 hooks, the script with visuals and timings, a shot list by location and an edit map, in your own voice from your creator profile and saved rules." },
+  { key: "dwight", name: "Dwight (helper)", about: "A helper on every page you can ask in your own words: it looks things up across your jobs, to-dos and Buffer, makes changes (with Undo), works out how many videos you need, and takes you to the right page. Each creator can rename theirs." },
   { key: "todos", name: "To-dos", about: "Your to-dos at the top of the home page: one-offs, repeating ones, and submitted work that comes back to check in on after 3 days without approval." },
 ] as const;
 

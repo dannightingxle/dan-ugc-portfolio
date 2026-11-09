@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { TODOS_CHANGED } from "./dwight/chat";
 import { isArchived, paymentDue, useProjects, type Project } from "./_lib/store";
 import { CHECK_IN_AFTER_DAYS, REPEATS, REPEAT_LABEL, checkInOn, finish, localDay, placeOf, unfinish, type Repeat, type Todo } from "./_lib/todos/types";
 import { input } from "./projects/fields";
@@ -44,7 +45,11 @@ export function YourTodos() {
   }, []);
 
   useEffect(() => {
-    call<{ todos: Todo[] }>(API, "GET").then((r) => setTodos(r.todos), (e: Error) => setError(e.message));
+    const load = () => call<{ todos: Todo[] }>(API, "GET").then((r) => setTodos(r.todos), (e: Error) => setError(e.message));
+    void load();
+    // Dwight changed them.
+    window.addEventListener(TODOS_CHANGED, load);
+    return () => window.removeEventListener(TODOS_CHANGED, load);
   }, []);
 
   // Changes go to the server one at a time, in order, so quick ticks don't overwrite each other;
