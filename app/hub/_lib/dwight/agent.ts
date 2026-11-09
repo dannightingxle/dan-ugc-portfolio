@@ -46,7 +46,9 @@ async function systemPrompt(user: HubUser, name: string, page: PageContext) {
 - Make the changes they ask for straight away. Every change is listed under your reply with an Undo button, so don't ask "shall I?" first. Ask only when you can't tell what they mean (which job, which date) or something you need is missing.
 - Never make up details about a job or their work.
 - You can't delete anything, post to Buffer or start things that use Claude credits (shoot sheets, scripts, setting a job up from its brief). For those, use show_buttons to give them a button to the right page, filled in where the link allows.
-- Finish with show_buttons whenever there's somewhere useful to go next.
+- When there's somewhere useful to go next, call show_buttons BEFORE you write your answer, then write the answer. The buttons go under it; they never replace it.
+- Show your working whenever you give numbers. For "how many videos do I need": one row per job with the videos a day used (and whether that came from the job or from what Buffer has been posting), the days, what's already scheduled, and how many to make; then say anything that doesn't add up (a pace Buffer disagrees with, a job with no Buffer accounts or no pace).
+- When they tell you a job's pace ("Pingo is 2 a day"), save it with update_job (videosPerDay) and work it out again, so it's right next time too.
 - Brand deal paid: paymentStatus Paid, paidOn (today unless they say otherwise), stage Paid.
 - Keep replies short and plain: a line or two, then a short list or a small table if it helps. No headings. Dates like "29 Nov". Money with its currency symbol.${spelling ? ` ${spelling} spelling.` : ""}
 - Your tools only see Creator Desk. If they ask about something outside it, say so.`,
@@ -115,11 +117,7 @@ async function work(user: HubUser, name: string, convo: Conversation, reply: Dwi
       onTool: (tool) => {
         const step = stepFor(tools, tool);
         if (step && reply.steps?.at(-1) !== step) reply.steps?.push(step);
-        reply.text = "";
         save(true);
-      },
-      onAside: (said) => {
-        reply.steps?.push(said.length > 160 ? `${said.slice(0, 157)}…` : said);
       },
       onText: (said) => {
         reply.text = said;

@@ -366,7 +366,7 @@ const TOOLS: Tool[] = [
     name: "content_needed",
     step: "Working out how many videos you need",
     description:
-      "For each live tech UGC job (Active or Warm-up): how many videos it needs from today up to a date (its videos a day x the days), what's already scheduled on its Buffer accounts, and how many are still to make. Use it for 'how much do I need to make before X'.",
+      "For each live tech UGC job (Active or Warm-up): how many videos it needs from today up to a date (its videos a day x the days), what's already scheduled on its Buffer accounts, and how many are still to make. The pace is the job's own videos a day; what Buffer has actually been posting is beside it (bufferPerDay), used when the job has none, and paceNote says when they disagree. Use it for 'how much do I need to make before X'.",
     input: z.object({ until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
     run: async (ctx, { until }: { until: string }) => {
       const [jobs, connected] = await Promise.all([
@@ -400,6 +400,7 @@ const TOOLS: Tool[] = [
         until,
         channels: cal?.channels ?? null,
         scheduled: cal?.scheduled ?? [],
+        sent: cal?.sent ?? [],
         jobChannels: connected ? await jobChannels(ctx.user.id) : {},
         finishedEdits: finished,
       });
