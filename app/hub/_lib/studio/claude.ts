@@ -108,16 +108,16 @@ type Converse = {
   runTool: (name: string, input: unknown) => Promise<{ ok: boolean; result: unknown }>;
   /** A tool is starting. */
   onTool?: (name: string) => void;
-  /** What Claude has said so far this round, as it writes it. */
+  /** What Claude has said so far (every round), as it writes it. */
   onText?: (text: string) => void;
-  /** Something Claude said on the way (before using a tool). */
-  onAside?: (text: string) => void;
   maxRounds?: number;
 };
 
 /** A turn of a conversation where Claude can use tools: it asks for a tool, gets its answer, and carries on until it
     has replied. Same model and settings as the rest of Studio. Returns its final reply. */
-export async function converse({ system, messages: history, tools, webFetch, runTool, onTool, onText, onAside, maxRounds = 16 }: Converse): Promise<string> {
+export async function converse({ system, messages: history, tools, webFetch, runTool, onTool, onText, maxRounds = 16 }: Converse): Promise<string> {
+  // Everything Claude says, across every round: an answer written before its last tool call (buttons, say) is still the answer.
+  let all = "";
   const messages = [...history];
   const allTools = [...tools, ...(webFetch ? [{ type: "web_fetch_20260209" as const, name: "web_fetch" as const, max_uses: 5 }] : [])];
   for (let round = 0; round < maxRounds; round++) {
@@ -135,7 +135,7 @@ export async function converse({ system, messages: history, tools, webFetch, run
     });
     stream.on("text", (delta) => {
       said += delta;
-      onText?.(said);
+      onText?.(joinSaid(all, said));
     });
     const msg = await stream.finalMessage();
     console.info("Creator Desk assistant: Claude usage", JSON.stringify(msg.usage));
@@ -143,8 +143,8 @@ export async function converse({ system, messages: history, tools, webFetch, run
     if (msg.stop_reason === "pause_turn") continue;
     if (msg.stop_reason === "refusal") throw new StudioError("Claude couldn't help with that one. Try asking another way.");
     const uses = msg.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
-    if (msg.stop_reason !== "tool_use" || !uses.length) return said.trim() || "Done.";
-    if (said.trim()) onAside?.(said.trim());
+    all = joinSaid(all, said);
+    if (msg.stop_reason !== "tool_use" || !uses.length) return all.trim() || "Done.";
     const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
     for (const u of uses) {
       onTool?.(u.name);
@@ -154,6 +154,13 @@ export async function converse({ system, messages: history, tools, webFetch, run
     messages.push({ role: "user", content: results });
   }
   throw new StudioError("That took too many steps. Try asking for one thing at a time.");
+}
+
+/** One round's words after the last round's, a blank line between. */
+function joinSaid(before: string, now: string) {
+  if (!before.trim()) return now;
+  if (!now.trim()) return before;
+  return `${before.trimEnd()}\n\n${now.trimStart()}`;
 }
 
 /** The answer checked against the shape, or what's wrong with it in a few words. */
