@@ -13,25 +13,15 @@ import type { Currency } from "./currencies";
 
 export type StarredAd = Ad & { starredAt: string; note?: string };
 
-export const STAGES = ["Pitched", "Briefed", "Scripting", "Filming", "Delivered", "Paid", "Lost"] as const;
-export type Stage = (typeof STAGES)[number];
+import { PAYMENT_STATUSES, SHIPPING, SOURCES, STAGES, TECH_STAGES, type PaymentStatus, type Stage, type TechStage } from "./job-fields";
+export { PAYMENT_STATUSES, SHIPPING, SOURCES, STAGES, TECH_STAGES, type PaymentStatus, type Stage, type TechStage };
 /** The board's columns. Lost jobs go to Archived instead. */
 export const BOARD_STAGES = STAGES.filter((s) => s !== "Lost");
 
-export const PAYMENT_STATUSES = ["Not invoiced", "Invoiced", "Paid"] as const;
-export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
-
-export const SHIPPING = ["Not needed", "Waiting", "On its way", "Received"] as const;
-
-/** Tech UGC jobs (a dedicated account posting for an app) move through these instead. */
-export const TECH_STAGES = ["Negotiating", "Account creation", "Setup", "Warm-up", "Active", "On hold", "Ended", "Lost"] as const;
-export type TechStage = (typeof TECH_STAGES)[number];
 /** A job that didn't happen. */
 export const isLost = (p: Pick<Project, "stage" | "techStage">) => p.stage === "Lost" || p.techStage === "Lost";
 /** Ended or lost: off the board and the to-do lists, kept in Archived. */
 export const isArchived = (p: Pick<Project, "stage" | "techStage">) => isLost(p) || p.techStage === "Ended";
-/** Where a job came from: a brand's inbound message, a UGC platform (Twirl, Insense…) or your own outreach. */
-export const SOURCES = ["Inbound", "Platform", "Outreach"] as const;
 
 // Fees and per-video rates can be in any of these; totals are converted to the account's currency.
 export { CURRENCIES, type Currency } from "./currencies";
@@ -325,6 +315,11 @@ export async function reloadProject(id: string) {
   const fresh = upgrade(data.data);
   const has = state.projects.some((p) => p.id === id);
   setState({ projects: has ? state.projects.map((p) => (p.id === id ? fresh : p)) : [fresh, ...state.projects] });
+}
+
+/** Take a job off the screen that the server has already removed (e.g. Dwight undoing a job it added). */
+export function dropProject(id: string) {
+  if (state.projects.some((p) => p.id === id)) setState({ projects: state.projects.filter((p) => p.id !== id) });
 }
 
 export async function initStore(opts: { mode: "local" } | { mode: "remote"; db: SupabaseClient; userId: string; canWrite: boolean }) {

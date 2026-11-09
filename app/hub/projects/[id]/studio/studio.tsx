@@ -465,7 +465,9 @@ function WeekTab({
   goSetup: () => void;
   goEdits?: () => void;
 }) {
-  const [videos, setVideos] = useState(7);
+  // A link can say how many (?videos=N, e.g. from Dwight).
+  const asked = Number(useSearchParams().get("videos"));
+  const [videos, setVideos] = useState(asked >= 1 && asked <= 21 ? Math.round(asked) : 7);
   // Saved with the job, so it's the same next week.
   const filmingOn = ws.filmingOn || DEFAULT_FILMING;
   const [lastWeek, setLastWeek] = useState("");
