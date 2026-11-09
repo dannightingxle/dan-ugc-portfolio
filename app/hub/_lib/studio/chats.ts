@@ -1,4 +1,5 @@
 import "server-only";
+import { Relay } from "./tasks";
 import { adminClient } from "../supabase/admin";
 import { studioErrorMessage } from "./claude";
 import type { Upload } from "./jobs";
@@ -92,9 +93,14 @@ export function requestText(input: WeekInput) {
 }
 
 /** Claude's turn in the chat: the sheet it made or changed, or why it couldn't. */
-export async function claudeTurn(userId: string, chat: SheetChat, work: () => Promise<{ id: string; title: string; oneLine: string; couldntOpen: string[]; bankEntry: string }>) {
+type Made = { id: string; title: string; oneLine: string; couldntOpen: string[]; bankEntry: string };
+
+/** Claude's turn in a sheet's chat: the sheet made (or the failure) is added to the chat. Work that hands its writing to a
+    fresh run comes back as a Relay, carrying the chat so that run can add the turn when the sheet is done. */
+export async function claudeTurn(userId: string, chat: SheetChat, work: () => Promise<Made | Relay>): Promise<unknown> {
   try {
     const made = await work();
+    if (made instanceof Relay) return new Relay(made.stage, { ...made.payload, chatId: chat.id }, () => claudeTurn(userId, chat, made.inline as () => Promise<Made>));
     await addMessage(userId, chat, { role: "claude", text: made.oneLine, sheetId: made.id, couldntOpen: made.couldntOpen }, { sheetId: made.id, title: made.title, bankEntry: made.bankEntry });
     return { id: made.id, oneLine: made.oneLine, couldntOpen: made.couldntOpen, chatId: chat.id };
   } catch (e) {

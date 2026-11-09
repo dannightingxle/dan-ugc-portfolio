@@ -16,7 +16,7 @@ import { BriefFill, applyBrief } from "./brief-fill";
 import { uploadedLinks } from "./pdf-links";
 import { attachedVideos } from "./attachments";
 import { type Unread, type WebPages, cleanLink, readWebPages } from "./web-pages";
-import type { Progress } from "./tasks";
+import { Relay, type Progress } from "./tasks";
 import type { LinkedPages } from "./linked-pages";
 import { canUse } from "../features";
 import { createEdit, deleteEdit, listEdits, updateEdit } from "../edits/data";
@@ -338,8 +338,12 @@ async function readBrief(userId: string, text: string, alsoWatch: string, progre
   const { rest, failed: macFailed, unread } = await readOtherLinks(userId, text, linked, progress);
   // Reference videos in the brief (or what's trending), as frames Claude can look at.
   progress("Watching the reference videos");
-  const watched = await watchVideos([text, alsoWatch].join("\n"), linked.pages, undefined, SHEET_MORE_VIDEOS, attached);
-  return { linked, rest, unread, watched, failed: [...linked.failed, ...macFailed, ...watched.failed] };
+  // TikTok and Instagram accounts linked as a reference: their latest posts, the way setting a job up looks at them.
+  const [watched, accounts] = await Promise.all([
+    watchVideos([text, alsoWatch].join("\n"), linked.pages, undefined, SHEET_MORE_VIDEOS, attached),
+    studyAccounts([text, alsoWatch].join("\n"), linked.pages),
+  ]);
+  return { linked, rest, unread, watched, accounts: accounts.text, failed: [...linked.failed, ...macFailed, ...watched.failed, ...accounts.failed] };
 }
 
 /** Claude writes the sheet: in the job's own template (from its Claude Project) when it has one, else the Creator Desk sheet. */
@@ -404,6 +408,7 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
         // Web fetch opens links that are in the request itself.
         read.rest.length > 0 && `Links in this week's brief: ${read.rest.join(" ")}`,
         unreadLine(read.unread, "in this week's brief"),
+        read.accounts,
         ...notesText(notes),
         `Today is ${today()}. Filming: ${input.filmingOn || "Monday, Wednesday and Thursday afternoons"}.`,
         input.lastWeek && `How last week went: ${input.lastWeek}`,
@@ -416,14 +421,50 @@ export async function makeShootSheet(user: HubUser, projectId: string, input: We
     },
   ];
   const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  const made = await writeSheet(job.brand, ws, content, read.rest.length + notes.unread.length > 0, date, progress);
+  const leg: SheetLeg = { mode: "new", brand: job.brand, content, webFetch: read.rest.length + notes.unread.length > 0, date, weekBrief, readFailed: read.failed };
+  // Reading took its share of the time limit: writing gets a fresh run of its own.
+  return sheetRelay(user, projectId, leg, progress);
+}
 
+/** What writing a sheet needs once the brief has been read, so it can be done in a fresh run. */
+export type SheetLeg = {
+  mode: "new" | "revise";
+  brand: string;
+  content: Anthropic.Beta.BetaContentBlockParam[];
+  webFetch: boolean;
+  date: string;
+  weekBrief: string;
+  readFailed: string[];
+  /** Revising: the sheet, and the hooks it put in the script bank. */
+  sheetId?: string;
+  bankEntry?: string;
+};
+export type SheetMade = { id: string; title: string; oneLine: string; couldntOpen: string[]; bankEntry: string };
+
+function sheetRelay(user: HubUser, projectId: string, leg: SheetLeg, progress: Progress) {
+  return new Relay("sheet-write", { leg }, () => finishShootSheet(user, projectId, leg, progress));
+}
+
+/** Write the sheet (new or changed), save it, put its hooks in the script bank and make or refresh its edit cards. */
+export async function finishShootSheet(user: HubUser, projectId: string, leg: SheetLeg, progress: Progress = () => {}): Promise<SheetMade> {
+  const ws = await getWorkspace(user.id, projectId);
+  if (leg.mode === "revise") {
+    const row = leg.sheetId ? await getSheet(user.id, leg.sheetId) : null;
+    if (!row || row.project_id !== projectId) throw new StudioError("That shoot sheet has been deleted - start a new one.");
+    const made = await writeSheet(leg.brand, ws, leg.content, leg.webFetch, leg.date, progress);
+    progress("Saving the sheet and its edit cards");
+    await updateSheet(user.id, row.id, made.title, leg.weekBrief ? { ...made.sheet, weekBrief: leg.weekBrief } : made.sheet);
+    const bankEntry = await bankHooks(user.id, projectId, ws, made.title, made.scriptBankEntry, leg.bankEntry);
+    await refreshEditCards(user, projectId, row.id, made.title, made.sheet);
+    return { id: row.id, title: made.title, oneLine: made.oneLine, couldntOpen: couldntOpenOnce(leg.readFailed, made.couldntOpen), bankEntry };
+  }
+  const made = await writeSheet(leg.brand, ws, leg.content, leg.webFetch, leg.date, progress);
   // This week's brief is kept with the sheet it was for.
   progress("Saving the sheet and its edit cards");
-  const id = await saveSheet(user.id, projectId, made.title, weekBrief ? { ...made.sheet, weekBrief } : made.sheet);
+  const id = await saveSheet(user.id, projectId, made.title, leg.weekBrief ? { ...made.sheet, weekBrief: leg.weekBrief } : made.sheet);
   const bankEntry = await bankHooks(user.id, projectId, ws, made.title, made.scriptBankEntry);
   await makeEditCards(user, projectId, id, made.title, made.sheet);
-  return { id, title: made.title, oneLine: made.oneLine, couldntOpen: couldntOpenOnce(read.failed, made.couldntOpen), bankEntry };
+  return { id, title: made.title, oneLine: made.oneLine, couldntOpen: couldntOpenOnce(leg.readFailed, made.couldntOpen), bankEntry };
 }
 
 /** A reply in the sheet's chat: Claude changes the sheet as asked, keeping the rest. */
@@ -450,6 +491,7 @@ export async function reviseShootSheet(user: HubUser, projectId: string, chat: S
         read.linked.pages.length > 0 && `Pages linked in my reply:\n${linkedPagesText(read.linked.pages)}`,
         read.rest.length > 0 && `Links in my reply: ${read.rest.join(" ")}`,
         unreadLine(read.unread, "in my reply"),
+        read.accounts,
         ...notesText(notes),
         `Today is ${today()}. Make the changes I'm asking for and give me the whole sheet back, with everything I haven't asked to change kept as it is. If I've just added context, use it where it fits. oneLine: one sentence on what you changed. scriptBankEntry: the hooks for the sheet as it now stands.`,
       ]
@@ -459,13 +501,18 @@ export async function reviseShootSheet(user: HubUser, projectId: string, chat: S
   ];
   // The sheet keeps the date it was made for.
   const date = row.title.split(" · ").at(-1) ?? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  const made = await writeSheet(job.brand, ws, content, read.rest.length + notes.unread.length > 0, date, progress);
-
-  progress("Saving the sheet and its edit cards");
-  await updateSheet(user.id, row.id, made.title, weekBrief ? { ...made.sheet, weekBrief } : made.sheet);
-  const bankEntry = await bankHooks(user.id, projectId, ws, made.title, made.scriptBankEntry, chat.bankEntry);
-  await refreshEditCards(user, projectId, row.id, made.title, made.sheet);
-  return { id: row.id, title: made.title, oneLine: made.oneLine, couldntOpen: couldntOpenOnce(read.failed, made.couldntOpen), bankEntry };
+  const leg: SheetLeg = {
+    mode: "revise",
+    brand: job.brand,
+    content,
+    webFetch: read.rest.length + notes.unread.length > 0,
+    date,
+    weekBrief: weekBrief ?? "",
+    readFailed: read.failed,
+    sheetId: row.id,
+    bankEntry: chat.bankEntry,
+  };
+  return sheetRelay(user, projectId, leg, progress);
 }
 
 /** The template's header markup, so Claude can see the bracketed text to fill. */
