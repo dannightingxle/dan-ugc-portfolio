@@ -23,6 +23,8 @@ type Tool = {
   href: string;
   /** True when the link pays me if someone signs up through it. */
   affiliate?: boolean;
+  /** A referral code to type in at sign-up, shown on the row. */
+  code?: string;
   /** Shown on the right in place of "Visit", e.g. "Waitlist". */
   cta?: string;
 };
@@ -67,9 +69,14 @@ const SECTIONS: Section[] = [
     title: "Tracking work",
     intro: "Keeping on top of the money and what's due.",
     tools: [
-      // Plain links for now: swap in the referral links from the Tide app and the Capital on Tap portal.
-      { name: "Tide", note: "My business bank account.", href: "https://www.tide.co" },
-      { name: "Capital on Tap", note: "My business credit card.", href: "https://www.capitalontap.com" },
+      // Tide has no referral link, only a code to type in when signing up.
+      { name: "Tide", note: "My business bank account.", href: "https://www.tide.co", affiliate: true, code: "62RKO9" },
+      {
+        name: "Capital on Tap",
+        note: "My business credit card. This link gets you 7,500 points when you first use the card.",
+        href: "https://cashback.capitalontap.com/referral/?promo=2REFP826G49&referrer=URSA%20PRODUCTS%20AND%20SERVICES",
+        affiliate: true,
+      },
       {
         name: "Creator Desk",
         note: "The app I built to run my UGC business: brand deals, what you're owed, shoot sheets and edits.",
@@ -148,6 +155,14 @@ export default function ToolsPage() {
                             )}
                           </span>
                           <span className="mt-0.5 block text-sm leading-snug text-[color:var(--text-muted)]">{t.note}</span>
+                          {t.code && (
+                            <span className="mt-1.5 block text-sm text-[color:var(--text-muted)]">
+                              Referral code:{" "}
+                              <span className="select-all rounded-md border border-[color:var(--border-strong)] px-1.5 py-0.5 font-mono font-semibold text-[color:var(--text)]">
+                                {t.code}
+                              </span>
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 text-sm font-semibold text-[color:var(--text)]">
                           {t.cta ?? "Visit"} <span aria-hidden="true">{external ? "↗" : "→"}</span>
@@ -162,7 +177,7 @@ export default function ToolsPage() {
 
         {hasAffiliate && (
           <p className="mt-10 rounded-2xl border border-[color:var(--border)] p-4 text-sm leading-relaxed text-[color:var(--text-muted)]">
-            Links marked <span className="font-semibold text-[color:var(--accent)]">Affiliate</span> pay me a small commission if you sign up
+            Links marked <span className="font-semibold text-[color:var(--accent)]">Affiliate</span> earn me a small commission or reward if you sign up
             through them, at no extra cost to you. I only list tools I actually use.
           </p>
         )}
