@@ -54,6 +54,19 @@ const LINKS: LinkItem[] = [
     ),
   },
   {
+    label: "My tools",
+    note: "Every tool I use to find UGC work, make the videos and keep track of the money, with a link to each.",
+    href: "/tools",
+    tag: "See the full list",
+    thumb: (
+      <Tile>
+        <span className="text-[17px]">
+          TOOLS<span className="text-[color:var(--accent)]">.</span>
+        </span>
+      </Tile>
+    ),
+  },
+  {
     label: "Creator Desk",
     note: "The app I built to run my UGC business: brand deals, what you're owed, shoot sheets and edits, all in one place. Opening soon.",
     href: "/creatordesk",
