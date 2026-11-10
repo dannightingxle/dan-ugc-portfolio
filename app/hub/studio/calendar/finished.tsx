@@ -5,7 +5,7 @@ import { SERVICE_LABEL, type CalendarPost, type Channel, type ChannelGroup, type
 import type { FinishedVideo } from "../../_lib/buffer/finished";
 import { TextBox } from "../../_lib/text-box";
 import { Busy, Spinner } from "../../_lib/ui";
-import { AccountPicker, call, input, uploadVideo } from "./shared";
+import { AccountPicker, call, input, uploadVideo, videoSeconds } from "./shared";
 
 /* Schedule finished videos: pick everything you exported from CapCut, and
    Creator Desk works out what each one is from its name (the draft name the
@@ -126,10 +126,10 @@ export function FinishedVideos({ channels, groups, scheduled, onScheduled, onDon
       for (const row of included) {
         patch(row.key, { state: "scheduling", error: undefined });
         try {
-          const videoPath = await row.promise;
+          const [videoPath, seconds] = await Promise.all([row.promise, videoSeconds(row.file)]);
           const r = await call<{ results: ScheduleResult[] }>("/api/hub/buffer/posts", {
             method: "POST",
-            body: JSON.stringify({ channelIds: accountsFor(row), text: row.caption, when: "queue", videoPath }),
+            body: JSON.stringify({ channelIds: accountsFor(row), text: row.caption, when: "queue", videoPath, ...(seconds && { videoSeconds: seconds }) }),
           });
           patch(row.key, { state: r.results.every((x) => x.ok) ? "done" : "failed", results: r.results });
         } catch (e) {

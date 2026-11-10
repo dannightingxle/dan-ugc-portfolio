@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CAPTION_LIMIT, SERVICE_LABEL, type CalendarData, type CalendarPost, type Channel, type ChannelGroup, type ScheduleResult } from "../../_lib/buffer/types";
 import { FinishedVideos } from "./finished";
-import { Avatar, call, input, type Upload, uploadVideo } from "./shared";
+import { Avatar, call, input, type Upload, uploadVideo, videoSeconds } from "./shared";
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
 import { Busy, Spinner } from "../../_lib/ui";
@@ -236,7 +236,8 @@ function Calendar({ calendar }: { calendar: CalendarData }) {
             <p key={p.id} className="flex items-start gap-2 text-sm">
               <Avatar channel={byId.get(p.channelId)} size="h-5 w-5" />
               <span>
-                <span className="font-medium">{byId.get(p.channelId)?.name ?? SERVICE_LABEL[p.service] ?? p.service}</span>
+                <span className="font-medium">{byId.get(p.channelId)?.name ?? p.service}</span>
+                <span className="text-text-muted"> ({SERVICE_LABEL[p.service] ?? p.service})</span>
                 {p.at && <span className="text-text-muted"> · {new Date(p.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}: {p.error ?? "Buffer couldn't publish it"} - fix it in Buffer.
               </span>
             </p>
@@ -455,10 +456,17 @@ function Schedule({
     setError("");
     setResults(null);
     try {
-      const videoPath = upload ? await upload.promise : undefined;
+      const [videoPath, seconds] = upload ? await Promise.all([upload.promise, videoSeconds(upload.file)]) : [undefined, null];
       const r = await call<{ results: ScheduleResult[] }>("/api/hub/buffer/posts", {
         method: "POST",
-        body: JSON.stringify({ channelIds: picked, text, when, ...(when === "time" && at && { dueAt: new Date(at).toISOString() }), ...(videoPath && { videoPath }) }),
+        body: JSON.stringify({
+          channelIds: picked,
+          text,
+          when,
+          ...(when === "time" && at && { dueAt: new Date(at).toISOString() }),
+          ...(videoPath && { videoPath }),
+          ...(seconds && { videoSeconds: seconds }),
+        }),
       });
       if (r.results.every((x) => x.ok)) {
         // Scheduled: kept in the list above, and the form is ready for the next one (same accounts, same kind of timing).
