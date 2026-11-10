@@ -45,3 +45,11 @@ export const SERVICE_LABEL: Record<string, string> = { tiktok: "TikTok", instagr
 
 /** How long a caption can be on each network (TikTok's limit is lower with a video). */
 export const CAPTION_LIMIT: Record<string, number> = { tiktok: 2200, instagram: 2200, youtube: 5000, threads: 500, twitter: 280, bluesky: 300 };
+
+/** Facebook takes a reel of up to 90 seconds (Instagram's go to 15 minutes). A longer video goes to Facebook as an ordinary
+    video post instead, so it isn't refused. Length unknown: a reel, as before. */
+export const FACEBOOK_REEL_MAX_SECONDS = 90;
+export function facebookPostType(hasVideo: boolean, seconds: number | null | undefined): "reel" | "post" {
+  if (!hasVideo) return "post";
+  return seconds != null && seconds > FACEBOOK_REEL_MAX_SECONDS ? "post" : "reel";
+}

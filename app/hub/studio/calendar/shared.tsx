@@ -35,6 +35,24 @@ function said(body: string) {
 
 export type Upload = { file: File; progress: number; path?: string; error?: string; promise: Promise<string>; abort: () => void };
 
+/** How long a video file is, in seconds, read by the browser (null if it can't tell). Facebook needs it: over 90 seconds
+    can't be a Facebook reel. */
+export function videoSeconds(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    const done = (n: number | null) => {
+      URL.revokeObjectURL(url);
+      resolve(n);
+    };
+    v.preload = "metadata";
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null);
+    v.onerror = () => done(null);
+    setTimeout(() => done(null), 10_000);
+    v.src = url;
+  });
+}
+
 /** Upload a video straight to storage (too big to go through the server), with progress. It starts as soon as you pick the video. */
 export function uploadVideo(file: File, onProgress: (pct: number) => void): { promise: Promise<string>; abort: () => void } {
   let xhr: XMLHttpRequest | null = null;

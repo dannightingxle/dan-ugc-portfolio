@@ -13,6 +13,7 @@ const Body = z
     dueAt: z.string().datetime().optional(),
     videoPath: z.string().max(300).optional(),
     title: z.string().max(100).optional(),
+    videoSeconds: z.number().positive().max(36_000).optional(),
   })
   .refine((b) => b.when === "queue" || (b.dueAt && Date.parse(b.dueAt) > Date.now()), "Pick a time in the future.")
   .refine((b) => b.text.trim() || b.videoPath, "Add a video or a caption.");

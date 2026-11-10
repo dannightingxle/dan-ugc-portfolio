@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { adminClient } from "../supabase/admin";
-import type { CalendarData, CalendarPost, Channel, ChannelGroup, ScheduleResult } from "./types";
+import { type CalendarData, type CalendarPost, type Channel, type ChannelGroup, type ScheduleResult, facebookPostType } from "./types";
 
 /* Buffer, connected with your own API key (Buffer → Settings → API). Its
    GraphQL API is called from the server only. Every request counts against
@@ -230,7 +230,7 @@ export async function videoUploadUrl(userId: string, fileName: string) {
   return { path, token: data.token, publicUrl: storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl };
 }
 
-export type ScheduleInput = { channelIds: string[]; text: string; when: "queue" | "time"; dueAt?: string; videoPath?: string; title?: string };
+export type ScheduleInput = { channelIds: string[]; text: string; when: "queue" | "time"; dueAt?: string; videoPath?: string; title?: string; /** How long the video is, read in the browser. */ videoSeconds?: number };
 
 /** One post per channel: in the queue's next free slot or at a set time, with the uploaded video. */
 export async function schedulePosts(userId: string, input: ScheduleInput): Promise<ScheduleResult[]> {
@@ -248,8 +248,8 @@ export async function schedulePosts(userId: string, input: ScheduleInput): Promi
         : service === "youtube"
           ? { youtube: { title, categoryId: "22" } }
           : service === "facebook"
-            ? // Buffer needs a Facebook post's type: a video goes up as a reel.
-              { facebook: { type: videoUrl ? "reel" : "post", annotations: [] } }
+            ? // Buffer needs a Facebook post's type: a video goes up as a reel, unless it's over Facebook's 90-second reel limit.
+              { facebook: { type: facebookPostType(Boolean(videoUrl), input.videoSeconds), annotations: [] } }
             : undefined;
     const variables = {
       input: {
