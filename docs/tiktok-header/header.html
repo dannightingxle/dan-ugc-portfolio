@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:J;src:url(https://cdn.jsdelivr.net/npm/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2);font-weight:200 800}
+*{margin:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0a0a;overflow:hidden;font-family:J;color:#f5f5f5;-webkit-font-smoothing:antialiased}
+.g{position:absolute;border-radius:50%}
+.o{background:radial-gradient(circle,rgba(255,107,53,.55),rgba(255,107,53,0) 62%)}
+.p{background:radial-gradient(circle,rgba(107,53,255,.42),rgba(107,53,255,0) 62%)}
+.grain{position:absolute;inset:0;opacity:.05;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.c{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;text-align:center;transform:translateY(-50%)}
+.k{font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#ff6b35;font-size:calc(var(--u)*2.1)}
+h1{font-weight:800;letter-spacing:-.04em;line-height:1;font-size:calc(var(--u)*10.4);margin-top:calc(var(--u)*2)}
+h1 b{color:#ff6b35}
+.t{margin-top:calc(var(--u)*2.6);font-weight:500;color:#c9c9c9;font-size:calc(var(--u)*2.9);letter-spacing:-.01em}
+.t i{font-style:normal;color:#ff6b35;margin:0 .45em}
+.pill{margin-top:calc(var(--u)*4);display:inline-flex;align-items:center;gap:.6em;padding:.7em 1.3em;border-radius:999px;border:1px solid rgba(255,107,53,.6);background:rgba(255,107,53,.12);font-weight:600;font-size:calc(var(--u)*2.3)}
+.pill s{text-decoration:none;color:#ff6b35}
+/* wide 2:1 */
+body.wide{--u:1vw}
+body.wide .c{top:47%}
+body.wide .o{width:70vw;height:70vw;left:62%;top:-48%}
+body.wide .p{width:62vw;height:62vw;left:-22%;top:28%}
+/* tall 9:16 */
+body.tall{--u:1.72vw}
+body.tall .c{top:30%}
+body.tall h1{font-size:calc(var(--u)*7.3)}
+body.tall .t{line-height:1.45;font-size:calc(var(--u)*3.2)}
+body.tall .t i{display:block;height:0;overflow:hidden}
+body.tall .o{width:150vw;height:150vw;left:28%;top:-34%}
+body.tall .p{width:150vw;height:150vw;left:-75%;top:44%}
+</style></head><body>
+<div class="g o"></div><div class="g p"></div><div class="grain"></div>
+<div class="c">
+<div class="k">UGC Creator</div>
+<h1>Dan Nightingale<b>.</b></h1>
+<div class="t">50+ brands in 6 months<i>·</i>Teaching you to do the same</div>
+<div class="pill">Free: The A to Z of UGC <s>→</s> link in bio</div>
+</div>
+<script>document.body.className=location.hash.slice(1)</script>
+</body></html>
