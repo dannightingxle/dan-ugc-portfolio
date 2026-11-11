@@ -483,7 +483,7 @@ function CarryOnElsewhere({ was, on, busy, disabled, onCarryOn }: { was: Device 
 
 /** Several video codes (V1, V2, V3…) usually means a whole shoot sheet rather than one card. */
 function looksLikeWholeSheet(text: string) {
-  return new Set(text.match(/\bV\d{1,2}\b/g) ?? []).size >= 3;
+  return new Set(text.match(/\bV\d{1,3}\b/g) ?? []).size >= 3;
 }
 
 function CodeBadge({ card }: { card: EditCard }) {

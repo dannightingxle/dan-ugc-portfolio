@@ -5,6 +5,7 @@ import { getBrand } from "../studio/brand";
 import { getWorkspace } from "../studio/data";
 import { bufferCalendar, jobChannels } from "./data";
 import type { Channel } from "./types";
+import { videoCode, withoutVersion } from "./video-code";
 
 /* Finished videos, straight from CapCut's export, matched to what they are:
    the edit card that made the draft (its draft name is the file name), the
@@ -43,7 +44,6 @@ export const baseName = (file: string) =>
     .replace(/\s*\(\d+\)$/, "")
     .replace(/_/g, " ")
     .trim();
-const codeIn = (s: string) => /\b([VT]\d{1,2})\b/i.exec(s)?.[1].toUpperCase() ?? "";
 const codeNumber = (code: string) => Number(code.slice(1)) || 0;
 
 /** A video's caption on a shoot sheet (Creator Desk's own, or the job's own template), with its hashtags. */
@@ -130,10 +130,10 @@ export async function matchFinished(userId: string, names: string[], jobFor: Rec
   const out: FinishedVideo[] = [];
   for (const name of names) {
     const base = baseName(name);
-    const v: FinishedVideo = { name, projectId: null, brand: "", code: codeIn(base), title: "", caption: "", channelIds: [], channelsFrom: "none", videosPerDay: null, problem: "", alreadyQueued: false };
+    const v: FinishedVideo = { name, projectId: null, brand: "", code: videoCode(base), title: "", caption: "", channelIds: [], channelsFrom: "none", videosPerDay: null, problem: "", alreadyQueued: false };
     // The card whose draft has this name (the newest, if a name was used again).
     const told = jobFor[name];
-    const edit = told ? undefined : ((edits ?? []) as EditRow[]).find((e) => (e.draft_name ?? "").split(/,\s*/).some((d) => norm(d) === norm(base)));
+    const edit = told ? undefined : ((edits ?? []) as EditRow[]).find((e) => (e.draft_name ?? "").split(/,\s*/).some((d) => norm(d) === norm(base) || norm(d) === norm(withoutVersion(base))));
     if (told) {
       if (told === BRAND_ID || project(told)) v.projectId = told;
     } else if (edit) {
