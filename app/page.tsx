@@ -24,6 +24,7 @@ const STATS = [
 const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = [
   { name: "Puma", logo: "/logos/puma.png", whiteAsset: true },
   { name: "Shark", logo: "/logos/shark.png" },
+  { name: "National Express", logo: "/logos/national-express.svg" },
   { name: "Manchester City", logo: "/logos/mancity.webp" },
   { name: "Coors", logo: "/logos/coors.webp" },
   { name: "Sure", logo: "/logos/sure.jpg" },
@@ -34,6 +35,7 @@ const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = 
   { name: "Neutonic", logo: "/logos/neutonic.png", whiteAsset: true },
   { name: "Canva", logo: "/logos/canva.webp" },
   { name: "P&O Ferries", logo: "/logos/po-ferries.jpg" },
+  { name: "Cuvva", logo: "/logos/cuvva.svg" },
   { name: "B&M", logo: "/logos/bm-color.png" },
   { name: "Chilly's", logo: "/logos/chillys-color.png" },
   { name: "Grenade", logo: "/logos/grenade.png" },
