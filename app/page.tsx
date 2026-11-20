@@ -62,7 +62,6 @@ const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = 
   { name: "The Scent Reserve", logo: "/logos/scent-reserve.png" },
   { name: "Opinly", logo: "/logos/opinly.png" },
   { name: "Our Story Magic", logo: "/logos/our-story-magic.png" },
-  { name: "LendedIt", logo: "/logos/lendedit.png" },
 ];
 
 const SERVICES = [
