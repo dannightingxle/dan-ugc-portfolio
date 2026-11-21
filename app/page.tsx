@@ -60,7 +60,6 @@ const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = 
   { name: "Wellgard", logo: "/logos/wellgard.png", whiteAsset: true },
   { name: "Card Factory", logo: "/logos/cardfactory.png" },
   { name: "The Scent Reserve", logo: "/logos/scent-reserve.png" },
-  { name: "Opinly", logo: "/logos/opinly.png" },
   { name: "Our Story Magic", logo: "/logos/our-story-magic.png" },
 ];
 
