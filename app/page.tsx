@@ -24,6 +24,7 @@ const STATS = [
 const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = [
   { name: "Puma", logo: "/logos/puma.png", whiteAsset: true },
   { name: "Shark", logo: "/logos/shark.png" },
+  { name: "National Express", logo: "/logos/national-express.svg" },
   { name: "Manchester City", logo: "/logos/mancity.webp" },
   { name: "Coors", logo: "/logos/coors.webp" },
   { name: "Sure", logo: "/logos/sure.jpg" },
@@ -34,6 +35,7 @@ const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = 
   { name: "Neutonic", logo: "/logos/neutonic.png", whiteAsset: true },
   { name: "Canva", logo: "/logos/canva.webp" },
   { name: "P&O Ferries", logo: "/logos/po-ferries.jpg" },
+  { name: "Cuvva", logo: "/logos/cuvva.svg" },
   { name: "B&M", logo: "/logos/bm-color.png" },
   { name: "Chilly's", logo: "/logos/chillys-color.png" },
   { name: "Grenade", logo: "/logos/grenade.png" },
@@ -57,6 +59,9 @@ const FEATURED_BRANDS: { name: string; logo: string; whiteAsset?: boolean }[] = 
   { name: "Warrior Supplements", logo: "/logos/warrior.png", whiteAsset: true },
   { name: "Wellgard", logo: "/logos/wellgard.png", whiteAsset: true },
   { name: "Card Factory", logo: "/logos/cardfactory.png" },
+  { name: "The Scent Reserve", logo: "/logos/scent-reserve.png" },
+  { name: "Opinly", logo: "/logos/opinly.png" },
+  { name: "Our Story Magic", logo: "/logos/our-story-magic.png" },
 ];
 
 const SERVICES = [
@@ -132,6 +137,11 @@ const WORK: WorkItem[] = [
     title: "World's biggest business competition - part two",
     videoSrc: "/work/helpbnk-competition-2.mp4",
   },
+  { category: "Shark", title: "CryoGlow Clinic - at-home skincare", videoSrc: "/work/shark-cryoglow.mp4" },
+  { category: "The Scent Reserve", title: "Best fragrances on a budget", videoSrc: "/work/scent-reserve-1.mp4" },
+  { category: "Cuvva", title: "Car insurance for a family of 5 - paid social", videoSrc: "/work/cuvva-7-seater.mp4" },
+  { category: "Our Story Magic", title: "Christmas gift app - paid social", videoSrc: "/work/our-story-magic.mp4" },
+  { category: "The Scent Reserve", title: "Tuscan Leather dupe - fragrance review", videoSrc: "/work/scent-reserve-2.mp4" },
   { category: "Sure", title: "Man City - Manchester derby concept", videoSrc: "/work/sure-derby.mp4" },
   { category: "Grenade", title: "Oreo protein powder launch", videoSrc: "/work/grenade-oreo.mp4" },
   { category: "Strike", title: "Electrolytes - paid social", videoSrc: "/work/strike-electrolytes.mp4" },
