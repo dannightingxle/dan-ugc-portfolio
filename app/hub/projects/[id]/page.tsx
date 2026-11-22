@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useState } from "react";
+import { use, useRef, useState, useSyncExternalStore } from "react";
 import { useFeature } from "../../account-provider";
 import {
   PAYMENT_STATUSES,
@@ -27,11 +27,14 @@ import { Spinner, compact, money, shortDate } from "../../_lib/ui";
 import { CurrencySelect, Field, PaymentPill, Section, input, parseMoney } from "../fields";
 import { useConfirm } from "../../_lib/popups";
 import { TextBox } from "../../_lib/text-box";
+import { celebrate, pointOf } from "../../_lib/celebrate";
 import { BriefFillBox } from "./brief-fill";
 import { JobScripts } from "./scripts";
 
-/* One project: dates, payment, contact, the full brief, links and notes.
-   Every change saves straight away - there's no save button. */
+/* One project. The top answers "where is this job at?" (what's next, when it's
+   due, the money, how much is done); the detail sits in tabs underneath, so
+   there's one thing to look at at a time. Every change saves straight away -
+   there's no save button. */
 
 const FORMATS = ["9:16", "4:5", "1:1", "16:9", "Photo", "Raw"];
 const PRESETS: Omit<Deliverable, "id" | "done">[] = [
@@ -41,6 +44,44 @@ const PRESETS: Omit<Deliverable, "id" | "done">[] = [
   { item: "Raw footage", qty: 1, format: "Raw", length: "" },
   { item: "Photos", qty: 5, format: "Photo", length: "" },
 ];
+
+/* Tabs live in the address (#brief, #money…), so a link can open one and
+   links to #scripts / #write-script still land on the scripts. */
+/* [key, label, shorter label for phones] */
+const TABS = [
+  ["overview", "Overview", "Overview"],
+  ["brief", "Brief", "Brief"],
+  ["money", "Money", "Money"],
+  ["contact", "Contact", "Contact"],
+  ["notes", "Notes & scripts", "Notes"],
+] as const;
+type Tab = (typeof TABS)[number][0];
+const TAB_EVENT = "hub-project-tab";
+
+function tabFromHash(hash: string): Tab {
+  const h = hash.replace(/^#/, "");
+  if (h === "scripts" || h === "write-script") return "notes";
+  return TABS.some(([key]) => key === h) ? (h as Tab) : "overview";
+}
+function onTabChange(fn: () => void) {
+  window.addEventListener("hashchange", fn);
+  window.addEventListener(TAB_EVENT, fn);
+  return () => {
+    window.removeEventListener("hashchange", fn);
+    window.removeEventListener(TAB_EVENT, fn);
+  };
+}
+function useTab(): [Tab, (t: Tab) => void] {
+  const hash = useSyncExternalStore(onTabChange, () => window.location.hash, () => "");
+  const go = (t: Tab) => {
+    // Swap the address without a new history entry for every tab.
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${t === "overview" ? "" : `#${t}`}`);
+    window.dispatchEvent(new Event(TAB_EVENT));
+  };
+  return [tabFromHash(hash), go];
+}
+
+const briefEmpty = (p: Project) => ![p.product, p.keyMessages, p.dos, p.donts].some((v) => v.trim());
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -52,6 +93,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const studio = useFeature("studio");
   const followups = useFeature("followups");
   const scripts = useFeature("scripts");
+  const [tab, setTab] = useTab();
+  const tabBar = useRef<HTMLDivElement>(null);
   const p = projects.find((x) => x.id === id);
 
   if (!ready)
@@ -68,6 +111,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     );
   }
   const project = p;
+  const overdue = Boolean(paymentDue(project)?.overdue);
 
   function set<K extends keyof Project>(k: K, v: Project[K]) {
     save({ ...project, [k]: v });
@@ -75,7 +119,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   function setContact(k: keyof Project["contact"], v: string) {
     save({ ...project, contact: { ...project.contact, [k]: v } });
   }
-  function setPaymentStatus(status: Project["paymentStatus"]) {
+  function setStage(stage: Project["stage"], e: React.MouseEvent) {
+    if (stage === "Paid" && project.stage !== "Paid") celebrate(pointOf(e));
+    set("stage", stage);
+  }
+  function setPaymentStatus(status: Project["paymentStatus"], e: React.MouseEvent) {
+    if (status === "Paid" && project.paymentStatus !== "Paid") celebrate(pointOf(e));
     const today = new Date().toISOString().slice(0, 10);
     save({
       ...project,
@@ -85,6 +134,27 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       stage: status === "Paid" ? "Paid" : project.stage,
     });
   }
+  /** From a summary card: open its tab and bring the tabs into view. */
+  function goTo(t: Tab) {
+    setTab(t);
+    tabBar.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  const followUp = followups && (
+    <Section title="Follow-up">
+      <Field label="Waiting on" hint="Done only when they've replied or paid.">
+        <input className={input} value={project.waitingOn} onChange={(e) => set("waitingOn", e.target.value)} placeholder="e.g. Thomas to approve V3, invoice paid…" />
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Last message">
+          <input type="date" className={input} value={project.lastContact} onChange={(e) => set("lastContact", e.target.value)} />
+        </Field>
+        <Field label="Chase on">
+          <input type="date" className={input} value={project.chaseOn} onChange={(e) => set("chaseOn", e.target.value)} />
+        </Field>
+      </div>
+    </Section>
+  );
 
   return (
     <div className="space-y-6">
@@ -101,8 +171,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {project.example && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent-soft px-4 py-3 text-sm">
           <p>
-            <span className="font-semibold text-accent">Example project.</span> A sample job showing what each section is for. Edit it into a real
-            one, or delete it.
+            <span className="font-semibold text-accent">Example project.</span> A sample job to click around. Edit it into a real one, or delete it.
           </p>
           <button
             type="button"
@@ -122,6 +191,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           value={project.brand}
           onChange={(e) => set("brand", e.target.value)}
           placeholder="Brand"
+          aria-label="Brand"
           className="w-full bg-transparent text-sm font-medium uppercase tracking-widest text-accent outline-none placeholder:text-text-dim"
         />
         <TextBox
@@ -129,6 +199,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           value={project.title}
           onValue={(v) => set("title", v.replace(/\n/g, " "))}
           placeholder="What's the job?"
+          aria-label="Job title"
           className="w-full resize-none bg-transparent font-serif text-3xl leading-tight outline-none [field-sizing:content] placeholder:text-text-dim sm:text-4xl"
         />
         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Stage">
@@ -138,7 +209,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               type="button"
               role="radio"
               aria-checked={project.stage === s}
-              onClick={() => set("stage", s)}
+              onClick={(e) => setStage(s, e)}
               className={`rounded-full border px-3 py-1 text-sm transition ${
                 project.stage === s ? "border-accent bg-accent text-on-accent" : "border-border text-text-muted hover:border-border-strong"
               }`}
@@ -158,262 +229,454 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         )}
       </header>
 
-      {studio && <BriefFillBox projectId={project.id} brand={project.brand} />}
+      <AtAGlance project={project} onGo={goTo} />
 
-      {studio && (
-        <Link
-          href={`/hub/projects/${project.id}/studio`}
-          className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 transition hover:border-accent"
-        >
-          <span>
-            <span className="block font-semibold text-accent">Studio</span>
-            <span className="text-sm text-text-muted">Brief, app notes, winners and script bank for this job. Weekly shoot sheets and the Friday review.</span>
-          </span>
-          <span className="text-accent">→</span>
-        </Link>
-      )}
+      <div ref={tabBar} className="sticky top-14 z-10 -mx-4 scroll-mt-14 border-b border-border bg-bg/95 px-4 backdrop-blur sm:-mx-6 sm:px-6">
+        <div role="tablist" aria-label="Job details" className="-mb-px flex gap-1 overflow-x-auto [scrollbar-width:none]">
+          {TABS.map(([key, label, short], i) => {
+            const flag = (key === "money" && overdue) || (key === "brief" && briefEmpty(project) && project.stage !== "Pitched");
+            return (
+              <button
+                key={key}
+                id={`tab-${key}`}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                aria-controls={`panel-${key}`}
+                tabIndex={tab === key ? 0 : -1}
+                onClick={() => setTab(key)}
+                onKeyDown={(e) => {
+                  const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+                  if (!step) return;
+                  const next = TABS[(i + step + TABS.length) % TABS.length][0];
+                  setTab(next);
+                  document.getElementById(`tab-${next}`)?.focus();
+                }}
+                className={`relative shrink-0 whitespace-nowrap border-b-2 px-2.5 py-3 text-sm sm:px-3 font-medium transition ${
+                  tab === key ? "border-accent text-accent" : "border-transparent text-text-muted hover:text-text"
+                }`}
+              >
+                <span className="sm:hidden">{short}</span>
+                <span className="hidden sm:inline">{label}</span>
+                {flag && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-label="needs a look" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-        {/* Sidebar first on phones: money, dates and contact are what you look up most. */}
-        <aside className="space-y-5 lg:order-2">
-          {followups && (
-            <Section title="Job type & follow-up">
-              <Field label="Tech UGC stage" hint="For a dedicated account posting for an app. Leave as 'Not a tech job' for brand deals. Ended or Lost moves the job to Archived.">
-                <select className={input} value={project.techStage} onChange={(e) => set("techStage", e.target.value as Project["techStage"])}>
-                  <option value="">Not a tech job</option>
-                  {TECH_STAGES.map((s) => (
-                    <option key={s}>{s}</option>
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="min-w-0">
+        {tab === "overview" && (
+          <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+            <div className="min-w-0 space-y-5">
+              {studio && briefEmpty(project) && <BriefFillBox projectId={project.id} brand={project.brand} />}
+              <Deliverables items={project.deliverables} onChange={(d) => set("deliverables", d)} />
+              {studio && (
+                <Link
+                  href={`/hub/projects/${project.id}/studio`}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 transition hover:border-accent"
+                >
+                  <span>
+                    <span className="block font-semibold text-accent">Open this job&apos;s Studio</span>
+                    <span className="text-sm text-text-muted">Weekly shoot sheets, the Friday review, winners and the script bank.</span>
+                  </span>
+                  <span className="text-accent" aria-hidden>
+                    →
+                  </span>
+                </Link>
+              )}
+            </div>
+            <aside className="space-y-5">
+              <Section title="Dates">
+                <div className="space-y-2">
+                  {(
+                    [
+                      ["filmBy", "Film by"],
+                      ["due", "Deliver by"],
+                      ["goLive", "Goes live"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-xs font-medium text-text-muted">{label}</span>
+                      <input type="date" className={input} value={project[key]} onChange={(e) => set(key, e.target.value)} />
+                    </label>
                   ))}
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Came from">
-                  <select className={input} value={project.source} onChange={(e) => set("source", e.target.value as Project["source"])}>
-                    <option value="">-</option>
-                    {SOURCES.map((s) => (
+                </div>
+              </Section>
+              {followUp}
+              <ContactCard contact={project.contact} onEdit={() => goTo("contact")} />
+              <LinkedAds project={project} onChange={(ids) => set("adIds", ids)} />
+            </aside>
+          </div>
+        )}
+
+        {tab === "brief" && (
+          <div className="space-y-5">
+            {studio && <BriefFillBox projectId={project.id} brand={project.brand} />}
+            <Section title="The brief">
+              <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+                <Field label="Product">
+                  <input className={input} value={project.product} onChange={(e) => set("product", e.target.value)} placeholder="What you're featuring" />
+                </Field>
+                <Field label="Product shipping">
+                  <select className={input} value={project.shipping} onChange={(e) => set("shipping", e.target.value as Project["shipping"])}>
+                    {SHIPPING.map((s) => (
                       <option key={s}>{s}</option>
                     ))}
                   </select>
                 </Field>
-                {project.source === "Platform" && (
-                  <Field label="Platform">
-                    <input className={input} value={project.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. Twirl, Insense…" />
-                  </Field>
-                )}
               </div>
-              {project.techStage && <TechPay project={project} set={set} />}
-              <Field label="Pay notes">
-                <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="e.g. Paid weekly via SideShift + view bonuses" />
+              <Field label="Key messages / talking points">
+                <TextBox rows={4} className={input} value={project.keyMessages} onValue={(v) => set("keyMessages", v)} placeholder="What the brand wants people to take away" />
               </Field>
-              <Field label="Waiting on" hint="Done only when they've replied or paid.">
-                <input className={input} value={project.waitingOn} onChange={(e) => set("waitingOn", e.target.value)} placeholder="e.g. Thomas to approve V3, invoice paid…" />
-              </Field>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Last message">
-                  <input type="date" className={input} value={project.lastContact} onChange={(e) => set("lastContact", e.target.value)} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Do's">
+                  <TextBox rows={4} className={input} value={project.dos} onValue={(v) => set("dos", v)} placeholder="e.g. Show the product in the first 3s…" />
                 </Field>
-                <Field label="Chase on">
-                  <input type="date" className={input} value={project.chaseOn} onChange={(e) => set("chaseOn", e.target.value)} />
+                <Field label="Don'ts">
+                  <TextBox rows={4} className={input} value={project.donts} onValue={(v) => set("donts", v)} placeholder="e.g. No competitor mentions…" />
                 </Field>
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={project.forGroup} onChange={(e) => set("forGroup", e.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--accent)]" />
-                For the mentorship group (pass it on rather than do it)
-              </label>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Usage rights">
+                  <input className={input} value={project.usageRights} onChange={(e) => set("usageRights", e.target.value)} placeholder="e.g. Paid ads, 3 months, UK" />
+                </Field>
+                <Field label="Exclusivity">
+                  <input className={input} value={project.exclusivity} onChange={(e) => set("exclusivity", e.target.value)} placeholder="e.g. None / 30 days, category" />
+                </Field>
+                <Field label="Revisions">
+                  <input className={input} value={project.revisions} onChange={(e) => set("revisions", e.target.value)} placeholder="e.g. 2 rounds included" />
+                </Field>
+              </div>
             </Section>
-          )}
-          <Section title="Payment" action={<PaymentPill project={project} />}>
-            <div className="grid grid-cols-[6.5rem_1fr] gap-2">
-              <Field label="Currency">
-                <CurrencySelect value={project.feeCurrency} onChange={(c) => set("feeCurrency", c)} />
-              </Field>
-              <Field label="Fee">
-                <input
-                  className={`${input} text-lg font-semibold`}
-                  inputMode="decimal"
-                  defaultValue={project.fee ?? ""}
-                  onBlur={(e) => set("fee", parseMoney(e.target.value))}
-                  placeholder="0"
-                />
-              </Field>
-            </div>
-            <div className="grid grid-cols-3 gap-1 rounded-lg bg-bg-elevated p-1">
-              {PAYMENT_STATUSES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setPaymentStatus(s)}
-                  className={`rounded-md py-1.5 text-xs font-medium transition ${
-                    project.paymentStatus === s ? "bg-bg-card text-text shadow-sm" : "text-text-dim hover:text-text"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Invoice no.">
-                <input className={input} value={project.invoiceNumber} onChange={(e) => set("invoiceNumber", e.target.value)} placeholder="e.g. INV-014" />
-              </Field>
-              <Field label="Terms (days)">
-                <input
-                  className={input}
-                  inputMode="numeric"
-                  value={project.paymentTermsDays ?? ""}
-                  onChange={(e) => set("paymentTermsDays", e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null)}
-                />
-              </Field>
-              <Field label="Invoiced on">
-                <input type="date" className={input} value={project.invoicedOn} onChange={(e) => set("invoicedOn", e.target.value)} />
-              </Field>
-              <Field label="Paid on">
-                <input type="date" className={input} value={project.paidOn} onChange={(e) => set("paidOn", e.target.value)} />
-              </Field>
-            </div>
-            <DueLine project={project} />
-            <Field label="Payment notes">
-              <TextBox
-                rows={2}
-                className={input}
-                value={project.paymentNotes}
-                onValue={(v) => set("paymentNotes", v)}
-                placeholder="e.g. 50% upfront, usage fee extra, pay via bank transfer…"
-              />
-            </Field>
-          </Section>
+            <Links items={project.links} onChange={(l) => set("links", l)} />
+          </div>
+        )}
 
-          <Section title="Dates">
-            <div className="space-y-2">
-              {(
-                [
-                  ["filmBy", "Film by"],
-                  ["due", "Deliver by"],
-                  ["goLive", "Goes live"],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-3">
-                  <span className="w-24 shrink-0 text-xs font-medium text-text-muted">{label}</span>
-                  <input type="date" className={input} value={project[key]} onChange={(e) => set(key, e.target.value)} />
-                </label>
-              ))}
-            </div>
-          </Section>
-
-          <RetainerSection project={project} save={save} />
-
-          <Section title="Contact">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Name">
-                <input className={input} value={project.contact.name} onChange={(e) => setContact("name", e.target.value)} placeholder="e.g. Sarah" />
-              </Field>
-              <Field label="Role">
-                <input className={input} value={project.contact.role} onChange={(e) => setContact("role", e.target.value)} placeholder="e.g. Creator manager" />
-              </Field>
-            </div>
-            <Field label="Company / agency">
-              <input className={input} value={project.contact.company} onChange={(e) => setContact("company", e.target.value)} placeholder="If booked through an agency" />
-            </Field>
-            <Field label="Email">
-              <input type="email" className={input} value={project.contact.email} onChange={(e) => setContact("email", e.target.value)} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Phone / WhatsApp">
-                <input type="tel" className={input} value={project.contact.phone} onChange={(e) => setContact("phone", e.target.value)} />
-              </Field>
-              <Field label="Instagram / TikTok">
-                <input className={input} value={project.contact.handle} onChange={(e) => setContact("handle", e.target.value)} placeholder="@handle" />
-              </Field>
-            </div>
-            <ContactActions contact={project.contact} />
-          </Section>
-
-          <LinkedAds project={project} onChange={(ids) => set("adIds", ids)} />
-        </aside>
-
-        <div className="min-w-0 space-y-5 lg:order-1">
-          <Deliverables items={project.deliverables} onChange={(d) => set("deliverables", d)} />
-
-          <Section title="The brief">
-            <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
-              <Field label="Product">
-                <input className={input} value={project.product} onChange={(e) => set("product", e.target.value)} placeholder="What you're featuring" />
-              </Field>
-              <Field label="Product shipping">
-                <select className={input} value={project.shipping} onChange={(e) => set("shipping", e.target.value as Project["shipping"])}>
-                  {SHIPPING.map((s) => (
-                    <option key={s}>{s}</option>
+        {tab === "money" && (
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="min-w-0 space-y-5">
+              <Section title="Payment" action={<PaymentPill project={project} />}>
+                <div className="grid grid-cols-[6.5rem_1fr] gap-2">
+                  <Field label="Currency">
+                    <CurrencySelect value={project.feeCurrency} onChange={(c) => set("feeCurrency", c)} />
+                  </Field>
+                  <Field label="Fee">
+                    <input
+                      className={`${input} text-lg font-semibold`}
+                      inputMode="decimal"
+                      defaultValue={project.fee ?? ""}
+                      onBlur={(e) => set("fee", parseMoney(e.target.value))}
+                      placeholder="0"
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-3 gap-1 rounded-lg bg-bg-elevated p-1" role="radiogroup" aria-label="Payment status">
+                  {PAYMENT_STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      role="radio"
+                      aria-checked={project.paymentStatus === s}
+                      onClick={(e) => setPaymentStatus(s, e)}
+                      className={`rounded-md py-1.5 text-xs font-medium transition ${
+                        project.paymentStatus === s ? "bg-bg-card text-text shadow-sm" : "text-text-dim hover:text-text"
+                      }`}
+                    >
+                      {s}
+                    </button>
                   ))}
-                </select>
-              </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Invoice no.">
+                    <input className={input} value={project.invoiceNumber} onChange={(e) => set("invoiceNumber", e.target.value)} placeholder="e.g. INV-014" />
+                  </Field>
+                  <Field label="Terms (days)">
+                    <input
+                      className={input}
+                      inputMode="numeric"
+                      value={project.paymentTermsDays ?? ""}
+                      onChange={(e) => set("paymentTermsDays", e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null)}
+                    />
+                  </Field>
+                  <Field label="Invoiced on">
+                    <input type="date" className={input} value={project.invoicedOn} onChange={(e) => set("invoicedOn", e.target.value)} />
+                  </Field>
+                  <Field label="Paid on">
+                    <input type="date" className={input} value={project.paidOn} onChange={(e) => set("paidOn", e.target.value)} />
+                  </Field>
+                </div>
+                <DueLine project={project} />
+                <Field label="Payment notes">
+                  <TextBox
+                    rows={2}
+                    className={input}
+                    value={project.paymentNotes}
+                    onValue={(v) => set("paymentNotes", v)}
+                    placeholder="e.g. 50% upfront, usage fee extra, pay via bank transfer…"
+                  />
+                </Field>
+              </Section>
             </div>
-            <Field label="Key messages / talking points">
-              <TextBox rows={4} className={input} value={project.keyMessages} onValue={(v) => set("keyMessages", v)} placeholder="What the brand wants people to take away" />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Do's">
-                <TextBox rows={4} className={input} value={project.dos} onValue={(v) => set("dos", v)} placeholder="e.g. Show the product in the first 3s…" />
-              </Field>
-              <Field label="Don'ts">
-                <TextBox rows={4} className={input} value={project.donts} onValue={(v) => set("donts", v)} placeholder="e.g. No competitor mentions…" />
-              </Field>
+            <div className="min-w-0 space-y-5">
+              <RetainerSection project={project} save={save} />
+              {followups && (
+                <Section title="Job type">
+                  <Field label="Tech UGC stage" hint="For a dedicated account posting for an app. Leave as 'Not a tech job' for brand deals. Ended or Lost moves the job to Archived.">
+                    <select className={input} value={project.techStage} onChange={(e) => set("techStage", e.target.value as Project["techStage"])}>
+                      <option value="">Not a tech job</option>
+                      {TECH_STAGES.map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="Came from">
+                      <select className={input} value={project.source} onChange={(e) => set("source", e.target.value as Project["source"])}>
+                        <option value="">-</option>
+                        {SOURCES.map((s) => (
+                          <option key={s}>{s}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    {project.source === "Platform" && (
+                      <Field label="Platform">
+                        <input className={input} value={project.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. Twirl, Insense…" />
+                      </Field>
+                    )}
+                  </div>
+                  {project.techStage && <TechPay project={project} set={set} />}
+                  <Field label="Pay notes">
+                    <input className={input} value={project.payModel} onChange={(e) => set("payModel", e.target.value)} placeholder="e.g. Paid weekly via SideShift + view bonuses" />
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={project.forGroup} onChange={(e) => set("forGroup", e.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--accent)]" />
+                    For the mentorship group (pass it on rather than do it)
+                  </label>
+                </Section>
+              )}
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Usage rights">
-                <input className={input} value={project.usageRights} onChange={(e) => set("usageRights", e.target.value)} placeholder="e.g. Paid ads, 3 months, UK" />
-              </Field>
-              <Field label="Exclusivity">
-                <input className={input} value={project.exclusivity} onChange={(e) => set("exclusivity", e.target.value)} placeholder="e.g. None / 30 days, category" />
-              </Field>
-              <Field label="Revisions">
-                <input className={input} value={project.revisions} onChange={(e) => set("revisions", e.target.value)} placeholder="e.g. 2 rounds included" />
-              </Field>
-            </div>
-          </Section>
+          </div>
+        )}
 
-          <Links items={project.links} onChange={(l) => set("links", l)} />
+        {tab === "contact" && (
+          <div className="max-w-xl">
+            <Section title="Contact">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Name">
+                  <input className={input} value={project.contact.name} onChange={(e) => setContact("name", e.target.value)} placeholder="e.g. Sarah" />
+                </Field>
+                <Field label="Role">
+                  <input className={input} value={project.contact.role} onChange={(e) => setContact("role", e.target.value)} placeholder="e.g. Creator manager" />
+                </Field>
+              </div>
+              <Field label="Company / agency">
+                <input className={input} value={project.contact.company} onChange={(e) => setContact("company", e.target.value)} placeholder="If booked through an agency" />
+              </Field>
+              <Field label="Email">
+                <input type="email" className={input} value={project.contact.email} onChange={(e) => setContact("email", e.target.value)} />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Phone / WhatsApp">
+                  <input type="tel" className={input} value={project.contact.phone} onChange={(e) => setContact("phone", e.target.value)} />
+                </Field>
+                <Field label="Instagram / TikTok">
+                  <input className={input} value={project.contact.handle} onChange={(e) => setContact("handle", e.target.value)} placeholder="@handle" />
+                </Field>
+              </div>
+              <ContactActions contact={project.contact} />
+            </Section>
+          </div>
+        )}
 
-          <Section title="Notes">
-            <TextBox
-              rows={6}
-              className={input}
-              value={project.notes}
-              onValue={(v) => set("notes", v)}
-              placeholder="Anything else: feedback from the brand, ideas, what went well…"
-            />
-          </Section>
-
-          {scripts && !project.techStage ? (
-            <JobScripts project={project} set={set} />
-          ) : (
-            <Section title="Script" action={<span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">Scripting tool coming soon</span>}>
+        {tab === "notes" && (
+          <div className="space-y-5">
+            <Section title="Notes">
               <TextBox
                 rows={6}
                 className={input}
-                value={project.script}
-                onValue={(v) => set("script", v)}
-                placeholder="Rough script or ideas for now. A proper script and shot-list builder is on the way."
+                value={project.notes}
+                onValue={(v) => set("notes", v)}
+                placeholder="Anything else: feedback from the brand, ideas, what went well…"
               />
             </Section>
-          )}
-
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={async () => {
-                const name = project.title || project.brand || "this project";
-                if (await confirm({ title: `Delete "${name}"?`, message: "This can't be undone.", confirmLabel: "Delete", danger: true })) {
-                  remove(project.id);
-                  router.push("/hub/projects");
-                }
-              }}
-              className="text-sm text-text-dim hover:text-accent"
-            >
-              Delete project
-            </button>
+            {scripts && !project.techStage ? (
+              <JobScripts project={project} set={set} />
+            ) : (
+              <Section title="Script" action={<span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">Scripting tool coming soon</span>}>
+                <TextBox
+                  rows={6}
+                  className={input}
+                  value={project.script}
+                  onValue={(v) => set("script", v)}
+                  placeholder="Rough script or ideas for now. A proper script and shot-list builder is on the way."
+                />
+              </Section>
+            )}
           </div>
-        </div>
+        )}
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <button
+          type="button"
+          onClick={async () => {
+            const name = project.title || project.brand || "this project";
+            if (await confirm({ title: `Delete "${name}"?`, message: "This can't be undone.", confirmLabel: "Delete", danger: true })) {
+              remove(project.id);
+              router.push("/hub/projects");
+            }
+          }}
+          className="text-sm text-text-dim hover:text-accent"
+        >
+          Delete project
+        </button>
       </div>
     </div>
+  );
+}
+
+/* ---------- At a glance ---------- */
+
+const DAY = 86_400_000;
+function daysUntil(day: string) {
+  const [y, m, d] = day.split("-").map(Number);
+  const now = new Date();
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / DAY);
+}
+function inDays(day: string) {
+  const n = daysUntil(day);
+  if (n === 0) return "today";
+  if (n === 1) return "tomorrow";
+  if (n === -1) return "yesterday";
+  return n > 0 ? `in ${n} days` : `${-n} days ago`;
+}
+
+type Tone = "accent" | "good" | "warn" | "muted";
+type Step = { text: string; detail?: string; tab: Tab; tone: Tone };
+
+/** The one thing to do next on this job, worked out from where it's at. */
+function nextStep(p: Project): Step {
+  const left = p.deliverables.filter((d) => !d.done).length;
+  const due = paymentDue(p);
+  if (isArchived(p)) return { text: isLost(p) ? "This one didn't happen" : "This job has ended", detail: "It's in Archived on the board.", tab: "overview", tone: "muted" };
+  if (p.paymentStatus === "Paid" || p.stage === "Paid") return { text: "All done - you've been paid", detail: p.paidOn ? `Paid ${shortDate(p.paidOn)}. Nice work.` : "Nice work.", tab: "money", tone: "good" };
+  if (due?.overdue) return { text: "Chase the payment", detail: `It was due ${shortDate(due.date)} (${inDays(due.date)}).`, tab: "money", tone: "warn" };
+  if (p.waitingOn.trim() && p.chaseOn && daysUntil(p.chaseOn) <= 0) return { text: `Chase: ${p.waitingOn.trim()}`, detail: `You planned to chase ${inDays(p.chaseOn)}.`, tab: "overview", tone: "warn" };
+  if (p.stage === "Pitched") return { text: "Waiting to hear back", detail: "Move it to Briefed when they say yes.", tab: "overview", tone: "muted" };
+  if (briefEmpty(p)) return { text: "Add the brief", detail: "Paste what the brand sent, or fill it in yourself.", tab: "brief", tone: "accent" };
+  if (left > 0)
+    return {
+      text: `${left} deliverable${left === 1 ? "" : "s"} to go`,
+      detail: p.due ? `Deliver by ${shortDate(p.due)} (${inDays(p.due)}).` : "Tick them off below as you finish them.",
+      tab: "overview",
+      // Amber when it's close or late; calm blue otherwise.
+      tone: p.due && daysUntil(p.due) <= 3 ? "warn" : "accent",
+    };
+  if (p.paymentStatus === "Not invoiced") return { text: "Send the invoice", detail: p.fee != null ? `${money(p.fee, p.feeCurrency)} to invoice.` : "Add the fee and invoice them.", tab: "money", tone: "accent" };
+  if (due) return { text: "Waiting on payment", detail: `Due ${shortDate(due.date)} (${inDays(due.date)}).`, tab: "money", tone: "muted" };
+  return { text: "You're up to date", detail: "Nothing needs doing right now.", tab: "overview", tone: "good" };
+}
+
+const TONE: Record<Tone, string> = {
+  accent: "border-accent/30 bg-accent-soft text-accent",
+  good: "border-good/20 bg-good-soft text-good",
+  warn: "border-warn/20 bg-warn-soft text-warn",
+  muted: "border-border bg-bg-card text-text",
+};
+
+function AtAGlance({ project, onGo }: { project: Project; onGo: (t: Tab) => void }) {
+  const step = nextStep(project);
+  const items = project.deliverables;
+  const done = items.filter((d) => d.done).length;
+  const monthly = project.techStage ? techMonthly(project) : null;
+  const dueIn = project.due ? daysUntil(project.due) : null;
+  const late = dueIn != null && dueIn < 0 && !["Delivered", "Paid"].includes(project.stage);
+  const tile = "flex min-w-0 flex-col justify-between gap-1 rounded-2xl border border-border bg-bg-card p-3 text-left transition hover:border-accent sm:p-4";
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+      <button type="button" onClick={() => onGo(step.tab)} className={`rounded-2xl border p-4 text-left transition hover:brightness-[0.98] ${TONE[step.tone]}`}>
+        <span className="text-xs font-medium uppercase tracking-wide opacity-80">Next step</span>
+        <span className="mt-1 block text-lg font-semibold leading-snug">{step.text}</span>
+        {step.detail && <span className="mt-0.5 block text-sm text-text-muted">{step.detail}</span>}
+      </button>
+      <div className="grid grid-cols-3 gap-3 lg:contents">
+        <button type="button" onClick={() => onGo("overview")} className={tile}>
+          <span className="text-xs text-text-muted">Deliver by</span>
+          <span className={`text-base font-semibold sm:text-lg ${late ? "text-accent" : ""}`}>{project.due ? shortDate(project.due) : "No date"}</span>
+          <span className={`truncate text-xs ${late ? "font-medium text-accent" : "text-text-dim"}`}>{project.due ? inDays(project.due) : "Add one"}</span>
+        </button>
+        <button type="button" onClick={() => onGo("money")} className={tile}>
+          <span className="text-xs text-text-muted">{monthly != null ? "A month" : "Fee"}</span>
+          <span className="truncate text-base font-semibold sm:text-lg">
+            {monthly != null ? money(monthly, project.currency) : project.fee != null ? money(project.fee, project.feeCurrency) : "–"}
+          </span>
+          <span className="truncate">
+            <PaymentPill project={project} />
+          </span>
+        </button>
+        <button type="button" onClick={() => onGo("overview")} className={tile}>
+          <span className="text-xs text-text-muted">Done</span>
+          <span className="flex items-center gap-2">
+            <Ring value={items.length ? done / items.length : 0} />
+            <span className="text-base font-semibold sm:text-lg">
+              {done}/{items.length}
+            </span>
+          </span>
+          <span className="truncate text-xs text-text-dim">{items.length ? (done === items.length ? "All finished" : "deliverables") : "Add what you're making"}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Ring({ value }: { value: number }) {
+  const r = 9;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6 shrink-0 -rotate-90" aria-hidden>
+      <circle cx="12" cy="12" r={r} fill="none" stroke="var(--border)" strokeWidth="3.5" />
+      <circle
+        cx="12"
+        cy="12"
+        r={r}
+        fill="none"
+        stroke={value >= 1 ? "var(--good)" : "var(--accent)"}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - value)}
+        className="transition-[stroke-dashoffset] duration-500"
+      />
+    </svg>
+  );
+}
+
+/** Who to talk to, with one-tap ways to reach them. */
+function ContactCard({ contact, onEdit }: { contact: Project["contact"]; onEdit: () => void }) {
+  const has = contact.name || contact.email || contact.phone || contact.handle;
+  return (
+    <Section
+      title="Contact"
+      action={
+        <button type="button" onClick={onEdit} className="text-sm text-accent hover:underline">
+          {has ? "Edit" : "Add"}
+        </button>
+      }
+    >
+      {has ? (
+        <>
+          <p className="text-sm">
+            <span className="font-medium">{contact.name || contact.email || contact.handle}</span>
+            {(contact.role || contact.company) && <span className="block text-text-muted">{[contact.role, contact.company].filter(Boolean).join(" · ")}</span>}
+          </p>
+          <ContactActions contact={contact} />
+        </>
+      ) : (
+        <p className="text-sm text-text-dim">Who you&apos;re dealing with at the brand, so you can message them in one tap.</p>
+      )}
+    </Section>
   );
 }
 
@@ -471,7 +734,14 @@ function Deliverables({ items, onChange }: { items: Deliverable[]; onChange: (d:
               <input
                 type="checkbox"
                 checked={d.done}
-                onChange={(e) => update(d.id, { done: e.target.checked })}
+                onChange={(e) => {
+                  // The last one ticked off: a little celebration.
+                  if (e.target.checked && items.every((x) => x.done || x.id === d.id)) {
+                    const r = e.target.getBoundingClientRect();
+                    celebrate({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+                  }
+                  update(d.id, { done: e.target.checked });
+                }}
                 className="h-4 w-4 shrink-0 accent-[var(--accent)]"
                 aria-label="Done"
               />
@@ -484,7 +754,7 @@ function Deliverables({ items, onChange }: { items: Deliverable[]; onChange: (d:
               />
               <span className="text-text-dim">×</span>
               <input
-                className={`min-w-0 flex-1 rounded-md bg-transparent px-1 py-1 text-sm outline-none focus:bg-bg-card ${d.done ? "text-text-dim line-through" : ""}`}
+                className={`min-w-[9rem] flex-1 rounded-md bg-transparent px-1 py-1 text-sm outline-none focus:bg-bg-card ${d.done ? "text-text-dim line-through" : ""}`}
                 value={d.item}
                 onChange={(e) => update(d.id, { item: e.target.value })}
                 placeholder="What is it?"
